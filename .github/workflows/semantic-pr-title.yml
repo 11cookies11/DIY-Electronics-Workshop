@@ -28,4 +28,11 @@ jobs:
             perf
             style
             revert
+            release
+            hotfix
+            deps
+            infra
+            wip
+          ignoreLabels: |
+            no-semantic-check
           requireScope: false
