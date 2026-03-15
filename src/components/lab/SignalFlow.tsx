@@ -76,11 +76,11 @@ export function SignalFlow({
         color={color}
         lineWidth={0.3}
         transparent
-        opacity={isExploded ? 0.18 : 0.03}
+        opacity={isExploded ? 0.34 : 0.08}
       />
       <mesh ref={particleRef}>
         <sphereGeometry args={[1, 8, 8]} />
-        <meshBasicMaterial color={color} transparent opacity={0.65} toneMapped={false} />
+        <meshBasicMaterial color={color} transparent opacity={0.82} toneMapped={false} />
       </mesh>
     </group>
   );

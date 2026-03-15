@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { Bot, Maximize2, Minimize2, Send, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useTheme } from "./theme-context";
 
 type Message = {
   role: "user" | "assistant";
@@ -36,6 +37,8 @@ export function ChatInterface() {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const { mode } = useTheme();
+  const isDark = mode === "dark";
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -67,7 +70,11 @@ export function ChatInterface() {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             onClick={() => setIsMinimized(false)}
-            className="pointer-events-auto flex h-full w-full items-center justify-center rounded-full bg-emerald-500 text-black shadow-lg shadow-emerald-500/20 transition-colors hover:bg-emerald-400"
+            className={`pointer-events-auto flex h-full w-full items-center justify-center rounded-full transition-colors ${
+              isDark
+                ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20 hover:bg-emerald-400"
+                : "border border-emerald-200 bg-white text-emerald-600 shadow-lg shadow-slate-300/40 hover:bg-emerald-50"
+            }`}
           >
             <Maximize2 className="h-5 w-5" />
           </motion.button>
@@ -77,19 +84,45 @@ export function ChatInterface() {
             initial={{ y: 20, opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 20, opacity: 0, scale: 0.95 }}
-            className="pointer-events-auto flex h-[520px] flex-col overflow-hidden rounded-sm border border-white/10 bg-black/88 shadow-[0_32px_64px_rgba(0,0,0,0.5)] backdrop-blur-2xl"
+            className={`pointer-events-auto flex h-[520px] flex-col overflow-hidden rounded-sm border backdrop-blur-2xl ${
+              isDark
+                ? "border-white/10 bg-black/88 shadow-[0_32px_64px_rgba(0,0,0,0.5)]"
+                : "border-slate-200 bg-[rgba(255,255,255,0.94)] shadow-[0_28px_70px_rgba(148,163,184,0.35)]"
+            }`}
           >
-            <div className="flex items-center justify-between border-b border-white/10 bg-white/[0.03] p-4">
+            <div
+              className={`flex items-center justify-between border-b p-4 ${
+                isDark
+                  ? "border-white/10 bg-white/[0.03]"
+                  : "border-slate-200 bg-slate-50/90"
+              }`}
+            >
               <div className="flex items-center gap-3">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
                 <div className="flex flex-col">
-                  <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white">Twin-AI</span>
-                  <span className="mt-1 font-mono text-[8px] uppercase tracking-widest text-white/40">Lab Reception v1</span>
+                  <span
+                    className={`font-mono text-[10px] uppercase tracking-[0.2em] ${
+                      isDark ? "text-white" : "text-slate-900"
+                    }`}
+                  >
+                    Twin-AI
+                  </span>
+                  <span
+                    className={`mt-1 font-mono text-[8px] uppercase tracking-widest ${
+                      isDark ? "text-white/40" : "text-slate-400"
+                    }`}
+                  >
+                    Lab Reception v1
+                  </span>
                 </div>
               </div>
               <button
                 onClick={() => setIsMinimized(true)}
-                className="flex h-6 w-6 items-center justify-center rounded-full text-white/40 transition-all hover:bg-white/5 hover:text-white"
+                className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
+                  isDark
+                    ? "text-white/40 hover:bg-white/5 hover:text-white"
+                    : "text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+                }`}
               >
                 <Minimize2 className="h-3 w-3" />
               </button>
@@ -99,9 +132,17 @@ export function ChatInterface() {
               {messages.map((msg, index) => (
                 <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`flex max-w-[88%] gap-3 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                    <div className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm border ${
-                      msg.role === "user" ? "border-blue-500/20 bg-blue-500/10" : "border-emerald-500/20 bg-emerald-500/10"
-                    }`}>
+                    <div
+                      className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-sm border ${
+                        msg.role === "user"
+                          ? isDark
+                            ? "border-blue-500/20 bg-blue-500/10"
+                            : "border-blue-200 bg-blue-50"
+                          : isDark
+                            ? "border-emerald-500/20 bg-emerald-500/10"
+                            : "border-emerald-200 bg-emerald-50"
+                      }`}
+                    >
                       {msg.role === "user" ? (
                         <User className="h-3.5 w-3.5 text-blue-400" />
                       ) : (
@@ -111,8 +152,12 @@ export function ChatInterface() {
                     <div
                       className={`rounded-sm border p-3.5 text-[11px] leading-relaxed tracking-wide ${
                         msg.role === "user"
-                          ? "border-blue-500/10 bg-blue-500/[0.08] text-blue-50/90"
-                          : "border-white/5 bg-white/[0.03] text-white/80"
+                          ? isDark
+                            ? "border-blue-500/10 bg-blue-500/[0.08] text-blue-50/90"
+                            : "border-blue-200 bg-blue-50 text-slate-700"
+                          : isDark
+                            ? "border-white/5 bg-white/[0.03] text-white/80"
+                            : "border-slate-200 bg-white text-slate-700"
                       }`}
                     >
                       {msg.content}
@@ -122,7 +167,13 @@ export function ChatInterface() {
               ))}
               {isLoading ? (
                 <div className="flex justify-start">
-                  <div className="rounded-sm border border-white/5 bg-white/[0.03] p-3">
+                  <div
+                    className={`rounded-sm border p-3 ${
+                      isDark
+                        ? "border-white/5 bg-white/[0.03]"
+                        : "border-slate-200 bg-white"
+                    }`}
+                  >
                     <div className="flex gap-1">
                       {[0, 1, 2].map((i) => (
                         <motion.div
@@ -138,7 +189,13 @@ export function ChatInterface() {
               ) : null}
             </div>
 
-            <div className="border-t border-white/10 bg-white/[0.02] p-4">
+            <div
+              className={`border-t p-4 ${
+                isDark
+                  ? "border-white/10 bg-white/[0.02]"
+                  : "border-slate-200 bg-slate-50/90"
+              }`}
+            >
               <div className="group relative">
                 <input
                   type="text"
@@ -146,18 +203,30 @@ export function ChatInterface() {
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => event.key === "Enter" && handleSend()}
                   placeholder="询问系统状态，或者下一步接什么能力..."
-                  className="w-full rounded-sm border border-white/10 bg-black/40 py-2.5 pl-4 pr-12 text-[11px] text-white placeholder:text-white/20 focus:border-emerald-500/40 focus:outline-none"
+                  className={`w-full rounded-sm border py-2.5 pl-4 pr-12 text-[11px] focus:outline-none ${
+                    isDark
+                      ? "border-white/10 bg-black/40 text-white placeholder:text-white/20 focus:border-emerald-500/40"
+                      : "border-slate-200 bg-white text-slate-800 placeholder:text-slate-400 focus:border-emerald-400"
+                  }`}
                 />
                 <button
                   onClick={handleSend}
                   disabled={isLoading || !input.trim()}
-                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center text-emerald-500 transition-all hover:scale-110 hover:text-emerald-400 disabled:text-white/10"
+                  className={`absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center transition-all hover:scale-110 ${
+                    isDark
+                      ? "text-emerald-500 hover:text-emerald-400 disabled:text-white/10"
+                      : "text-emerald-600 hover:text-emerald-500 disabled:text-slate-300"
+                  }`}
                 >
                   <Send className="h-3.5 w-3.5" />
                 </button>
               </div>
               <div className="mt-2 text-center">
-                <span className="font-mono text-[7px] uppercase tracking-[0.3em] text-white/10">
+                <span
+                  className={`font-mono text-[7px] uppercase tracking-[0.3em] ${
+                    isDark ? "text-white/10" : "text-slate-300"
+                  }`}
+                >
                   secure link established
                 </span>
               </div>

@@ -139,10 +139,10 @@ export function Node({
         return (
           <group>
             <Box args={[0.25, 0.06, 0.25]}>
-              <meshStandardMaterial color="#1a1a1a" roughness={0.2} metalness={0.8} />
+              <meshStandardMaterial color="#2a313b" roughness={0.18} metalness={0.82} />
             </Box>
             <Box args={[0.08, 0.08, 0.08]} position={[0, 0.04, 0]}>
-              <meshStandardMaterial color={THEME.primary} emissive={THEME.primary} emissiveIntensity={2} />
+              <meshStandardMaterial color={THEME.primary} emissive={THEME.primary} emissiveIntensity={2.8} />
             </Box>
           </group>
         );
@@ -150,12 +150,12 @@ export function Node({
         return (
           <group>
             <Box args={[0.3, 0.08, 0.3]}>
-              <meshStandardMaterial color="#111" roughness={0.1} metalness={0.9} />
+              <meshStandardMaterial color="#303845" roughness={0.12} metalness={0.9} />
             </Box>
             {[...Array(8)].map((_, i) => (
               <group key={i} rotation={[0, (i * Math.PI) / 4, 0]}>
                 <Box args={[0.01, 0.01, 0.35]} position={[0.12, -0.04, 0]}>
-                  <meshStandardMaterial color="#ffaa00" metalness={1} />
+                  <meshStandardMaterial color="#ffbf47" emissive="#7a4b00" emissiveIntensity={0.45} metalness={1} />
                 </Box>
               </group>
             ))}
@@ -165,7 +165,7 @@ export function Node({
         return (
           <group rotation={screenRotation()}>
             <Box args={[0.9, 0.9, 0.05]}>
-              <meshStandardMaterial color="#101216" roughness={0.5} metalness={0.5} />
+              <meshStandardMaterial color="#29313c" roughness={0.42} metalness={0.58} />
             </Box>
             <mesh position={[0, 0, 0.026]}>
               <planeGeometry args={[0.85, 0.85]} />
@@ -181,10 +181,10 @@ export function Node({
         return (
           <group>
             <Box args={[0.4, 0.2, 0.4]}>
-              <meshStandardMaterial color="#222" />
+              <meshStandardMaterial color="#35302a" />
             </Box>
             <Box args={[0.38, 0.18, 0.38]}>
-              <meshStandardMaterial color={THEME.power} emissive={THEME.power} emissiveIntensity={isSelected ? 5 : 1} toneMapped={false} />
+              <meshStandardMaterial color={THEME.power} emissive={THEME.power} emissiveIntensity={isSelected ? 5 : 1.8} toneMapped={false} />
             </Box>
           </group>
         );
@@ -192,10 +192,10 @@ export function Node({
         return (
           <group>
             <Cylinder args={[0.15, 0.15, 0.1, 32]} rotation={[Math.PI / 2, 0, 0]}>
-              <meshStandardMaterial color="#333" />
+              <meshStandardMaterial color="#3a424d" />
             </Cylinder>
             <Cylinder args={[0.12, 0.12, 0.11, 32]} rotation={[Math.PI / 2, 0, 0]}>
-              <meshStandardMaterial color="#111" />
+              <meshStandardMaterial color="#171c24" />
             </Cylinder>
           </group>
         );
@@ -203,10 +203,10 @@ export function Node({
         return (
           <group>
             <Box args={[0.2, 0.05, 0.2]}>
-              <meshStandardMaterial color="#1a1a1a" />
+              <meshStandardMaterial color="#2a313b" />
             </Box>
             <Box args={[0.15, 0.06, 0.15]}>
-              <meshStandardMaterial color={THEME.primary} emissive={THEME.primary} emissiveIntensity={isSelected ? 5 : 1} toneMapped={false} />
+              <meshStandardMaterial color={THEME.primary} emissive={THEME.primary} emissiveIntensity={isSelected ? 5 : 1.8} toneMapped={false} />
             </Box>
           </group>
         );
@@ -237,8 +237,8 @@ export function Node({
           <div
             className={`rounded px-2 py-1 text-[9px] font-mono backdrop-blur-md ${
               isSelected
-                ? "border border-emerald-400/50 bg-emerald-500/15 text-emerald-300"
-                : "border border-white/10 bg-black/60 text-white/40"
+                ? "border border-emerald-300/70 bg-emerald-500/18 text-emerald-200 shadow-[0_0_18px_rgba(16,185,129,0.18)]"
+                : "border border-white/16 bg-black/72 text-white/58"
             }`}
           >
             {node.label}
