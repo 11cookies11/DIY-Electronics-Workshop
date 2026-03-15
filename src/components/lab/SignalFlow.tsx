@@ -1,0 +1,87 @@
+"use client";
+
+import { QuadraticBezierLine } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
+import { useMemo, useRef } from "react";
+import * as THREE from "three";
+import { type Connection, type LabNode, THEME } from "./constants";
+
+export function SignalFlow({
+  connection,
+  startNode,
+  endNode,
+  isExploded,
+}: {
+  connection: Connection;
+  startNode: LabNode;
+  endNode: LabNode;
+  isExploded: boolean;
+}) {
+  const particleRef = useRef<THREE.Mesh>(null);
+  const lineRef = useRef<{
+    setPoints: (start: number[], end: number[], mid: number[]) => void;
+  } | null>(null);
+
+  const currentStart = useRef(new THREE.Vector3(...(isExploded ? startNode.explodedPos : startNode.assembledPos)));
+  const currentEnd = useRef(new THREE.Vector3(...(isExploded ? endNode.explodedPos : endNode.assembledPos)));
+  const targetStart = useMemo(() => (isExploded ? startNode.explodedPos : startNode.assembledPos), [isExploded, startNode]);
+  const targetEnd = useMemo(() => (isExploded ? endNode.explodedPos : endNode.assembledPos), [isExploded, endNode]);
+
+  const color = useMemo(() => {
+    if (connection.flowType === "power") return THEME.power;
+    if (connection.flowType === "control") return THEME.secondary;
+    return THEME.primary;
+  }, [connection.flowType]);
+
+  useFrame((state) => {
+    currentStart.current.lerp(new THREE.Vector3(...targetStart), 0.05);
+    currentEnd.current.lerp(new THREE.Vector3(...targetEnd), 0.05);
+
+    if (lineRef.current) {
+      lineRef.current.setPoints(
+        currentStart.current.toArray(),
+        currentEnd.current.toArray(),
+        new THREE.Vector3()
+          .addVectors(currentStart.current, currentEnd.current)
+          .multiplyScalar(0.5)
+          .add(new THREE.Vector3(0, isExploded ? 0.5 : 0.1, 0))
+          .toArray(),
+      );
+    }
+
+    if (particleRef.current) {
+      const time = state.clock.getElapsedTime() * connection.speed * 0.4;
+      const t = time % 1;
+      const mid = new THREE.Vector3().addVectors(currentStart.current, currentEnd.current).multiplyScalar(0.5);
+      mid.y += isExploded ? 0.5 : 0.1;
+
+      const pos = new THREE.Vector3();
+      const invT = 1 - t;
+      pos.addScaledVector(currentStart.current, invT * invT);
+      pos.addScaledVector(mid, 2 * invT * t);
+      pos.addScaledVector(currentEnd.current, t * t);
+      particleRef.current.position.copy(pos);
+
+      const scale = 0.03 + Math.sin(state.clock.getElapsedTime() * 5) * 0.01;
+      particleRef.current.scale.set(scale, scale, scale);
+    }
+  });
+
+  return (
+    <group>
+      <QuadraticBezierLine
+        ref={lineRef as never}
+        start={currentStart.current.toArray()}
+        end={currentEnd.current.toArray()}
+        color={color}
+        lineWidth={0.3}
+        transparent
+        opacity={isExploded ? 0.18 : 0.03}
+      />
+      <mesh ref={particleRef}>
+        <sphereGeometry args={[1, 8, 8]} />
+        <meshBasicMaterial color={color} transparent opacity={0.65} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
