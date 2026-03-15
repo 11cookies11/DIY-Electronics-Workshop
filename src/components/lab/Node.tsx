@@ -79,11 +79,13 @@ export function Node({
   node,
   isExploded,
   isSelected,
+  isDark,
   onClick,
 }: {
   node: LabNode;
   isExploded: boolean;
   isSelected: boolean;
+  isDark: boolean;
   onClick: () => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
@@ -149,16 +151,62 @@ export function Node({
       case "mcu":
         return (
           <group>
-            <Box args={[0.3, 0.08, 0.3]}>
-              <meshStandardMaterial color="#303845" roughness={0.12} metalness={0.9} />
+            {/* Main ESP32 carrier board */}
+            <Box args={[0.42, 0.05, 0.32]}>
+              <meshStandardMaterial color="#1e2732" roughness={0.42} metalness={0.35} />
             </Box>
-            {[...Array(8)].map((_, i) => (
-              <group key={i} rotation={[0, (i * Math.PI) / 4, 0]}>
-                <Box args={[0.01, 0.01, 0.35]} position={[0.12, -0.04, 0]}>
-                  <meshStandardMaterial color="#ffbf47" emissive="#7a4b00" emissiveIntensity={0.45} metalness={1} />
-                </Box>
-              </group>
-            ))}
+
+            {/* Shield can */}
+            <Box args={[0.2, 0.035, 0.18]} position={[0, 0.028, -0.025]}>
+              <meshStandardMaterial color="#aeb9c6" roughness={0.18} metalness={0.95} />
+            </Box>
+
+            {/* Main chip */}
+            <Box args={[0.08, 0.018, 0.08]} position={[0, 0.055, -0.02]}>
+              <meshStandardMaterial color="#0f141b" roughness={0.22} metalness={0.55} />
+            </Box>
+
+            {/* USB / connector block */}
+            <Box args={[0.09, 0.03, 0.07]} position={[0, 0.02, 0.12]}>
+              <meshStandardMaterial color="#ced6de" roughness={0.2} metalness={0.92} />
+            </Box>
+
+            {/* Status LED */}
+            <Box args={[0.024, 0.01, 0.024]} position={[-0.11, 0.035, 0.07]}>
+              <meshStandardMaterial
+                color={THEME.primary}
+                emissive={THEME.primary}
+                emissiveIntensity={isSelected ? 4.2 : 1.6}
+                toneMapped={false}
+              />
+            </Box>
+
+            {/* Passive components */}
+            <Box args={[0.034, 0.012, 0.02]} position={[0.12, 0.03, 0.05]}>
+              <meshStandardMaterial color="#c8b68a" roughness={0.45} metalness={0.25} />
+            </Box>
+            <Box args={[0.028, 0.012, 0.018]} position={[-0.085, 0.03, -0.105]}>
+              <meshStandardMaterial color="#6f7d8d" roughness={0.35} metalness={0.55} />
+            </Box>
+
+            {/* Dual side headers */}
+            {[-0.18, 0.18].map((x) =>
+              [...Array(8)].map((_, i) => (
+                <group key={`${x}-${i}`} position={[x, 0.002, -0.12 + i * 0.035]}>
+                  <Box args={[0.022, 0.02, 0.012]}>
+                    <meshStandardMaterial color="#11161d" roughness={0.4} metalness={0.4} />
+                  </Box>
+                  <Box args={[0.01, 0.01, 0.024]} position={[x > 0 ? 0.012 : -0.012, -0.002, 0]}>
+                    <meshStandardMaterial color="#d6a54a" roughness={0.2} metalness={1} />
+                  </Box>
+                </group>
+              )),
+            )}
+
+            {/* Antenna trace zone */}
+            <Box args={[0.14, 0.006, 0.055]} position={[0, 0.03, -0.135]}>
+              <meshStandardMaterial color="#4fd8c2" emissive="#1ea896" emissiveIntensity={0.35} />
+            </Box>
           </group>
         );
       case "screen":
@@ -231,13 +279,15 @@ export function Node({
       <Html distanceFactor={8} position={[0, 0.8, 0]} center>
         <motion.div
           initial={{ opacity: 0 }}
-          animate={{ opacity: isSelected ? 1 : isExploded ? 0.45 : 0, scale: isSelected ? 1.08 : 1 }}
+          animate={{ opacity: isSelected ? 1 : 0, scale: isSelected ? 1.08 : 1 }}
           className="pointer-events-none select-none"
         >
           <div
             className={`rounded px-2 py-1 text-[9px] font-mono backdrop-blur-md ${
               isSelected
-                ? "border border-emerald-300/70 bg-emerald-500/18 text-emerald-200 shadow-[0_0_18px_rgba(16,185,129,0.18)]"
+                ? isDark
+                  ? "border border-emerald-300/70 bg-emerald-500/18 text-emerald-100 shadow-[0_0_18px_rgba(16,185,129,0.18)]"
+                  : "border border-emerald-300 bg-white/78 text-emerald-700 shadow-[0_0_22px_rgba(16,185,129,0.16)]"
                 : "border border-white/16 bg-black/72 text-white/58"
             }`}
           >

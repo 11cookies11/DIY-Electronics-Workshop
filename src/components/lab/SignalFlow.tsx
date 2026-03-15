@@ -11,11 +11,13 @@ export function SignalFlow({
   startNode,
   endNode,
   isExploded,
+  isDark,
 }: {
   connection: Connection;
   startNode: LabNode;
   endNode: LabNode;
   isExploded: boolean;
+  isDark: boolean;
 }) {
   const particleRef = useRef<THREE.Mesh>(null);
   const lineRef = useRef<{
@@ -74,13 +76,26 @@ export function SignalFlow({
         start={currentStart.current.toArray()}
         end={currentEnd.current.toArray()}
         color={color}
-        lineWidth={0.3}
+        lineWidth={isDark ? 0.3 : 1.2}
         transparent
-        opacity={isExploded ? 0.34 : 0.08}
+        opacity={
+          isDark
+            ? isExploded
+              ? 0.34
+              : 0.08
+            : isExploded
+              ? 0.58
+              : 0.18
+        }
       />
       <mesh ref={particleRef}>
         <sphereGeometry args={[1, 8, 8]} />
-        <meshBasicMaterial color={color} transparent opacity={0.82} toneMapped={false} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={isDark ? 0.82 : 0.95}
+          toneMapped={false}
+        />
       </mesh>
     </group>
   );

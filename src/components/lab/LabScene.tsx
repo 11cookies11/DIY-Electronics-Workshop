@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
 import { AnimatePresence, motion } from "motion/react";
 import { Moon, Settings, Sun, X } from "lucide-react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 import { ChatInterface } from "./ChatInterface";
 import { CONNECTIONS, LAB_NODES, THEME } from "./constants";
 import { Node } from "./Node";
@@ -28,23 +28,16 @@ export function LabScene({
   userInfoError,
 }: LabSceneProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [isExploded, setIsExploded] = useState(false);
+  const [isExploded, setIsExploded] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const { mode, toggleTheme } = useTheme();
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      setIsExploded((prev) => !prev);
-    }, 8000);
-    return () => window.clearInterval(interval);
-  }, []);
 
   const isDark = mode === "dark";
   const bgColor = isDark ? THEME.bg : THEME.bgLight;
 
   return (
     <div className={`relative h-screen w-screen overflow-hidden transition-colors duration-500 ${isDark ? "bg-[#050505]" : "bg-[#f0f2f5]"}`}>
-      <Canvas shadows dpr={[1, 2]}>
+      <Canvas shadows dpr={[1, 2]} onPointerMissed={() => setSelectedNodeId(null)}>
         <PerspectiveCamera makeDefault position={[5, 5, 5]} fov={40} />
         <OrbitControls enableDamping dampingFactor={0.05} minDistance={2} maxDistance={12} maxPolarAngle={Math.PI / 1.8} />
         <color attach="background" args={[bgColor]} />
@@ -70,6 +63,7 @@ export function LabScene({
               node={node}
               isExploded={isExploded}
               isSelected={selectedNodeId === node.id}
+              isDark={isDark}
               onClick={() => setSelectedNodeId((prev) => (prev === node.id ? null : node.id))}
             />
           ))}
@@ -85,6 +79,7 @@ export function LabScene({
                 startNode={startNode}
                 endNode={endNode}
                 isExploded={isExploded}
+                isDark={isDark}
               />
             );
           })}
@@ -120,13 +115,13 @@ export function LabScene({
           <div className="pointer-events-auto flex gap-4">
             <button
               onClick={() => setIsExploded((prev) => !prev)}
-              className={`${isDark ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white" : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"} rounded-sm border px-4 py-2 font-mono text-[10px] uppercase tracking-widest transition-all`}
+              className={`${isDark ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white" : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"} flex h-14 min-w-24 items-center justify-center rounded-sm border px-4 font-mono text-[10px] uppercase tracking-[0.18em] transition-all md:h-16 md:min-w-28`}
             >
               {isExploded ? "合拢设备" : "拆解设备"}
             </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className={`${isDark ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10" : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"} rounded-sm border p-2 transition-all`}
+              className={`${isDark ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10" : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"} flex h-14 w-14 items-center justify-center rounded-sm border transition-all md:h-16 md:w-16`}
             >
               <Settings size={16} />
             </button>
