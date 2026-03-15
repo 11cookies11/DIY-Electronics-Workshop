@@ -14,4 +14,11 @@ Thumbs.db
 dist/
 build/
 out/
+.next/
+node_modules/
 
+# Local env
+.env
+.env.local
+.env.*
+!.env.example
