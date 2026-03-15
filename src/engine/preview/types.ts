@@ -46,6 +46,8 @@ export interface PreviewInput {
   modules: string[];
 }
 
+export type PreviewView = "assembled" | "exploded";
+
 export interface ModuleDefinition {
   id: string;
   category: ModuleCategory;
@@ -113,6 +115,7 @@ export interface SceneNode {
 }
 
 export interface PreviewScene {
+  view?: PreviewView;
   shellNode: SceneNode;
   boardNode: SceneNode;
   moduleNodes: SceneNode[];

@@ -7,3 +7,5 @@ export * from "./boardGrid";
 export * from "./worldTransform";
 export * from "./faceGrid";
 export * from "./faceTransform";
+export * from "./sceneBuilder";
+export * from "./exploded";
