@@ -141,18 +141,21 @@ function formatNodeLabel(node: SceneNode) {
 }
 
 function NodeLabel({ node }: { node: SceneNode }) {
-  const anchorX = node.size[0] * 0.5;
+  const anchorX = node.size[0] * 0.5 + 8;
 
   return (
-    <Html position={[anchorX, 0, 0]} distanceFactor={8} style={{ pointerEvents: "none" }}>
+    <Html
+      position={[anchorX, 0, 0]}
+      distanceFactor={10}
+      style={{ pointerEvents: "none" }}
+    >
       <motion.div
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1, scale: 1.06 }}
-        className="pointer-events-none flex select-none items-center gap-2"
-        style={{ transform: "translate(12px, -50%)" }}
+        animate={{ opacity: 1, scale: 1.02 }}
+        className="pointer-events-none flex select-none items-center"
+        style={{ transform: "translate(0, -50%)" }}
       >
-        <div className="h-px w-4 bg-cyan-400/80" />
-        <div className="rounded px-2 py-1 text-[10px] font-mono uppercase tracking-tight border border-cyan-300/75 bg-slate-950/80 text-cyan-300 shadow-[0_0_18px_rgba(34,211,238,0.14)] backdrop-blur-md">
+        <div className="rounded-md border border-cyan-300/70 bg-slate-950/80 px-2 py-1 text-[10px] font-mono tracking-tight text-cyan-200 shadow-[0_0_14px_rgba(34,211,238,0.14)] backdrop-blur-md">
           {formatNodeLabel(node)}
         </div>
       </motion.div>

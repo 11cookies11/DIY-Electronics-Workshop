@@ -154,11 +154,11 @@ export function ConnectionMesh({
         color={color}
         lineWidth={1.8}
         transparent
-        opacity={0.24}
+        opacity={0.18}
       />
       <mesh ref={particleRef}>
         <sphereGeometry args={[1.2, 10, 10]} />
-        <meshBasicMaterial color={color} transparent opacity={0.75} toneMapped={false} />
+        <meshBasicMaterial color={color} transparent opacity={0.6} toneMapped={false} />
       </mesh>
     </group>
   );
