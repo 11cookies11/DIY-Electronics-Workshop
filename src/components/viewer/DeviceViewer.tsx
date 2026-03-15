@@ -103,7 +103,11 @@ export function DeviceViewer({
             <pointLight position={[120, 120, 120]} intensity={24000} />
             <pointLight position={[-120, 80, 40]} intensity={12000} color="#67e8f9" />
             <group scale={0.015}>
-              <SceneRenderer scene={scene} />
+              <SceneRenderer
+                scene={scene}
+                selectedNodeId={null}
+                onSelectNode={() => {}}
+              />
             </group>
           </Canvas>
         </div>

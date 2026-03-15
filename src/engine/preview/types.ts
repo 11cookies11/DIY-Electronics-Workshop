@@ -166,6 +166,13 @@ export interface SceneNode {
   meta?: Record<string, unknown>;
 }
 
+export interface PreviewConnection {
+  id: string;
+  fromId: string;
+  toId: string;
+  kind: "power" | "data" | "signal" | "interface";
+}
+
 export interface PreviewScene {
   view?: PreviewView;
   shellNode: SceneNode;
@@ -173,6 +180,7 @@ export interface PreviewScene {
   moduleNodes: SceneNode[];
   screenNodes: SceneNode[];
   portNodes: SceneNode[];
+  connections: PreviewConnection[];
 }
 
 export interface FaceDescriptor {

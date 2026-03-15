@@ -6,6 +6,7 @@ import { placeMainScreen, placePorts } from "./faceGrid";
 import { getPreviewModules } from "./moduleRegistry";
 import { buildShellGeometry } from "./shellGeometry";
 import type {
+  PreviewConnection,
   PreviewInput,
   PreviewScene,
   PreviewView,
@@ -42,6 +43,21 @@ function createBoardNode(input: PreviewInput): SceneNode {
       rows: board.rows,
     },
   };
+}
+
+function getConnectionKind(category: unknown): PreviewConnection["kind"] {
+  switch (String(category ?? "")) {
+    case "power":
+      return "power";
+    case "sensor":
+    case "storage":
+      return "data";
+    case "communication":
+    case "actuator":
+      return "signal";
+    default:
+      return "interface";
+  }
 }
 
 export function buildPreviewScene(
@@ -106,6 +122,27 @@ export function buildPreviewScene(
     },
   }));
 
+  const connections: PreviewConnection[] = [
+    ...moduleNodes.map((node) => ({
+      id: `link-board-${node.id}`,
+      fromId: "main-board",
+      toId: node.id,
+      kind: getConnectionKind(node.meta?.category),
+    })),
+    ...screenNodes.map((node) => ({
+      id: `link-board-${node.id}`,
+      fromId: "main-board",
+      toId: node.id,
+      kind: "signal" as const,
+    })),
+    ...portNodes.map((node) => ({
+      id: `link-board-${node.id}`,
+      fromId: "main-board",
+      toId: node.id,
+      kind: "interface" as const,
+    })),
+  ];
+
   const scene: PreviewScene = {
     view: "assembled",
     shellNode: createShellNode(input),
@@ -113,6 +150,7 @@ export function buildPreviewScene(
     moduleNodes,
     screenNodes,
     portNodes,
+    connections,
   };
 
   return applyPreviewView(scene, view);

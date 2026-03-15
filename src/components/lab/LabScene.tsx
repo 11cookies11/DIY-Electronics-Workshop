@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
 import { AnimatePresence, motion } from "motion/react";
 import { Moon, Settings, Sun, X } from "lucide-react";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { ChatInterface } from "./ChatInterface";
 import { THEME } from "./constants";
 import { useTheme } from "./theme-context";
@@ -33,6 +33,7 @@ export function LabScene({
   const [presetId, setPresetId] = useState(PREVIEW_DEVICE_PRESETS[0].id);
   const [view, setView] = useState<PreviewView>("assembled");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const isDark = mode === "dark";
   const bgColor = isDark ? THEME.bg : THEME.bgLight;
   const activePreset =
@@ -42,6 +43,10 @@ export function LabScene({
     () => buildPreviewScene(activePreset.input, view),
     [activePreset, view],
   );
+
+  useEffect(() => {
+    setSelectedNodeId(null);
+  }, [presetId, view]);
   const heroCopy =
     "这是新的嵌入式产品 3D 预览系统。现在主舞台和左下控制面板都由同一套预览引擎驱动，可以直接切换设备方案、装配图和拆解图。";
 
@@ -51,7 +56,7 @@ export function LabScene({
         isDark ? "bg-[#050505]" : "bg-[#f0f2f5]"
       }`}
     >
-      <Canvas shadows dpr={[1, 2]}>
+      <Canvas shadows dpr={[1, 2]} onPointerMissed={() => setSelectedNodeId(null)}>
         <PerspectiveCamera makeDefault position={[4.9, 4.1, 6]} fov={38} />
         <OrbitControls
           enableDamping
@@ -89,7 +94,11 @@ export function LabScene({
         />
         <Suspense fallback={null}>
           <group scale={0.015}>
-            <SceneRenderer scene={activeScene} />
+            <SceneRenderer
+              scene={activeScene}
+              selectedNodeId={selectedNodeId}
+              onSelectNode={setSelectedNodeId}
+            />
           </group>
           <EffectComposer>
             <Bloom
