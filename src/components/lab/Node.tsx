@@ -5,7 +5,8 @@ import { extend, useFrame } from "@react-three/fiber";
 import { motion } from "motion/react";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
-import { type LabNode, THEME } from "./constants";
+import { THEME } from "./constants";
+import type { SceneModuleNode } from "./scene-schema";
 
 const ScreenMaterial = shaderMaterial(
   {
@@ -79,18 +80,23 @@ export function Node({
   node,
   isExploded,
   isSelected,
+  isHighlighted,
   isDark,
   onClick,
 }: {
-  node: LabNode;
+  node: SceneModuleNode;
   isExploded: boolean;
   isSelected: boolean;
+  isHighlighted: boolean;
   isDark: boolean;
   onClick: () => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const materialRef = useRef<{ uTime: number; uIsSelected: boolean } | null>(null);
-  const targetPos = useMemo(() => (isExploded ? node.explodedPos : node.assembledPos), [isExploded, node]);
+  const targetPos = useMemo(
+    () => (isExploded ? node.explodedPosition : node.assembledPosition),
+    [node.assembledPosition, node.explodedPosition, isExploded],
+  );
   const screenMaterialInstance = useMemo(() => new (ScreenMaterial as unknown as new () => THREE.ShaderMaterial)(), []);
 
   useFrame((state) => {
@@ -135,108 +141,118 @@ export function Node({
     }
   };
 
+  const nodeType = node.type.toLowerCase();
+  const nodeCategory = node.category?.toLowerCase() ?? "";
+
   const renderGeometry = () => {
-    switch (node.type) {
-      case "sensor":
-        return (
-          <group>
-            <Box args={[0.25, 0.06, 0.25]}>
-              <meshStandardMaterial color="#2a313b" roughness={0.18} metalness={0.82} />
-            </Box>
-            <Box args={[0.08, 0.08, 0.08]} position={[0, 0.04, 0]}>
-              <meshStandardMaterial color={THEME.primary} emissive={THEME.primary} emissiveIntensity={2.8} />
-            </Box>
-          </group>
-        );
-      case "mcu":
-        return (
-          <group>
-            {/* Main ESP32 carrier board */}
-            <Box args={[0.42, 0.05, 0.32]}>
-              <meshStandardMaterial color="#1e2732" roughness={0.42} metalness={0.35} />
-            </Box>
+    if (
+      nodeType.includes("sensor") ||
+      nodeCategory === "sensor"
+    ) {
+      return (
+        <group>
+          <Box args={[0.25, 0.06, 0.25]}>
+            <meshStandardMaterial color="#2a313b" roughness={0.18} metalness={0.82} />
+          </Box>
+          <Box args={[0.08, 0.08, 0.08]} position={[0, 0.04, 0]}>
+            <meshStandardMaterial
+              color={THEME.primary}
+              emissive={THEME.primary}
+              emissiveIntensity={isSelected || isHighlighted ? 3.8 : 2.8}
+            />
+          </Box>
+        </group>
+      );
+    }
 
-            {/* Shield can */}
-            <Box args={[0.2, 0.035, 0.18]} position={[0, 0.028, -0.025]}>
-              <meshStandardMaterial color="#aeb9c6" roughness={0.18} metalness={0.95} />
-            </Box>
+    if (
+      nodeType.includes("controller") ||
+      nodeType.includes("mcu") ||
+      nodeCategory === "controller"
+    ) {
+      return (
+        <group>
+          <Box args={[0.42, 0.05, 0.32]}>
+            <meshStandardMaterial color="#1e2732" roughness={0.42} metalness={0.35} />
+          </Box>
+          <Box args={[0.2, 0.035, 0.18]} position={[0, 0.028, -0.025]}>
+            <meshStandardMaterial color="#aeb9c6" roughness={0.18} metalness={0.95} />
+          </Box>
+          <Box args={[0.08, 0.018, 0.08]} position={[0, 0.055, -0.02]}>
+            <meshStandardMaterial color="#0f141b" roughness={0.22} metalness={0.55} />
+          </Box>
+          <Box args={[0.09, 0.03, 0.07]} position={[0, 0.02, 0.12]}>
+            <meshStandardMaterial color="#ced6de" roughness={0.2} metalness={0.92} />
+          </Box>
+          <Box args={[0.024, 0.01, 0.024]} position={[-0.11, 0.035, 0.07]}>
+            <meshStandardMaterial
+              color={THEME.primary}
+              emissive={THEME.primary}
+              emissiveIntensity={isSelected || isHighlighted ? 4.2 : 1.6}
+              toneMapped={false}
+            />
+          </Box>
+          {[-0.18, 0.18].map((x) =>
+            [...Array(8)].map((_, i) => (
+              <group key={`${x}-${i}`} position={[x, 0.002, -0.12 + i * 0.035]}>
+                <Box args={[0.022, 0.02, 0.012]}>
+                  <meshStandardMaterial color="#11161d" roughness={0.4} metalness={0.4} />
+                </Box>
+                <Box args={[0.01, 0.01, 0.024]} position={[x > 0 ? 0.012 : -0.012, -0.002, 0]}>
+                  <meshStandardMaterial color="#d6a54a" roughness={0.2} metalness={1} />
+                </Box>
+              </group>
+            )),
+          )}
+          <Box args={[0.14, 0.006, 0.055]} position={[0, 0.03, -0.135]}>
+            <meshStandardMaterial color="#4fd8c2" emissive="#1ea896" emissiveIntensity={0.35} />
+          </Box>
+        </group>
+      );
+    }
 
-            {/* Main chip */}
-            <Box args={[0.08, 0.018, 0.08]} position={[0, 0.055, -0.02]}>
-              <meshStandardMaterial color="#0f141b" roughness={0.22} metalness={0.55} />
-            </Box>
+    if (
+      nodeType.includes("screen") ||
+      nodeType.includes("display") ||
+      nodeCategory === "ui"
+    ) {
+      return (
+        <group rotation={screenRotation()}>
+          <Box args={[0.9, 0.9, 0.05]}>
+            <meshStandardMaterial color="#29313c" roughness={0.42} metalness={0.58} />
+          </Box>
+          <mesh position={[0, 0, 0.026]}>
+            <planeGeometry args={[0.85, 0.85]} />
+            <primitive
+              object={screenMaterialInstance}
+              attach="material"
+              ref={materialRef}
+            />
+          </mesh>
+        </group>
+      );
+    }
 
-            {/* USB / connector block */}
-            <Box args={[0.09, 0.03, 0.07]} position={[0, 0.02, 0.12]}>
-              <meshStandardMaterial color="#ced6de" roughness={0.2} metalness={0.92} />
-            </Box>
+    if (
+      nodeType.includes("battery") ||
+      nodeCategory === "power"
+    ) {
+      return (
+        <group>
+          <Box args={[0.4, 0.2, 0.4]}>
+            <meshStandardMaterial color="#35302a" />
+          </Box>
+          <Box args={[0.38, 0.18, 0.38]}>
+            <meshStandardMaterial color={THEME.power} emissive={THEME.power} emissiveIntensity={isSelected || isHighlighted ? 5 : 1.8} toneMapped={false} />
+          </Box>
+        </group>
+      );
+    }
 
-            {/* Status LED */}
-            <Box args={[0.024, 0.01, 0.024]} position={[-0.11, 0.035, 0.07]}>
-              <meshStandardMaterial
-                color={THEME.primary}
-                emissive={THEME.primary}
-                emissiveIntensity={isSelected ? 4.2 : 1.6}
-                toneMapped={false}
-              />
-            </Box>
-
-            {/* Passive components */}
-            <Box args={[0.034, 0.012, 0.02]} position={[0.12, 0.03, 0.05]}>
-              <meshStandardMaterial color="#c8b68a" roughness={0.45} metalness={0.25} />
-            </Box>
-            <Box args={[0.028, 0.012, 0.018]} position={[-0.085, 0.03, -0.105]}>
-              <meshStandardMaterial color="#6f7d8d" roughness={0.35} metalness={0.55} />
-            </Box>
-
-            {/* Dual side headers */}
-            {[-0.18, 0.18].map((x) =>
-              [...Array(8)].map((_, i) => (
-                <group key={`${x}-${i}`} position={[x, 0.002, -0.12 + i * 0.035]}>
-                  <Box args={[0.022, 0.02, 0.012]}>
-                    <meshStandardMaterial color="#11161d" roughness={0.4} metalness={0.4} />
-                  </Box>
-                  <Box args={[0.01, 0.01, 0.024]} position={[x > 0 ? 0.012 : -0.012, -0.002, 0]}>
-                    <meshStandardMaterial color="#d6a54a" roughness={0.2} metalness={1} />
-                  </Box>
-                </group>
-              )),
-            )}
-
-            {/* Antenna trace zone */}
-            <Box args={[0.14, 0.006, 0.055]} position={[0, 0.03, -0.135]}>
-              <meshStandardMaterial color="#4fd8c2" emissive="#1ea896" emissiveIntensity={0.35} />
-            </Box>
-          </group>
-        );
-      case "screen":
-        return (
-          <group rotation={screenRotation()}>
-            <Box args={[0.9, 0.9, 0.05]}>
-              <meshStandardMaterial color="#29313c" roughness={0.42} metalness={0.58} />
-            </Box>
-            <mesh position={[0, 0, 0.026]}>
-              <planeGeometry args={[0.85, 0.85]} />
-              <primitive
-                object={screenMaterialInstance}
-                attach="material"
-                ref={materialRef}
-              />
-            </mesh>
-          </group>
-        );
-      case "battery":
-        return (
-          <group>
-            <Box args={[0.4, 0.2, 0.4]}>
-              <meshStandardMaterial color="#35302a" />
-            </Box>
-            <Box args={[0.38, 0.18, 0.38]}>
-              <meshStandardMaterial color={THEME.power} emissive={THEME.power} emissiveIntensity={isSelected ? 5 : 1.8} toneMapped={false} />
-            </Box>
-          </group>
-        );
-      case "speaker":
+    if (
+      nodeType.includes("speaker") ||
+      nodeCategory === "actuator"
+    ) {
         return (
           <group>
             <Cylinder args={[0.15, 0.15, 0.1, 32]} rotation={[Math.PI / 2, 0, 0]}>
@@ -247,14 +263,39 @@ export function Node({
             </Cylinder>
           </group>
         );
-      case "network":
+    }
+
+    if (
+      nodeType.includes("network") ||
+      nodeType.includes("wifi") ||
+      nodeType.includes("communication") ||
+      nodeCategory === "communication"
+    ) {
+      return (
+        <group>
+          <Box args={[0.2, 0.05, 0.2]}>
+            <meshStandardMaterial color="#2a313b" />
+          </Box>
+          <Box args={[0.15, 0.06, 0.15]}>
+            <meshStandardMaterial color={THEME.primary} emissive={THEME.primary} emissiveIntensity={isSelected || isHighlighted ? 5 : 1.8} toneMapped={false} />
+          </Box>
+        </group>
+      );
+    }
+
+    switch (node.type) {
+      case "sensor_module":
         return (
           <group>
-            <Box args={[0.2, 0.05, 0.2]}>
-              <meshStandardMaterial color="#2a313b" />
+            <Box args={[0.25, 0.06, 0.25]}>
+              <meshStandardMaterial color="#2a313b" roughness={0.18} metalness={0.82} />
             </Box>
-            <Box args={[0.15, 0.06, 0.15]}>
-              <meshStandardMaterial color={THEME.primary} emissive={THEME.primary} emissiveIntensity={isSelected ? 5 : 1.8} toneMapped={false} />
+            <Box args={[0.08, 0.08, 0.08]} position={[0, 0.04, 0]}>
+              <meshStandardMaterial
+                color={THEME.primary}
+                emissive={THEME.primary}
+                emissiveIntensity={isSelected || isHighlighted ? 3.8 : 2.8}
+              />
             </Box>
           </group>
         );
@@ -288,10 +329,14 @@ export function Node({
                 ? isDark
                   ? "border border-emerald-300/70 bg-emerald-500/18 text-emerald-100 shadow-[0_0_18px_rgba(16,185,129,0.18)]"
                   : "border border-emerald-300 bg-white/78 text-emerald-700 shadow-[0_0_22px_rgba(16,185,129,0.16)]"
+                : isHighlighted
+                  ? isDark
+                    ? "border border-cyan-300/55 bg-cyan-400/10 text-cyan-100 shadow-[0_0_16px_rgba(34,211,238,0.16)]"
+                    : "border border-cyan-200 bg-white/74 text-cyan-700 shadow-[0_0_18px_rgba(34,211,238,0.14)]"
                 : "border border-white/16 bg-black/72 text-white/58"
             }`}
           >
-            {node.label}
+            {node.label ?? node.id}
           </div>
         </motion.div>
       </Html>

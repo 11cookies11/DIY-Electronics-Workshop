@@ -4,18 +4,23 @@ import { QuadraticBezierLine } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
-import { type Connection, type LabNode, THEME } from "./constants";
+import { THEME } from "./constants";
+import type { SceneConnection } from "./scene-schema";
 
 export function SignalFlow({
   connection,
-  startNode,
-  endNode,
+  startAssembledPos,
+  startExplodedPos,
+  endAssembledPos,
+  endExplodedPos,
   isExploded,
   isDark,
 }: {
-  connection: Connection;
-  startNode: LabNode;
-  endNode: LabNode;
+  connection: SceneConnection;
+  startAssembledPos: [number, number, number];
+  startExplodedPos: [number, number, number];
+  endAssembledPos: [number, number, number];
+  endExplodedPos: [number, number, number];
   isExploded: boolean;
   isDark: boolean;
 }) {
@@ -24,16 +29,32 @@ export function SignalFlow({
     setPoints: (start: number[], end: number[], mid: number[]) => void;
   } | null>(null);
 
-  const currentStart = useRef(new THREE.Vector3(...(isExploded ? startNode.explodedPos : startNode.assembledPos)));
-  const currentEnd = useRef(new THREE.Vector3(...(isExploded ? endNode.explodedPos : endNode.assembledPos)));
-  const targetStart = useMemo(() => (isExploded ? startNode.explodedPos : startNode.assembledPos), [isExploded, startNode]);
-  const targetEnd = useMemo(() => (isExploded ? endNode.explodedPos : endNode.assembledPos), [isExploded, endNode]);
+  const currentStart = useRef(
+    new THREE.Vector3(...(isExploded ? startExplodedPos : startAssembledPos)),
+  );
+  const currentEnd = useRef(
+    new THREE.Vector3(...(isExploded ? endExplodedPos : endAssembledPos)),
+  );
+  const targetStart = useMemo(
+    () => (isExploded ? startExplodedPos : startAssembledPos),
+    [isExploded, startAssembledPos, startExplodedPos],
+  );
+  const targetEnd = useMemo(
+    () => (isExploded ? endExplodedPos : endAssembledPos),
+    [endAssembledPos, endExplodedPos, isExploded],
+  );
 
   const color = useMemo(() => {
-    if (connection.flowType === "power") return THEME.power;
-    if (connection.flowType === "control") return THEME.secondary;
+    if (connection.kind === "power") return THEME.power;
+    if (connection.kind === "signal") return THEME.secondary;
     return THEME.primary;
-  }, [connection.flowType]);
+  }, [connection.kind]);
+
+  const speed = useMemo(() => {
+    if (connection.kind === "power") return 2;
+    if (connection.kind === "signal") return 1.5;
+    return 3.5;
+  }, [connection.kind]);
 
   useFrame((state) => {
     currentStart.current.lerp(new THREE.Vector3(...targetStart), 0.05);
@@ -52,7 +73,7 @@ export function SignalFlow({
     }
 
     if (particleRef.current) {
-      const time = state.clock.getElapsedTime() * connection.speed * 0.4;
+      const time = state.clock.getElapsedTime() * speed * 0.4;
       const t = time % 1;
       const mid = new THREE.Vector3().addVectors(currentStart.current, currentEnd.current).multiplyScalar(0.5);
       mid.y += isExploded ? 0.5 : 0.1;
