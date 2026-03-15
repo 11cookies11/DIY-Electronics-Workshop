@@ -5,19 +5,14 @@ import { Canvas } from "@react-three/fiber";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
 import { AnimatePresence, motion } from "motion/react";
 import { Moon, Settings, Sun, X } from "lucide-react";
-import { Suspense, useEffect, useMemo, useRef } from "react";
-import type { PerspectiveCamera as PerspectiveCameraImpl } from "three";
-import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { Suspense, useMemo, useState } from "react";
 import { ChatInterface } from "./ChatInterface";
-import {
-  THEME,
-} from "./constants";
-import { Node } from "./Node";
-import { ShowcaseControlPanel } from "./ShowcaseControlPanel";
-import { useShowcase } from "./showcase-context";
-import { SignalFlow } from "./SignalFlow";
+import { THEME } from "./constants";
 import { useTheme } from "./theme-context";
 import { DeviceViewer } from "@/components/viewer/DeviceViewer";
+import { PREVIEW_DEVICE_PRESETS } from "@/components/viewer/device-presets";
+import { SceneRenderer } from "@/components/viewer/SceneRenderer";
+import { buildPreviewScene, type PreviewView } from "@/engine/preview";
 
 type LabSceneProps = {
   isConnected: boolean;
@@ -35,42 +30,20 @@ export function LabScene({
   userInfoError,
 }: LabSceneProps) {
   const { mode, toggleTheme } = useTheme();
-  const {
-    isExploded,
-    selectedNodeId,
-    highlightedNodeIds,
-    isSettingsOpen,
-    renderScene,
-    selectNode,
-    focusNode,
-    toggleExploded,
-    openSettings,
-    closeSettings,
-    cameraPosition,
-    cameraTarget,
-  } = useShowcase();
-
+  const [presetId, setPresetId] = useState(PREVIEW_DEVICE_PRESETS[0].id);
+  const [view, setView] = useState<PreviewView>("assembled");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const isDark = mode === "dark";
   const bgColor = isDark ? THEME.bg : THEME.bgLight;
-  const cameraRef = useRef<PerspectiveCameraImpl | null>(null);
-  const controlsRef = useRef<OrbitControlsImpl | null>(null);
-
-  const visibleNodes = renderScene.modules;
-  const visibleConnections = renderScene.connections;
-  const highlightedNodeSet = useMemo(
-    () => new Set(renderScene.highlights ?? highlightedNodeIds),
-    [renderScene.highlights, highlightedNodeIds],
+  const activePreset =
+    PREVIEW_DEVICE_PRESETS.find((preset) => preset.id === presetId) ??
+    PREVIEW_DEVICE_PRESETS[0];
+  const activeScene = useMemo(
+    () => buildPreviewScene(activePreset.input, view),
+    [activePreset, view],
   );
-
-  useEffect(() => {
-    if (!cameraRef.current || !controlsRef.current) {
-      return;
-    }
-
-    cameraRef.current.position.set(...cameraPosition);
-    controlsRef.current.target.set(...cameraTarget);
-    controlsRef.current.update();
-  }, [cameraPosition, cameraTarget]);
+  const heroCopy =
+    "这是新的嵌入式产品 3D 预览系统。现在主舞台和左下控制面板都由同一套预览引擎驱动，可以直接切换设备方案、装配图和拆解图。";
 
   return (
     <div
@@ -78,36 +51,30 @@ export function LabScene({
         isDark ? "bg-[#050505]" : "bg-[#f0f2f5]"
       }`}
     >
-      <Canvas shadows dpr={[1, 2]} onPointerMissed={() => selectNode(null)}>
-        <PerspectiveCamera
-          ref={cameraRef}
-          makeDefault
-          position={cameraPosition}
-          fov={40}
-        />
+      <Canvas shadows dpr={[1, 2]}>
+        <PerspectiveCamera makeDefault position={[4.9, 4.1, 6]} fov={38} />
         <OrbitControls
-          ref={controlsRef}
           enableDamping
           dampingFactor={0.05}
           minDistance={2}
           maxDistance={12}
           maxPolarAngle={Math.PI / 1.8}
-          target={cameraTarget}
+          target={[0, 0, 0]}
         />
         <color attach="background" args={[bgColor]} />
         <fog attach="fog" args={[bgColor, 6, 15]} />
-        <ambientLight intensity={isDark ? 0.82 : 0.9} />
-        <pointLight position={[10, 10, 10]} intensity={isDark ? 1.35 : 0.5} />
+        <ambientLight intensity={isDark ? 0.82 : 0.92} />
+        <pointLight position={[10, 10, 10]} intensity={isDark ? 1.35 : 0.55} />
         <pointLight
           position={[-6, 4, 6]}
-          intensity={isDark ? 0.65 : 0.2}
+          intensity={isDark ? 0.65 : 0.24}
           color="#3ddcff"
         />
         <spotLight
           position={[-10, 10, 10]}
           angle={0.15}
           penumbra={1}
-          intensity={isDark ? 2.1 : 0.8}
+          intensity={isDark ? 2.1 : 0.9}
           castShadow
         />
         <Grid
@@ -121,41 +88,9 @@ export function LabScene({
           position={[0, -4, 0]}
         />
         <Suspense fallback={null}>
-          {visibleNodes.map((node) => {
-            return (
-              <Node
-                key={node.id}
-                node={node}
-                isExploded={isExploded}
-                isSelected={selectedNodeId === node.id}
-                isHighlighted={highlightedNodeSet.has(node.id)}
-                isDark={isDark}
-                onClick={() =>
-                  selectedNodeId === node.id ? selectNode(null) : focusNode(node.id)
-                }
-              />
-            );
-          })}
-          {visibleConnections.map((connection) => {
-            const startNode = visibleNodes.find((node) => node.id === connection.from);
-            const endNode = visibleNodes.find((node) => node.id === connection.to);
-            if (!startNode || !endNode) {
-              return null;
-            }
-
-            return (
-              <SignalFlow
-                key={connection.id}
-                connection={connection}
-                startAssembledPos={startNode.assembledPosition}
-                startExplodedPos={startNode.explodedPosition}
-                endAssembledPos={endNode.assembledPosition}
-                endExplodedPos={endNode.explodedPosition}
-                isExploded={isExploded}
-                isDark={isDark}
-              />
-            );
-          })}
+          <group scale={0.015}>
+            <SceneRenderer scene={activeScene} />
+          </group>
           <EffectComposer>
             <Bloom
               luminanceThreshold={1}
@@ -181,12 +116,12 @@ export function LabScene({
               <div className="relative">
                 <div
                   className={`h-3 w-3 rounded-full ${
-                    isExploded ? "bg-blue-500" : "bg-emerald-500"
+                    view === "exploded" ? "bg-blue-500" : "bg-emerald-500"
                   } animate-pulse`}
                 />
                 <div
                   className={`absolute inset-0 h-3 w-3 rounded-full ${
-                    isExploded ? "bg-blue-500" : "bg-emerald-500"
+                    view === "exploded" ? "bg-blue-500" : "bg-emerald-500"
                   } animate-ping opacity-20`}
                 />
               </div>
@@ -205,34 +140,43 @@ export function LabScene({
                   : "border-slate-300 text-slate-500"
               }`}
             >
-              {isExploded
-                ? "internal structure | signal decomposition"
-                : "standby mode | runtime overview"}
+              {view === "exploded"
+                ? "preview mode | exploded assembly"
+                : "preview mode | assembled concept"}
             </p>
             <p
               className={`max-w-2xl text-sm leading-7 ${
                 isDark ? "text-white/70" : "text-slate-700"
               }`}
             >
-              这是从 AI Studio 迁过来的嵌入式实验室界面。现在它已经挂在当前
-              SecondMe 工程里，可以同时展示 3D 设备、授权状态和用户资料，
-              并且已经支持产品模板、展示场景和讲解分组切换。
+              {heroCopy}
+            </p>
+            <p
+              className={`font-mono text-[10px] uppercase tracking-[0.18em] ${
+                isDark ? "text-cyan-300/70" : "text-cyan-700"
+              }`}
+            >
+              active preset | {activePreset.label}
             </p>
           </div>
 
           <div className="pointer-events-auto flex gap-3">
             <button
-              onClick={toggleExploded}
+              onClick={() =>
+                setView((current) =>
+                  current === "assembled" ? "exploded" : "assembled",
+                )
+              }
               className={`flex h-12 min-w-24 items-center justify-center rounded-sm border px-4 font-mono text-[10px] uppercase tracking-[0.18em] transition-all md:h-14 md:min-w-28 ${
                 isDark
                   ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
                   : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"
               }`}
             >
-              {isExploded ? "合拢设备" : "拆解设备"}
+              {view === "exploded" ? "合拢设备" : "拆解设备"}
             </button>
             <button
-              onClick={openSettings}
+              onClick={() => setIsSettingsOpen(true)}
               className={`flex h-12 w-12 items-center justify-center rounded-sm border transition-all md:h-14 md:w-14 ${
                 isDark
                   ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
@@ -245,8 +189,15 @@ export function LabScene({
         </div>
 
         <div className="flex flex-wrap items-end justify-start gap-4">
-          <ShowcaseControlPanel />
-          <DeviceViewer />
+          <DeviceViewer
+            presetId={presetId}
+            view={view}
+            onPresetChange={(nextPresetId) => {
+              setPresetId(nextPresetId);
+              setView("assembled");
+            }}
+            onViewChange={setView}
+          />
         </div>
       </div>
 
@@ -257,7 +208,7 @@ export function LabScene({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={closeSettings}
+              onClick={() => setIsSettingsOpen(false)}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
             <motion.div
@@ -289,7 +240,7 @@ export function LabScene({
                   </h2>
                 </div>
                 <button
-                  onClick={closeSettings}
+                  onClick={() => setIsSettingsOpen(false)}
                   className={`rounded-full p-1 transition-colors ${
                     isDark
                       ? "text-white/40 hover:bg-white/10"
@@ -337,10 +288,7 @@ export function LabScene({
                           : "border-white/10 bg-white/5 text-white/40 hover:border-white/20"
                       }`}
                     >
-                      <Sun
-                        size={24}
-                        className={!isDark ? "text-blue-500" : ""}
-                      />
+                      <Sun size={24} className={!isDark ? "text-blue-500" : ""} />
                       <span className="font-mono text-[10px] uppercase">浅色模式</span>
                     </button>
                   </div>
@@ -378,6 +326,8 @@ export function LabScene({
         error={error}
         userInfo={userInfo}
         userInfoError={userInfoError}
+        activePresetLabel={activePreset.label}
+        activeView={view}
       />
     </div>
   );

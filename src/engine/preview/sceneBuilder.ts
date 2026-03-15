@@ -28,7 +28,7 @@ function createShellNode(input: PreviewInput): SceneNode {
 }
 
 function createBoardNode(input: PreviewInput): SceneNode {
-  const board = createBoardSpec(input.shellSize);
+  const board = createBoardSpec(input.shellSize, input.board);
 
   return {
     id: "main-board",
@@ -37,6 +37,7 @@ function createBoardNode(input: PreviewInput): SceneNode {
     size: [board.width, board.thickness, board.depth],
     meta: {
       layer: "board",
+      placement: input.board.placement,
       cols: board.cols,
       rows: board.rows,
     },
@@ -47,7 +48,7 @@ export function buildPreviewScene(
   input: PreviewInput,
   view: PreviewView = "assembled",
 ): PreviewScene {
-  const boardSpec = createBoardSpec(input.shellSize);
+  const boardSpec = createBoardSpec(input.shellSize, input.board);
   const boardGrid = createBoardGrid(boardSpec.cols, boardSpec.rows);
   const modules = getPreviewModules(input.modules);
   const placedModules = placeModules(boardGrid, boardSpec, modules);
@@ -60,6 +61,8 @@ export function buildPreviewScene(
     meta: {
       layer: "module",
       category: modules.find((entry) => entry.id === module.id)?.category,
+      shape: modules.find((entry) => entry.id === module.id)?.shape,
+      sourceId: modules.find((entry) => entry.id === module.id)?.sourceId,
       zone: module.zone,
       gridX: module.gridX,
       gridY: module.gridY,
@@ -77,13 +80,14 @@ export function buildPreviewScene(
     ? [
         {
           id: screenPlacement.id,
-          type: "screen",
+          type: screenPlacement.componentType ?? "screen",
           position: screenPlacement.worldPosition,
           rotation: screenPlacement.rotation,
           size: screenPlacement.sizeMm,
           meta: {
             layer: "screen",
             face: screenPlacement.face,
+            componentType: screenPlacement.componentType ?? "display_panel",
           },
         },
       ]
@@ -91,13 +95,14 @@ export function buildPreviewScene(
 
   const portNodes: SceneNode[] = portPlacements.map((port) => ({
     id: port.id,
-    type: "port",
+    type: port.componentType ?? "port",
     position: port.worldPosition,
     rotation: port.rotation,
     size: port.sizeMm,
     meta: {
       layer: "port",
       face: port.face,
+      componentType: port.componentType ?? "usb_c",
     },
   }));
 

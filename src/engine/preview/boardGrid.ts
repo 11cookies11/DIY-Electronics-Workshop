@@ -7,6 +7,8 @@ import type {
   BoardZone,
   GridCell,
   ModuleDefinition,
+  PreviewInput,
+  ResolvedModuleDefinition,
   ShellSize,
 } from "./types";
 import { createPlacedModule } from "./worldTransform";
@@ -36,20 +38,27 @@ export function createBoardGrid(
   };
 }
 
-export function getBoardDimensions(shellSize: ShellSize) {
+export function getBoardDimensions(
+  shellSize: ShellSize,
+  boardConfig?: PreviewInput["board"],
+) {
   return {
-    width: shellSize.width * DEFAULT_BOARD_WIDTH_RATIO,
-    depth: shellSize.depth * DEFAULT_BOARD_DEPTH_RATIO,
-    thickness: DEFAULT_BOARD_THICKNESS,
+    width:
+      boardConfig?.sizeMm?.width ?? shellSize.width * DEFAULT_BOARD_WIDTH_RATIO,
+    depth:
+      boardConfig?.sizeMm?.depth ?? shellSize.depth * DEFAULT_BOARD_DEPTH_RATIO,
+    thickness:
+      boardConfig?.sizeMm?.thickness ?? DEFAULT_BOARD_THICKNESS,
   };
 }
 
 export function createBoardSpec(
   shellSize: ShellSize,
-  cols = DEFAULT_BOARD_COLS,
-  rows = DEFAULT_BOARD_ROWS,
+  boardConfig?: PreviewInput["board"],
 ): BoardSpec {
-  const dimensions = getBoardDimensions(shellSize);
+  const cols = boardConfig?.grid?.cols ?? DEFAULT_BOARD_COLS;
+  const rows = boardConfig?.grid?.rows ?? DEFAULT_BOARD_ROWS;
+  const dimensions = getBoardDimensions(shellSize, boardConfig);
   const center: [number, number, number] = [0, 0, 0];
   const topY = center[1] + dimensions.thickness / 2;
 
@@ -72,7 +81,10 @@ export function getBoardCellSize(board: BoardSpec) {
 }
 
 function range(start: number, end: number) {
-  return Array.from({ length: Math.max(end - start, 0) }, (_, index) => start + index);
+  return Array.from(
+    { length: Math.max(end - start, 0) },
+    (_, index) => start + index,
+  );
 }
 
 export function getZoneCells(board: BoardGrid, zone: BoardZone) {
@@ -184,7 +196,7 @@ function categoryOrder(module: ModuleDefinition) {
 
 function findPlacementInZone(
   board: BoardGrid,
-  module: ModuleDefinition,
+  module: ResolvedModuleDefinition,
   zone: BoardZone,
 ) {
   const candidates = getZoneCells(board, zone);
@@ -201,7 +213,7 @@ function findPlacementInZone(
 export function placeModules(
   board: BoardGrid,
   boardSpec: BoardSpec,
-  modules: ModuleDefinition[],
+  modules: ResolvedModuleDefinition[],
 ): BoardPlacedModule[] {
   const placedModules: BoardPlacedModule[] = [];
   const sorted = [...modules].sort((a, b) => {
@@ -218,7 +230,7 @@ export function placeModules(
     }
 
     if (!candidate) {
-      throw new Error(`无法放置模块: ${module.id}`);
+      throw new Error(`cannot place module: ${module.id}`);
     }
 
     occupy(board, module.id, candidate.x, candidate.y, module.gridW, module.gridH);

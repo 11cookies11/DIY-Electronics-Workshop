@@ -1,6 +1,6 @@
 "use client";
 
-import type { BoardPlacedModule, BoardSpec, ModuleDefinition } from "./types";
+import type { BoardPlacedModule, BoardSpec, ResolvedModuleDefinition } from "./types";
 import { getBoardCellSize } from "./boardGrid";
 
 export function gridToBoardWorldPosition(
@@ -21,7 +21,7 @@ export function gridToBoardWorldPosition(
 
 export function createPlacedModule(
   board: BoardSpec,
-  module: ModuleDefinition,
+  module: ResolvedModuleDefinition,
   zone: BoardPlacedModule["zone"],
   gridX: number,
   gridY: number,

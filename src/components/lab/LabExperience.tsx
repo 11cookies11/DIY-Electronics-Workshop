@@ -1,7 +1,6 @@
 "use client";
 
 import { LabScene } from "./LabScene";
-import { ShowcaseProvider } from "./showcase-context";
 import { ThemeProvider } from "./theme-context";
 
 export function LabExperience(props: {
@@ -13,9 +12,7 @@ export function LabExperience(props: {
 }) {
   return (
     <ThemeProvider>
-      <ShowcaseProvider>
-        <LabScene {...props} />
-      </ShowcaseProvider>
+      <LabScene {...props} />
     </ThemeProvider>
   );
 }

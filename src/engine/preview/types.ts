@@ -14,8 +14,12 @@ export type ModuleCategory =
   | "core"
   | "power"
   | "communication"
+  | "storage"
   | "sensor"
   | "actuator"
+  | "interface"
+  | "thermal"
+  | "mechanical"
   | "other";
 
 export type ModuleShape = "board" | "chip" | "box" | "panel";
@@ -40,10 +44,53 @@ export interface ShellSize {
 export interface PreviewInput {
   shell: ShellType;
   shellSize: ShellSize;
-  board: "center";
-  mainScreen?: FaceName;
-  ports?: FaceName[];
-  modules: string[];
+  board: {
+    placement: "center";
+    sizeMm?: {
+      width?: number;
+      depth?: number;
+      thickness?: number;
+    };
+    grid?: {
+      cols?: number;
+      rows?: number;
+    };
+  };
+  mainScreen?: {
+    face: FaceName;
+    type?: "display_panel" | "touch_display";
+    sizeMm?: {
+      width: number;
+      height: number;
+      depth: number;
+    };
+  };
+  ports?: Array<{
+    face: FaceName;
+    type?:
+      | "usb_c"
+      | "rj45"
+      | "audio_jack"
+      | "power_jack"
+      | "button_cutout"
+      | "ir_window";
+    sizeMm?: {
+      width: number;
+      height: number;
+      depth: number;
+    };
+  }>;
+  modules: Array<
+    | string
+    | {
+        id: string;
+        sizeOverride?: {
+          width?: number;
+          height?: number;
+          depth?: number;
+        };
+      }
+  >;
 }
 
 export type PreviewView = "assembled" | "exploded";
@@ -60,6 +107,10 @@ export interface ModuleDefinition {
   };
   preferredZone: PreferredZone;
   shape: ModuleShape;
+}
+
+export interface ResolvedModuleDefinition extends ModuleDefinition {
+  sourceId: string;
 }
 
 export interface GridCell {
@@ -95,6 +146,7 @@ export interface BoardPlacedModule {
 export interface FacePlacedItem {
   id: string;
   type: "screen" | "port";
+  componentType?: string;
   face: FaceName;
   gridX: number;
   gridY: number;

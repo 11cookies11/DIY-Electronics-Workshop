@@ -5,6 +5,7 @@ import type {
   FaceName,
   FacePlacedItem,
   GridCell,
+  PreviewInput,
 } from "./types";
 import { faceGridToWorldPosition, getFaceRotation } from "./faceTransform";
 
@@ -83,19 +84,59 @@ function occupy(
   }
 }
 
-export function placeMainScreen(
+function getFaceDimensions(
   face: FaceName,
   shellSize: { width: number; height: number; depth: number },
 ) {
+  switch (face) {
+    case "front":
+    case "back":
+      return {
+        width: shellSize.width,
+        height: shellSize.height,
+      };
+    case "left":
+    case "right":
+      return {
+        width: shellSize.depth,
+        height: shellSize.height,
+      };
+    case "top":
+    case "bottom":
+      return {
+        width: shellSize.width,
+        height: shellSize.depth,
+      };
+  }
+}
+
+export function placeMainScreen(
+  screen: NonNullable<PreviewInput["mainScreen"]>,
+  shellSize: { width: number; height: number; depth: number },
+) {
+  const face = screen.face;
+
   if (face === "bottom") {
-    throw new Error("v1 涓嶆敮鎸佹妸涓诲睆鏀惧湪 bottom 闈€?");
+    throw new Error("v1 does not allow the main screen on the bottom face");
   }
 
   const grid = createFaceGrid(face, DEFAULT_SCREEN_GRID.cols, DEFAULT_SCREEN_GRID.rows);
-  const gridW = 2;
-  const gridH = 2;
-  const gridX = 0;
-  const gridY = 0;
+  const screenSize = screen.sizeMm ?? {
+    width: 54,
+    height: 34,
+    depth: 4,
+  };
+  const faceSize = getFaceDimensions(face, shellSize);
+  const gridW = Math.min(
+    grid.cols,
+    Math.max(1, Math.round((screenSize.width / faceSize.width) * grid.cols)),
+  );
+  const gridH = Math.min(
+    grid.rows,
+    Math.max(1, Math.round((screenSize.height / faceSize.height) * grid.rows)),
+  );
+  const gridX = Math.max(0, Math.floor((grid.cols - gridW) / 2));
+  const gridY = Math.max(0, Math.floor((grid.rows - gridH) / 2));
 
   occupy(grid, "main-screen", gridX, gridY, gridW, gridH);
 
@@ -104,6 +145,7 @@ export function placeMainScreen(
     item: {
       id: `screen:${face}`,
       type: "screen" as const,
+      componentType: screen.type ?? "display_panel",
       face,
       gridX,
       gridY,
@@ -117,67 +159,87 @@ export function placeMainScreen(
         gridY,
         gridW,
         gridH,
-        4,
+        screenSize.depth,
       ),
       rotation: getFaceRotation(face),
-      sizeMm: [54, 4, 34] as [number, number, number],
+      sizeMm: [screenSize.width, screenSize.depth, screenSize.height] as [
+        number,
+        number,
+        number,
+      ],
     },
   };
 }
 
 export function placePorts(
-  faces: FaceName[],
+  ports: NonNullable<PreviewInput["ports"]>,
   shellSize: { width: number; height: number; depth: number },
 ): FacePlacedItem[] {
-  const grouped = faces.reduce<Record<FaceName, number>>(
-    (acc, face) => {
-      acc[face] += 1;
+  const grouped = ports.reduce<Record<FaceName, typeof ports>>(
+    (acc, port) => {
+      acc[port.face].push(port);
       return acc;
     },
     {
-      front: 0,
-      back: 0,
-      left: 0,
-      right: 0,
-      top: 0,
-      bottom: 0,
+      front: [],
+      back: [],
+      left: [],
+      right: [],
+      top: [],
+      bottom: [],
     },
   );
 
-  return Object.entries(grouped).flatMap(([faceName, count]) => {
+  return Object.entries(grouped).flatMap(([faceName, facePorts]) => {
     const face = faceName as FaceName;
     const grid = createFaceGrid(face, DEFAULT_PORT_GRID.cols, DEFAULT_PORT_GRID.rows);
     const items: FacePlacedItem[] = [];
 
-    for (let index = 0; index < count; index += 1) {
+    for (let index = 0; index < facePorts.length; index += 1) {
+      const port = facePorts[index];
+      const portSize = port.sizeMm ?? {
+        width: 12,
+        height: 8,
+        depth: 8,
+      };
+      const faceSize = getFaceDimensions(face, shellSize);
+      const gridW = Math.min(
+        grid.cols,
+        Math.max(1, Math.round((portSize.width / faceSize.width) * grid.cols)),
+      );
+      const gridH = Math.min(
+        grid.rows,
+        Math.max(1, Math.round((portSize.height / faceSize.height) * grid.rows)),
+      );
       const gridX = index % grid.cols;
       const gridY = Math.floor(index / grid.cols);
 
-      if (!canPlace(grid, gridX, gridY, 1, 1)) {
-        throw new Error(`鏃犳硶鍦?${face} 闈㈡斁缃鍙?${index + 1}`);
+      if (!canPlace(grid, gridX, gridY, gridW, gridH)) {
+        throw new Error(`cannot place port ${index + 1} on face ${face}`);
       }
 
-      occupy(grid, `port:${face}:${index}`, gridX, gridY, 1, 1);
+      occupy(grid, `port:${face}:${index}`, gridX, gridY, gridW, gridH);
       items.push({
         id: `port:${face}:${index}`,
         type: "port",
+        componentType: port.type ?? "usb_c",
         face,
         gridX,
         gridY,
-        gridW: 1,
-        gridH: 1,
+        gridW,
+        gridH,
         worldPosition: faceGridToWorldPosition(
           shellSize,
           face,
           grid,
           gridX,
           gridY,
-          1,
-          1,
-          8,
+          gridW,
+          gridH,
+          portSize.depth,
         ),
         rotation: getFaceRotation(face),
-        sizeMm: [12, 8, 8],
+        sizeMm: [portSize.width, portSize.depth, portSize.height],
       });
     }
 

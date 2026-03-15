@@ -3,7 +3,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import {
   Bot,
-  Cuboid,
   Maximize2,
   Minimize2,
   Send,
@@ -11,14 +10,7 @@ import {
   WandSparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LAB_NODES, PRODUCT_TEMPLATES, type ProductTemplateId } from "./constants";
-import {
-  HIGHLIGHT_GROUPS,
-  SHOWCASE_SCENES,
-  type HighlightGroupId,
-  type ShowcaseSceneId,
-  useShowcase,
-} from "./showcase-context";
+import type { PreviewView } from "@/engine/preview";
 import { useTheme } from "./theme-context";
 
 type Message = {
@@ -26,199 +18,49 @@ type Message = {
   content: string;
 };
 
-type AgentAction =
-  | { type: "scene"; sceneId: ShowcaseSceneId }
-  | { type: "group"; groupId: HighlightGroupId }
-  | { type: "focus"; nodeId: string }
-  | { type: "template"; templateId: ProductTemplateId };
-
 type ChatInterfaceProps = {
   isConnected?: boolean;
   connectedFromCallback?: boolean;
   error?: string;
   userInfo?: Record<string, unknown> | null;
   userInfoError?: string | null;
+  activePresetLabel: string;
+  activeView: PreviewView;
 };
 
-const QUICK_ACTIONS: Array<{
-  label: string;
-  prompt: string;
-}> = [
+const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
   { label: "介绍实验室", prompt: "请先介绍一下这个嵌入式实验室" },
-  { label: "看主控方案", prompt: "带我看一下主控方案" },
-  { label: "手持终端", prompt: "切换成手持终端形态" },
-  { label: "工业控制盒", prompt: "切换成工业控制盒形态" },
+  { label: "介绍当前方案", prompt: "介绍一下当前这个产品方案" },
+  { label: "我想做手持设备", prompt: "我想做一个手持设备" },
+  { label: "我想做桌面设备", prompt: "我想做一个桌面设备" },
 ];
 
-const sceneMatchers: Array<{
-  keywords: string[];
-  sceneId: ShowcaseSceneId;
-  reply: string;
-}> = [
-  {
-    keywords: ["概览", "整体", "整机", "总览"],
-    sceneId: "overview",
-    reply: "我先切到整体概览，给你看一下设备合拢后的整机形态。",
-  },
-  {
-    keywords: ["拆解", "结构", "拆开", "内部"],
-    sceneId: "full-exploded",
-    reply: "我先展开整机结构，这样你会更容易看清内部模块关系。",
-  },
-  {
-    keywords: ["主控", "mcu", "esp32", "控制器"],
-    sceneId: "mcu-demo",
-    reply: "我已经切到主控方案场景，重点看 MCU 如何连接和调度其他模块。",
-  },
-  {
-    keywords: ["传感", "检测", "imu", "mpu"],
-    sceneId: "sensor-demo",
-    reply: "我已经切到传感方案场景，重点看采集、处理和回传链路。",
-  },
-  {
-    keywords: ["显示", "屏幕", "交互", "界面"],
-    sceneId: "display-demo",
-    reply: "我已经切到显示方案场景，重点展示多面屏幕与交互结构。",
-  },
-  {
-    keywords: ["供电", "电池", "续航", "功耗"],
-    sceneId: "power-demo",
-    reply: "我已经切到供电结构场景，重点看电池和供电分发链路。",
-  },
-  {
-    keywords: ["联网", "wifi", "通信", "远程"],
-    sceneId: "network-demo",
-    reply: "我已经切到联网能力场景，重点看无线通信模组与主控协同。",
-  },
-];
-
-const groupMatchers: Array<{
-  keywords: string[];
-  groupId: HighlightGroupId;
-  reply: string;
-}> = [
-  {
-    keywords: ["主控核心", "核心", "控制核心"],
-    groupId: "core-control",
-    reply: "我把主控核心链路高亮了，方便你看它如何串起网络和传感模块。",
-  },
-  {
-    keywords: ["传感采集", "采集", "传感器"],
-    groupId: "sensing",
-    reply: "我把传感采集链路高亮了，重点看传感器和主控之间的数据流。",
-  },
-  {
-    keywords: ["显示交互", "多屏", "交互"],
-    groupId: "display",
-    reply: "我把显示交互模块高亮了，方便你直观看到屏幕布局。",
-  },
-  {
-    keywords: ["供电系统", "供电", "电源"],
-    groupId: "power",
-    reply: "我把供电系统高亮了，重点看电池与核心模块的关系。",
-  },
-  {
-    keywords: ["联网通信", "通信", "网络"],
-    groupId: "connectivity",
-    reply: "我把联网通信模块高亮了，方便你看无线连接能力。",
-  },
-];
-
-const templateMatchers: Array<{
-  keywords: string[];
-  templateId: ProductTemplateId;
-  reply: string;
-}> = [
-  {
-    keywords: ["立方体", "cube", "沉浸"],
-    templateId: "immersive-cube",
-    reply: "我切回了沉浸立方体形态，适合展示全向多屏结构。",
-  },
-  {
-    keywords: ["手持", "便携", "终端"],
-    templateId: "handheld-terminal",
-    reply: "我切到手持终端形态，方便你看便携式设备的装配方式。",
-  },
-  {
-    keywords: ["工业", "控制盒", "控制台"],
-    templateId: "industrial-console",
-    reply: "我切到工业控制盒形态，重点看盒体式前屏与内部模组布局。",
-  },
-  {
-    keywords: ["节点", "传感节点", "监测站"],
-    templateId: "sensor-station",
-    reply: "我切到传感节点形态，方便你看采集站式布局和供电分布。",
-  },
-];
-
-const nodeMatchers = LAB_NODES.map((node) => ({
-  nodeId: node.id,
-  label: node.label,
-  keywords: [node.label.toLowerCase(), node.id.toLowerCase()],
-}));
-
-function buildSeedMessage(isConnected: boolean) {
+function buildSeedMessage(isConnected: boolean, activePresetLabel: string) {
   return isConnected
-    ? "你好，我是实验室前台接待助手 Twin-AI。这里是一个可展示嵌入式产品概念、结构拆解和模块能力的实验室，你可以告诉我想做什么产品，我会边讲边驱动 3D 模型给你看。"
-    : "你好，我是实验室前台接待助手 Twin-AI。你可以先连接 SecondMe 账号，后续我会结合你的身份信息、产品想法和 3D 展示系统做更完整的讲解。";
+    ? `你好，我是实验室前台接待助手 Twin-AI。当前主舞台正在展示“${activePresetLabel}”，你可以继续告诉我你的产品想法，我会结合这个 3D 预览来讲解。`
+    : `你好，我是实验室前台接待助手 Twin-AI。当前主舞台正在展示“${activePresetLabel}”。你可以先连接 SecondMe，或者直接告诉我你想做什么嵌入式产品。`;
 }
 
-function collectAgentActions(input: string): {
-  reply: string;
-  actions: AgentAction[];
-} {
+function buildReply(input: string, activePresetLabel: string) {
   const normalized = input.toLowerCase();
-  const actions: AgentAction[] = [];
-  const replyParts: string[] = [];
 
-  const matchedTemplate = templateMatchers.find((matcher) =>
-    matcher.keywords.some((keyword) => normalized.includes(keyword.toLowerCase())),
-  );
-  if (matchedTemplate) {
-    actions.push({ type: "template", templateId: matchedTemplate.templateId });
-    replyParts.push(matchedTemplate.reply);
+  if (normalized.includes("介绍") && normalized.includes("实验室")) {
+    return "这里是一个面向嵌入式产品概念验证的实验室。我们会把产品拆成外壳、主板、屏幕、端口和内部模块，再用 3D 预览把结构直观地展示出来。";
   }
 
-  const matchedScene = sceneMatchers.find((matcher) =>
-    matcher.keywords.some((keyword) => normalized.includes(keyword.toLowerCase())),
-  );
-  if (matchedScene) {
-    actions.push({ type: "scene", sceneId: matchedScene.sceneId });
-    replyParts.push(matchedScene.reply);
+  if (normalized.includes("当前") || normalized.includes("方案")) {
+    return `当前主舞台展示的是“${activePresetLabel}”。如果你愿意，我们接下来可以继续细化它的屏幕、端口、主板布局，或者切换到别的产品方向。`;
   }
 
-  const matchedGroup = groupMatchers.find((matcher) =>
-    matcher.keywords.some((keyword) => normalized.includes(keyword.toLowerCase())),
-  );
-  if (matchedGroup) {
-    actions.push({ type: "group", groupId: matchedGroup.groupId });
-    replyParts.push(matchedGroup.reply);
+  if (normalized.includes("手持")) {
+    return "手持设备通常会优先考虑窄长主板、小屏幕、电池位置和侧边端口。我们已经可以在当前预览引擎里表达这些结构。";
   }
 
-  const matchedNode = nodeMatchers.find((matcher) =>
-    matcher.keywords.some((keyword) => normalized.includes(keyword)),
-  );
-  if (matchedNode) {
-    actions.push({ type: "focus", nodeId: matchedNode.nodeId });
-    replyParts.push(`我再把镜头聚焦到 ${matchedNode.label}，方便你看细节。`);
+  if (normalized.includes("桌面")) {
+    return "桌面设备通常更适合更大的壳体、更大的屏幕和更完整的接口布局，也更容易容纳摄像头、麦克风和散热结构。";
   }
 
-  if (normalized.includes("介绍") || normalized.includes("实验室")) {
-    replyParts.unshift(
-      "这是一个面向嵌入式产品构思与演示的实验室，我们可以把需求拆成主控、传感、显示、联网和供电几个维度来讲。",
-    );
-  }
-
-  if (replyParts.length === 0) {
-    replyParts.push(
-      "收到。你可以继续告诉我目标产品、使用场景和想要的功能，我会整理需求，并按需要驱动 3D 模型给你看。",
-    );
-  }
-
-  return {
-    reply: replyParts.join(" "),
-    actions,
-  };
+  return `收到。你可以继续描述功能、交互方式或外形方向，我会基于“${activePresetLabel}”这类结构继续帮你梳理。`;
 }
 
 export function ChatInterface({
@@ -227,19 +69,11 @@ export function ChatInterface({
   error,
   userInfo,
   userInfoError,
+  activePresetLabel,
+  activeView,
 }: ChatInterfaceProps) {
-  const {
-    activeSceneId,
-    activeHighlightGroupId,
-    activeTemplateId,
-    selectedNodeId,
-    applyHighlightGroup,
-    focusNode,
-    setTemplate,
-    showScene,
-  } = useShowcase();
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: buildSeedMessage(isConnected) },
+    { role: "assistant", content: buildSeedMessage(isConnected, activePresetLabel) },
   ]);
   const [input, setInput] = useState("");
   const [isMinimized, setIsMinimized] = useState(false);
@@ -266,46 +100,27 @@ export function ChatInterface({
       {
         role: "assistant",
         content: visitorName
-          ? `你好，${visitorName}。欢迎来到嵌入式实验室，我可以先带你看 3D 结构，再一起梳理产品方案。`
-          : buildSeedMessage(isConnected),
+          ? `你好，${visitorName}。当前主舞台正在展示“${activePresetLabel}”，我可以先介绍这个方案，再一起梳理你的产品需求。`
+          : buildSeedMessage(isConnected, activePresetLabel),
       },
     ]);
-  }, [isConnected, visitorName]);
-
-  const handleAgentActions = (actions: AgentAction[]) => {
-    actions.forEach((action) => {
-      if (action.type === "template") {
-        setTemplate(action.templateId);
-      }
-      if (action.type === "scene") {
-        showScene(action.sceneId);
-      }
-      if (action.type === "group") {
-        applyHighlightGroup(action.groupId);
-      }
-      if (action.type === "focus") {
-        focusNode(action.nodeId);
-      }
-    });
-  };
+  }, [activePresetLabel, isConnected, visitorName]);
 
   const handleSend = async (prompt?: string) => {
     const nextInput = (prompt ?? input).trim();
-    if (!nextInput || isLoading) {
-      return;
-    }
+    if (!nextInput || isLoading) return;
 
     setInput("");
     setMessages((prev) => [...prev, { role: "user", content: nextInput }]);
     setIsLoading(true);
 
-    const { reply, actions } = collectAgentActions(nextInput);
-
     window.setTimeout(() => {
-      handleAgentActions(actions);
-      setMessages((prev) => [...prev, { role: "assistant", content: reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: buildReply(nextInput, activePresetLabel) },
+      ]);
       setIsLoading(false);
-    }, 650);
+    }, 500);
   };
 
   const statusLine =
@@ -314,17 +129,6 @@ export function ChatInterface({
       : isConnected
         ? "SecondMe 已连接"
         : "等待连接 SecondMe";
-
-  const activeSceneLabel =
-    SHOWCASE_SCENES.find((scene) => scene.id === activeSceneId)?.label ?? "未选择";
-  const activeGroupLabel =
-    HIGHLIGHT_GROUPS.find((group) => group.id === activeHighlightGroupId)?.label ??
-    "未高亮";
-  const activeTemplateLabel =
-    PRODUCT_TEMPLATES.find((template) => template.id === activeTemplateId)?.label ??
-    "未选择";
-  const activeNodeLabel =
-    LAB_NODES.find((node) => node.id === selectedNodeId)?.label ?? "未聚焦";
 
   return (
     <div
@@ -423,27 +227,15 @@ export function ChatInterface({
               }`}
             >
               <div>
-                <div className={isDark ? "text-white/30" : "text-slate-400"}>模板</div>
+                <div className={isDark ? "text-white/30" : "text-slate-400"}>当前方案</div>
                 <div className={isDark ? "mt-1 text-white/75" : "mt-1 text-slate-700"}>
-                  {activeTemplateLabel}
+                  {activePresetLabel}
                 </div>
               </div>
               <div>
-                <div className={isDark ? "text-white/30" : "text-slate-400"}>场景</div>
+                <div className={isDark ? "text-white/30" : "text-slate-400"}>视图</div>
                 <div className={isDark ? "mt-1 text-white/75" : "mt-1 text-slate-700"}>
-                  {activeSceneLabel}
-                </div>
-              </div>
-              <div>
-                <div className={isDark ? "text-white/30" : "text-slate-400"}>分组</div>
-                <div className={isDark ? "mt-1 text-white/75" : "mt-1 text-slate-700"}>
-                  {activeGroupLabel}
-                </div>
-              </div>
-              <div>
-                <div className={isDark ? "text-white/30" : "text-slate-400"}>聚焦</div>
-                <div className={isDark ? "mt-1 text-white/75" : "mt-1 text-slate-700"}>
-                  {activeNodeLabel}
+                  {activeView === "exploded" ? "完整拆解" : "装配预览"}
                 </div>
               </div>
             </div>
@@ -460,11 +252,7 @@ export function ChatInterface({
                         : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
                     }`}
                   >
-                    {action.label.includes("终端") || action.label.includes("控制盒") ? (
-                      <Cuboid className="h-3 w-3" />
-                    ) : (
-                      <WandSparkles className="h-3 w-3" />
-                    )}
+                    <WandSparkles className="h-3 w-3" />
                     {action.label}
                   </button>
                 ))}
@@ -529,11 +317,7 @@ export function ChatInterface({
                         <motion.div
                           key={i}
                           animate={{ opacity: [0.2, 1, 0.2] }}
-                          transition={{
-                            repeat: Infinity,
-                            duration: 1,
-                            delay: i * 0.2,
-                          }}
+                          transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
                           className="h-1 w-1 rounded-full bg-emerald-500"
                         />
                       ))}
@@ -556,7 +340,7 @@ export function ChatInterface({
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => event.key === "Enter" && handleSend()}
-                  placeholder="告诉我你想做什么嵌入式产品，或者直接说：切到手持终端 / 工业控制盒 / 看主控 / 看联网..."
+                  placeholder="告诉我你想做什么嵌入式产品，或者让我介绍当前方案..."
                   className={`w-full rounded-sm border py-2.5 pl-4 pr-12 text-[11px] focus:outline-none ${
                     isDark
                       ? "border-white/10 bg-black/40 text-white placeholder:text-white/20 focus:border-emerald-500/40"
