@@ -55,6 +55,12 @@ function createModuleConstraint(
   sourceId: string,
   category: unknown,
   zone: unknown,
+  keepoutCells?: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  },
 ): SceneNodeConstraint {
   const normalizedCategory = String(category ?? "");
   const normalizedZone = String(zone ?? "center");
@@ -88,6 +94,7 @@ function createModuleConstraint(
         3,
       footprintPadding: normalizedCategory === "core" ? 2 : 1,
       bodyPadding: 1,
+      keepout: keepoutCells,
     },
     priority:
       normalizedCategory === "core" ? 900 :
@@ -216,6 +223,7 @@ export function buildPreviewScene(
       definition?.sourceId ?? module.type,
       definition?.category,
       module.zone,
+      definition?.keepoutCells,
     );
 
     return {

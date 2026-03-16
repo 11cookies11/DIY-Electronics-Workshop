@@ -5,8 +5,8 @@ import type {
   BoardPlacedModule,
   BoardSpec,
   BoardZone,
-  GridCell,
   ModuleDefinition,
+  GridCell,
   PreviewInput,
   ResolvedModuleDefinition,
   ShellSize,
@@ -140,6 +140,7 @@ export function canPlace(
   gridW: number,
   gridH: number,
   clearanceCells = 0,
+  keepoutCells: ModuleDefinition["keepoutCells"] = {},
 ) {
   if (gridX < 0 || gridY < 0) {
     return false;
@@ -149,10 +150,22 @@ export function canPlace(
     return false;
   }
 
-  const startX = Math.max(0, gridX - clearanceCells);
-  const startY = Math.max(0, gridY - clearanceCells);
-  const endX = Math.min(board.cols, gridX + gridW + clearanceCells);
-  const endY = Math.min(board.rows, gridY + gridH + clearanceCells);
+  const startX = Math.max(
+    0,
+    gridX - clearanceCells - (keepoutCells.left ?? 0),
+  );
+  const startY = Math.max(
+    0,
+    gridY - clearanceCells - (keepoutCells.top ?? 0),
+  );
+  const endX = Math.min(
+    board.cols,
+    gridX + gridW + clearanceCells + (keepoutCells.right ?? 0),
+  );
+  const endY = Math.min(
+    board.rows,
+    gridY + gridH + clearanceCells + (keepoutCells.bottom ?? 0),
+  );
 
   for (let y = startY; y < endY; y += 1) {
     for (let x = startX; x < endX; x += 1) {
@@ -173,11 +186,24 @@ export function occupy(
   gridW: number,
   gridH: number,
   clearanceCells = 0,
+  keepoutCells: ModuleDefinition["keepoutCells"] = {},
 ) {
-  const startX = Math.max(0, gridX - clearanceCells);
-  const startY = Math.max(0, gridY - clearanceCells);
-  const endX = Math.min(board.cols, gridX + gridW + clearanceCells);
-  const endY = Math.min(board.rows, gridY + gridH + clearanceCells);
+  const startX = Math.max(
+    0,
+    gridX - clearanceCells - (keepoutCells.left ?? 0),
+  );
+  const startY = Math.max(
+    0,
+    gridY - clearanceCells - (keepoutCells.top ?? 0),
+  );
+  const endX = Math.min(
+    board.cols,
+    gridX + gridW + clearanceCells + (keepoutCells.right ?? 0),
+  );
+  const endY = Math.min(
+    board.rows,
+    gridY + gridH + clearanceCells + (keepoutCells.bottom ?? 0),
+  );
 
   for (let y = startY; y < endY; y += 1) {
     for (let x = startX; x < endX; x += 1) {
@@ -210,6 +236,10 @@ function getModuleClearanceCells(module: ResolvedModuleDefinition) {
     default:
       return 0;
   }
+}
+
+function getModuleKeepoutCells(module: ResolvedModuleDefinition) {
+  return module.keepoutCells ?? {};
 }
 
 function categoryOrder(module: ModuleDefinition) {
@@ -343,6 +373,7 @@ function findPlacementInZone(
   zone: BoardZone,
 ) {
   const clearanceCells = getModuleClearanceCells(module);
+  const keepoutCells = getModuleKeepoutCells(module);
   const candidates = getZoneCells(board, zone)
     .filter((candidate, index, collection) => {
       return collection.findIndex((entry) => entry.x === candidate.x && entry.y === candidate.y) === index;
@@ -362,6 +393,7 @@ function findPlacementInZone(
         module.gridW,
         module.gridH,
         clearanceCells,
+        keepoutCells,
       )
     ) {
       return candidate;
@@ -402,6 +434,7 @@ export function placeModules(
       module.gridW,
       module.gridH,
       getModuleClearanceCells(module),
+      getModuleKeepoutCells(module),
     );
     placedModules.push(
       createPlacedModule(boardSpec, module, zone, candidate.x, candidate.y),

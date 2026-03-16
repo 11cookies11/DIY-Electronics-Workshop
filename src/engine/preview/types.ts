@@ -101,6 +101,12 @@ export interface ModuleDefinition {
   gridW: number;
   gridH: number;
   clearanceCells?: number;
+  keepoutCells?: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  };
   sizeMm: {
     width: number;
     height: number;
