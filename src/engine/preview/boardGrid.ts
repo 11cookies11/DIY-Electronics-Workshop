@@ -242,9 +242,13 @@ function getModuleKeepoutCells(module: ResolvedModuleDefinition) {
   return module.keepoutCells ?? {};
 }
 
-function getPlacementAttempts(module: ResolvedModuleDefinition) {
+function getPlacementConfig(
+  module: ResolvedModuleDefinition,
+  relaxationLevel: number,
+) {
   const clearanceCells = getModuleClearanceCells(module);
   const keepoutCells = getModuleKeepoutCells(module);
+
   const attempts: Array<{
     clearanceCells: number;
     keepoutCells: ModuleDefinition["keepoutCells"];
@@ -264,7 +268,7 @@ function getPlacementAttempts(module: ResolvedModuleDefinition) {
     });
   }
 
-  return attempts.filter((attempt, index, collection) => {
+  const dedupedAttempts = attempts.filter((attempt, index, collection) => {
     return (
       collection.findIndex((entry) => {
         return (
@@ -277,6 +281,11 @@ function getPlacementAttempts(module: ResolvedModuleDefinition) {
       }) === index
     );
   });
+
+  return dedupedAttempts[Math.min(relaxationLevel, dedupedAttempts.length - 1)] ?? {
+    clearanceCells: 0,
+    keepoutCells: {},
+  };
 }
 
 function categoryOrder(module: ModuleDefinition) {
@@ -305,7 +314,7 @@ function categoryOrder(module: ModuleDefinition) {
 }
 
 function getPlacementPriority(module: ModuleDefinition) {
-  return module.placementPriority ?? Number.POSITIVE_INFINITY;
+  return categoryOrder(module) * 100 + (module.placementPriority ?? 0);
 }
 
 function getModuleArea(module: ModuleDefinition) {
@@ -416,7 +425,9 @@ function findPlacementInZone(
   board: BoardGrid,
   module: ResolvedModuleDefinition,
   zone: BoardZone,
+  relaxationLevel: number,
 ) {
+  const placementConfig = getPlacementConfig(module, relaxationLevel);
   const candidates = getZoneCells(board, zone)
     .filter((candidate, index, collection) => {
       return collection.findIndex((entry) => entry.x === candidate.x && entry.y === candidate.y) === index;
@@ -427,36 +438,36 @@ function findPlacementInZone(
       return leftScore - rightScore || left.y - right.y || left.x - right.x;
     });
 
-  for (const attempt of getPlacementAttempts(module)) {
-    for (const candidate of candidates) {
-      if (
-        canPlace(
-          board,
-          candidate.x,
-          candidate.y,
-          module.gridW,
-          module.gridH,
-          attempt.clearanceCells,
-          attempt.keepoutCells,
-        )
-      ) {
-        return {
-          candidate,
-          clearanceCells: attempt.clearanceCells,
-          keepoutCells: attempt.keepoutCells,
-        };
-      }
+  for (const candidate of candidates) {
+    if (
+      canPlace(
+        board,
+        candidate.x,
+        candidate.y,
+        module.gridW,
+        module.gridH,
+        placementConfig.clearanceCells,
+        placementConfig.keepoutCells,
+      )
+    ) {
+      return {
+        candidate,
+        clearanceCells: placementConfig.clearanceCells,
+        keepoutCells: placementConfig.keepoutCells,
+      };
     }
   }
 
   return null;
 }
 
-export function placeModules(
+function tryPlaceModules(
   board: BoardGrid,
   boardSpec: BoardSpec,
   modules: ResolvedModuleDefinition[],
-): BoardPlacedModule[] {
+  relaxationLevel: number,
+) {
+  const workingBoard = createBoardGrid(board.cols, board.rows);
   const placedModules: BoardPlacedModule[] = [];
   const sorted = [...modules].sort((a, b) => {
     return (
@@ -469,19 +480,19 @@ export function placeModules(
 
   for (const module of sorted) {
     let zone: BoardZone = module.preferredZone;
-    let placement = findPlacementInZone(board, module, zone);
+    let placement = findPlacementInZone(workingBoard, module, zone, relaxationLevel);
 
     if (!placement && zone !== "any") {
       zone = "any";
-      placement = findPlacementInZone(board, module, zone);
+      placement = findPlacementInZone(workingBoard, module, zone, relaxationLevel);
     }
 
     if (!placement) {
-      throw new Error(`cannot place module: ${module.id}`);
+      return null;
     }
 
     occupy(
-      board,
+      workingBoard,
       module.id,
       placement.candidate.x,
       placement.candidate.y,
@@ -501,5 +512,28 @@ export function placeModules(
     );
   }
 
+  board.cells = workingBoard.cells;
   return placedModules;
+}
+
+export function placeModules(
+  board: BoardGrid,
+  boardSpec: BoardSpec,
+  modules: ResolvedModuleDefinition[],
+): BoardPlacedModule[] {
+  for (const relaxationLevel of [0, 1, 2, 3]) {
+    const placedModules = tryPlaceModules(
+      board,
+      boardSpec,
+      modules,
+      relaxationLevel,
+    );
+
+    if (placedModules) {
+      return placedModules;
+    }
+  }
+
+  const moduleIds = modules.map((module) => module.id).join(", ");
+  throw new Error(`cannot place modules on board: ${moduleIds}`);
 }
