@@ -5,6 +5,11 @@ import {
   requestSecondMeStructuredReply,
 } from "./secondme-client";
 import {
+  buildBaseConversationReply,
+  countStructuredSignals,
+} from "./conversation-base";
+import { renderSkillReply, routeIntakeSkills } from "./skills";
+import {
   createEmptyState,
   type ConfirmedRequirement,
   type IntakeAgentOutput,
@@ -368,56 +373,6 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
     .join("；");
 }
 
-function buildIntroReply(state: IntakeAgentState) {
-  const summary = buildRequirementSummary(state.confirmed);
-  if (summary) {
-    return `当然可以。我现在既能陪你聊方案，也能把需求逐步整理成 3D 预览和实验室交接单。你当前这边我已经记住的是：${summary}。你想继续细化功能，还是先让我介绍一下这套方案怎么推进？`;
-  }
-  return "当然可以。我不是只能填表的前台，也可以先陪你聊产品方向、使用场景和方案思路。等信息够了，我再帮你整理成 3D 预览草案和实验室交接单。";
-}
-
-function buildSmallTalkReply(message: string, state: IntakeAgentState) {
-  if (hasPattern(message, [/^(你好|您好|hi|hello|在吗)[！!。？?]*$/i])) {
-    return "你好，我在。你可以把我当成一个会接待、会梳理需求、也能帮你把设备方案拉成 3D 预览草案的前台伙伴。";
-  }
-
-  if (hasPattern(message, [/(你是谁|你能做什么|你会什么|介绍一下你自己)/])) {
-    return buildIntroReply(state);
-  }
-
-  if (hasPattern(message, [/(介绍一下实验室|介绍实验室|这个实验室是做什么的)/])) {
-    return "这个实验室主要做嵌入式产品需求接待、方案梳理和结构预览。我会先和你把产品想法聊清楚，再把信息整理成 3D preview 草案和实验室交接单，方便后面的工程评估继续接。";
-  }
-
-  if (hasPattern(message, [/(介绍一下当前方案|当前方案是什么|这个方案怎么样)/])) {
-    const summary = buildRequirementSummary(state.confirmed);
-    return summary
-      ? `当前我理解到的方案是：${summary}。如果你愿意，我可以继续帮你补齐使用场景、核心功能和尺寸约束，这样就能更稳地推进到实验室交接。`
-      : "当前还没有形成完整方案，但我们已经可以开始聊。你告诉我想做什么设备、给谁用、主要功能是什么，我就能一步步帮你收成方案。";
-  }
-
-  if (hasPattern(message, [/(谢谢|多谢|辛苦了)/])) {
-    return "不客气。你继续说想法就行，我会一边聊天一边帮你把需求收成可执行的方案。";
-  }
-
-  return null;
-}
-
-function countStructuredSignals(confirmed: ConfirmedRequirement) {
-  return [
-    confirmed.device_type,
-    confirmed.use_case,
-    confirmed.screen,
-    confirmed.size,
-    ...(confirmed.controls ?? []),
-    ...(confirmed.sensors ?? []),
-    ...(confirmed.connectivity ?? []),
-    ...(confirmed.ports ?? []),
-    ...(confirmed.power ?? []),
-    ...(confirmed.core_features ?? []),
-  ].filter(Boolean).length;
-}
-
 function buildCustomerReply(
   message: string,
   state: IntakeAgentState,
@@ -426,11 +381,29 @@ function buildCustomerReply(
   nextAction: IntakeNextAction,
   previewDraft?: PreviewDraft,
 ) {
-  const smallTalkReply = buildSmallTalkReply(message, state);
+  const baseReply = buildBaseConversationReply(message, state);
+  const route = routeIntakeSkills({
+    message,
+    state,
+    confirmed,
+    unknowns,
+    previewDraft,
+  });
+  const skillReply = renderSkillReply(route.active_skill, {
+    message,
+    state,
+    confirmed,
+    unknowns,
+    previewDraft,
+  });
   const summary = buildRequirementSummary(confirmed);
 
-  if (smallTalkReply && countStructuredSignals(confirmed) === countStructuredSignals(state.confirmed)) {
-    return smallTalkReply;
+  if (baseReply && countStructuredSignals(confirmed) === countStructuredSignals(state.confirmed)) {
+    return baseReply;
+  }
+
+  if (skillReply && countStructuredSignals(confirmed) === countStructuredSignals(state.confirmed)) {
+    return skillReply;
   }
 
   if (nextAction === "generate_preview" && previewDraft) {
@@ -505,6 +478,13 @@ export async function runIntakeWorkflow(
   const confirmed = deriveConfirmed(message, state.confirmed);
   const unknowns = computeUnknowns(confirmed);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
+  const route = routeIntakeSkills({
+    message,
+    state,
+    confirmed,
+    unknowns,
+    previewDraft,
+  });
   const risks = unique([
     ...state.risks,
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
@@ -514,7 +494,7 @@ export async function runIntakeWorkflow(
     unknowns.length > 0 ? "clarifying" : "preview_ready";
   let nextAction: IntakeNextAction = unknowns.length > 0 ? "ask_more" : "generate_preview";
 
-  if (previewDraft) {
+  if (route.active_skill === "preview-promoter" && previewDraft) {
     workflowState = "preview_generated";
     nextAction = "prepare_handoff";
   }
@@ -528,7 +508,10 @@ export async function runIntakeWorkflow(
     previewDraft,
   );
 
-  if (labHandoff && unknowns.length <= 2) {
+  if (route.active_skill === "handoff-promoter" && labHandoff) {
+    workflowState = "handoff_ready";
+    nextAction = "prepare_handoff";
+  } else if (labHandoff && unknowns.length <= 2) {
     workflowState = "handoff_ready";
   }
 

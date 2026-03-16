@@ -118,6 +118,20 @@ export type SecondMeChatMessage = {
   content: string;
 };
 
+export type IntakeSkillId =
+  | "capability-intro"
+  | "lab-intro"
+  | "solution-intro"
+  | "requirement-clarifier"
+  | "preview-promoter"
+  | "handoff-promoter";
+
+export type IntakeSkillRoute = {
+  active_skill: IntakeSkillId;
+  matched_skills: IntakeSkillId[];
+  use_secondme: boolean;
+};
+
 export function createEmptyState(): IntakeAgentState {
   return {
     workflow_state: "collecting",
