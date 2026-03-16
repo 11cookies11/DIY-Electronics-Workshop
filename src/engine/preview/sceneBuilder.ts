@@ -466,16 +466,18 @@ export function buildPreviewScene(
       getOppositeFace(boardSpec.mountFace),
       definition?.keepoutCells,
     );
+    const pose = createConstrainedPose(
+      module.worldPosition,
+      constraints,
+      boardSpec.rotation,
+    );
 
     return {
       id: module.id,
       type: module.type,
-      pose: createConstrainedPose(
-        module.worldPosition,
-        constraints,
-        boardSpec.rotation,
-      ),
-      position: module.worldPosition,
+      pose,
+      position: pose.position,
+      rotation: pose.rotation,
       size: module.sizeMm,
       dimensions: createVisualDimensions(module.sizeMm),
       constraints,
