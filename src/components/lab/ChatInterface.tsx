@@ -39,30 +39,30 @@ const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
 
 function buildSeedMessage(isConnected: boolean, activePresetLabel: string) {
   return isConnected
-    ? `你好，实验室平台已经接入 Second Me。当前主舞台展示的是“${activePresetLabel}”。你可以先随便聊聊想法，我会像前台一样帮你慢慢收敛成方案。`
-    : `你好，我是实验室前台接待助手 Twin-AI。当前主舞台展示的是“${activePresetLabel}”。你可以先跟我聊聊想法，我会边聊边帮你把需求收下来。`;
+    ? `你好呀，实验室平台已经接入 Second Me 了。当前主舞台展示的是“${activePresetLabel}”。你可以先随便和我聊聊想法，我会慢慢帮你把方案理出来。`
+    : `你好呀，我是实验室前台接待助手 Twin-AI。当前主舞台展示的是“${activePresetLabel}”。你可以先跟我聊聊想法，我会一边听一边帮你把需求整理出来。`;
 }
 
 function buildFallbackReply(input: string, activePresetLabel: string) {
   const normalized = input.toLowerCase();
 
   if (normalized.includes("介绍") && normalized.includes("实验室")) {
-    return "我们这边主要做嵌入式产品的前期接待、方案梳理和 3D 结构预览。你可以先把想法说给我听，我来帮你慢慢收。";
+    return "我们这边主要做嵌入式产品的前期接待、方案梳理和 3D 结构预览。你可以先把想法告诉我，我会慢慢帮你理顺。";
   }
 
   if (normalized.includes("当前") || normalized.includes("方案")) {
-    return `当前主舞台展示的是“${activePresetLabel}”。如果你愿意，我可以继续介绍它的结构特点，或者我们也可以直接聊你的新想法。`;
+    return `当前主舞台展示的是“${activePresetLabel}”。如果你愿意，我可以继续和你介绍它的结构特点，或者我们也可以直接聊你的新想法。`;
   }
 
   if (normalized.includes("手持")) {
-    return "手持设备通常会更关注尺寸、电池、屏幕和侧边交互。你如果有想做的方向，可以直接往下说，我来帮你整理。";
+    return "手持设备通常会更关注尺寸、电池、屏幕和侧边交互。你如果已经有方向了，可以直接往下说，我来帮你慢慢整理。";
   }
 
   if (normalized.includes("桌面")) {
-    return "桌面设备通常空间更宽裕，适合放更大的屏幕、更完整的接口和更多模块。你想偏展示型，还是偏工具型？";
+    return "桌面设备通常空间会更宽裕一些，适合放更大的屏幕、更完整的接口和更多模块。你想偏展示型，还是偏工具型呀？";
   }
 
-  return `收到。你继续说就行，我会顺着你的思路慢慢帮你整理，不会一下子把对话弄得太“办事”。`;
+  return "收到啦。你继续说就好，我会顺着你的思路慢慢帮你整理。";
 }
 
 export function ChatInterface({
@@ -106,8 +106,8 @@ export function ChatInterface({
         role: "assistant",
         content: visitorName
           ? isConnected
-            ? `你好，${visitorName}。实验室平台已经接入 Second Me。你可以先跟我随便聊聊，我会在合适的时候帮你推进成方案。`
-            : `你好，${visitorName}。当前主舞台展示的是“${activePresetLabel}”。你想到哪儿都可以直接说，我来帮你收。`
+            ? `你好呀，${visitorName}。实验室平台已经接入 Second Me 了。你可以先跟我随便聊聊，我会在合适的时候帮你慢慢推进成方案。`
+            : `你好呀，${visitorName}。当前主舞台展示的是“${activePresetLabel}”。你想到哪儿都可以直接说，我来帮你慢慢收。`
           : buildSeedMessage(isConnected, activePresetLabel),
       },
     ]);
