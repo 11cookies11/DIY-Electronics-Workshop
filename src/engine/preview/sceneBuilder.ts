@@ -4,7 +4,7 @@ import { createBoardGrid, createBoardSpec, placeModules } from "./boardGrid";
 import { applyPreviewView } from "./exploded";
 import { placeMainScreen, placePorts } from "./faceGrid";
 import { getPreviewModules } from "./moduleRegistry";
-import { createPose } from "./nodePose";
+import { createConstrainedPose, createPose } from "./nodePose";
 import { buildShellGeometry } from "./shellGeometry";
 import type {
   FaceName,
@@ -212,19 +212,20 @@ export function buildPreviewScene(
 
   const moduleNodes: SceneNode[] = placedModules.map((module) => {
     const definition = modules.find((entry) => entry.id === module.id);
+    const constraints = createModuleConstraint(
+      definition?.sourceId ?? module.type,
+      definition?.category,
+      module.zone,
+    );
 
     return {
       id: module.id,
       type: module.type,
-      pose: createPose(module.worldPosition),
+      pose: createConstrainedPose(module.worldPosition, constraints),
       position: module.worldPosition,
       size: module.sizeMm,
       dimensions: createVisualDimensions(module.sizeMm),
-      constraints: createModuleConstraint(
-        definition?.sourceId ?? module.type,
-        definition?.category,
-        module.zone,
-      ),
+      constraints,
       meta: {
         layer: "module",
         category: definition?.category,
@@ -246,39 +247,51 @@ export function buildPreviewScene(
 
   const screenNodes: SceneNode[] = screenPlacement
     ? [
-        {
+        (() => {
+          const constraints = createScreenConstraint(screenPlacement.face);
+
+          return {
           id: screenPlacement.id,
           type: screenPlacement.componentType ?? "screen",
-          pose: createPose(screenPlacement.worldPosition, screenPlacement.rotation),
+          pose: createConstrainedPose(
+            screenPlacement.worldPosition,
+            constraints,
+            screenPlacement.rotation,
+          ),
           position: screenPlacement.worldPosition,
           rotation: screenPlacement.rotation,
           size: screenPlacement.sizeMm,
           dimensions: createVisualDimensions(screenPlacement.sizeMm),
-          constraints: createScreenConstraint(screenPlacement.face),
+          constraints,
           meta: {
             layer: "screen",
             face: screenPlacement.face,
             componentType: screenPlacement.componentType ?? "display_panel",
           },
-        },
+        };
+        })(),
       ]
     : [];
 
-  const portNodes: SceneNode[] = portPlacements.map((port) => ({
-    id: port.id,
-    type: port.componentType ?? "port",
-    pose: createPose(port.worldPosition, port.rotation),
-    position: port.worldPosition,
-    rotation: port.rotation,
-    size: port.sizeMm,
-    dimensions: createVisualDimensions(port.sizeMm),
-    constraints: createPortConstraint(port.face),
-    meta: {
-      layer: "port",
-      face: port.face,
-      componentType: port.componentType ?? "usb_c",
-    },
-  }));
+  const portNodes: SceneNode[] = portPlacements.map((port) => {
+    const constraints = createPortConstraint(port.face);
+
+    return {
+      id: port.id,
+      type: port.componentType ?? "port",
+      pose: createConstrainedPose(port.worldPosition, constraints, port.rotation),
+      position: port.worldPosition,
+      rotation: port.rotation,
+      size: port.sizeMm,
+      dimensions: createVisualDimensions(port.sizeMm),
+      constraints,
+      meta: {
+        layer: "port",
+        face: port.face,
+        componentType: port.componentType ?? "usb_c",
+      },
+    };
+  });
 
   const connections: PreviewConnection[] = [
     ...moduleNodes.map((node) => ({

@@ -1,5 +1,6 @@
 "use client";
 
+import { getFaceRotation } from "./faceTransform";
 import type { EulerTuple, SceneNode, TransformPose, Vector3Tuple } from "./types";
 
 const ZERO_ROTATION: EulerTuple = [0, 0, 0];
@@ -15,6 +16,33 @@ export function createPose(
     rotation,
     scale,
   };
+}
+
+export function createConstrainedPose(
+  position: Vector3Tuple,
+  constraint: SceneNode["constraints"] | undefined,
+  fallbackRotation: EulerTuple = ZERO_ROTATION,
+): TransformPose {
+  const placement = constraint?.placement;
+  const poseConstraint = constraint?.pose;
+
+  if (
+    placement?.anchorNodeId === "main-board" &&
+    placement.anchorFace === "top" &&
+    placement.selfMountFace === "bottom"
+  ) {
+    return createPose(position, ZERO_ROTATION);
+  }
+
+  if (
+    placement?.anchorNodeId === "shell" &&
+    poseConstraint?.functionalFace === "front" &&
+    poseConstraint.targetDirection === "outward"
+  ) {
+    return createPose(position, getFaceRotation(placement.anchorFace));
+  }
+
+  return createPose(position, fallbackRotation);
 }
 
 export function getNodePose(node: SceneNode): TransformPose {
