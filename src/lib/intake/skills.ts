@@ -45,7 +45,7 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
 const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "capability-intro",
-    description: "介绍前台 agent 能做什么。",
+    description: "介绍前台 agent 能做什么",
     match: ({ message }) =>
       hasPattern(message, [/(你是谁|你能做什么|你会什么|介绍一下你自己)/]),
     renderReply: ({ state }) => {
@@ -58,7 +58,7 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   },
   {
     id: "lab-intro",
-    description: "介绍实验室定位与接待流程。",
+    description: "介绍实验室定位与接待流程",
     match: ({ message }) =>
       hasPattern(message, [/(介绍一下实验室|介绍实验室|这个实验室是做什么的)/]),
     renderReply: () =>
@@ -66,7 +66,7 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   },
   {
     id: "solution-intro",
-    description: "介绍当前方案或当前舞台所代表的产品方向。",
+    description: "介绍当前方案或当前舞台所代表的产品方向",
     match: ({ message }) =>
       hasPattern(message, [/(介绍一下当前方案|当前方案是什么|这个方案怎么样)/]),
     renderReply: ({ state }) => {
@@ -78,20 +78,20 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   },
   {
     id: "handoff-promoter",
-    description: "在交接单可用时负责把对话推进到 handoff 阶段。",
+    description: "在交接单可用时把对话推进到 handoff 阶段",
     match: ({ previewDraft, unknowns }) =>
       Boolean(previewDraft) && unknowns.length <= 2,
     useSecondMe: true,
   },
   {
     id: "preview-promoter",
-    description: "在预览草案已经可生成时负责把对话推进到 preview 阶段。",
+    description: "在预览草案已可生成时把对话推进到 preview 阶段",
     match: ({ previewDraft }) => Boolean(previewDraft),
     useSecondMe: true,
   },
   {
     id: "requirement-clarifier",
-    description: "默认技能，用于自然澄清需求并推进结构化收集。",
+    description: "默认技能，用于自然澄清需求并推进结构化收集",
     match: () => true,
     useSecondMe: true,
   },

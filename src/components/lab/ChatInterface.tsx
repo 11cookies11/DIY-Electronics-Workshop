@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PreviewView } from "@/engine/preview";
-import type { PreviewDraft, SecondMeChatMessage } from "@/lib/intake/types";
+import type { PreviewDraft } from "@/lib/intake/types";
 import { useTheme } from "./theme-context";
 
 type Message = {
@@ -39,7 +39,7 @@ const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
 
 function buildSeedMessage(isConnected: boolean, activePresetLabel: string) {
   return isConnected
-    ? `你好，实验室平台已经接入 Second Me。当前主舞台正在展示“${activePresetLabel}”，你现在可以直接在这里自由对话。`
+    ? `你好，实验室平台已经接入 Second Me，前台 Agent 现在会结合 DeepSeek 和当前舞台方案来和你对话。当前主舞台正在展示“${activePresetLabel}”。`
     : `你好，我是实验室前台接待助手 Twin-AI。当前主舞台正在展示“${activePresetLabel}”。你可以先告诉我想做什么嵌入式产品，我会一边聊天一边帮你收敛需求。`;
 }
 
@@ -63,13 +63,6 @@ function buildFallbackReply(input: string, activePresetLabel: string) {
   }
 
   return `收到。你可以继续描述功能、交互方式或外形方向，我会基于“${activePresetLabel}”这类结构继续帮你梳理。`;
-}
-
-function toSecondMeMessages(messages: Message[]): SecondMeChatMessage[] {
-  return messages.map((message) => ({
-    role: message.role,
-    content: message.content,
-  }));
 }
 
 export function ChatInterface({
@@ -113,7 +106,7 @@ export function ChatInterface({
         role: "assistant",
         content: visitorName
           ? isConnected
-            ? `你好，${visitorName}。实验室平台已经接入 Second Me，现在你可以直接在这里和我聊天。`
+            ? `你好，${visitorName}。实验室平台已经接入 Second Me，我会以实验室前台 Agent 的身份继续帮你梳理需求和方案。`
             : `你好，${visitorName}。当前主舞台正在展示“${activePresetLabel}”，我可以先介绍这个方案，再一起梳理你的产品需求。`
           : buildSeedMessage(isConnected, activePresetLabel),
       },
@@ -133,35 +126,6 @@ export function ChatInterface({
     setIsLoading(true);
 
     try {
-      if (isConnected) {
-        const response = await fetch("/api/secondme/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messages: toSecondMeMessages(nextMessages.slice(-12)),
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error("secondme chat request failed");
-        }
-
-        const payload = (await response.json()) as {
-          reply?: string;
-        };
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: payload.reply ?? "我在，继续聊吧。",
-          },
-        ]);
-        return;
-      }
-
       const response = await fetch("/api/intake/chat", {
         method: "POST",
         headers: {
@@ -215,14 +179,14 @@ export function ChatInterface({
     error || userInfoError
       ? "Second Me 授权状态异常"
       : isConnected
-        ? "Second Me 平台已连接"
-        : "等待平台接入 Second Me";
+        ? "Second Me 平台已连接 / DeepSeek 已启用"
+        : "本地前台 Agent / DeepSeek 已启用";
 
   const statusMeta = connectedFromCallback
     ? "管理员刚完成绑定"
     : isConnected
-      ? "平台直连对话模式"
-      : "当前为本地接待模式";
+      ? "平台接入 + 前台 Agent 模式"
+      : "前台 Agent 模式";
 
   const viewLabel = activeView === "exploded" ? "完整拆解" : "装配预览";
 
@@ -334,26 +298,24 @@ export function ChatInterface({
               </div>
             </div>
 
-            {!isConnected ? (
-              <div className="border-b border-black/5 px-4 py-3 dark:border-white/10">
-                <div className="flex flex-wrap gap-2">
-                  {QUICK_ACTIONS.map((action) => (
-                    <button
-                      key={action.label}
-                      onClick={() => handleSend(action.prompt)}
-                      className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
-                        isDark
-                          ? "border-white/10 bg-white/[0.03] text-white/70 hover:border-emerald-400/30 hover:text-white"
-                          : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
-                      }`}
-                    >
-                      <WandSparkles className="h-3 w-3" />
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
+            <div className="border-b border-black/5 px-4 py-3 dark:border-white/10">
+              <div className="flex flex-wrap gap-2">
+                {QUICK_ACTIONS.map((action) => (
+                  <button
+                    key={action.label}
+                    onClick={() => handleSend(action.prompt)}
+                    className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
+                      isDark
+                        ? "border-white/10 bg-white/[0.03] text-white/70 hover:border-emerald-400/30 hover:text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+                    }`}
+                  >
+                    <WandSparkles className="h-3 w-3" />
+                    {action.label}
+                  </button>
+                ))}
               </div>
-            ) : null}
+            </div>
 
             <div ref={scrollRef} className="flex-1 space-y-6 overflow-y-auto p-5">
               {messages.map((msg, index) => (
@@ -437,9 +399,7 @@ export function ChatInterface({
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => event.key === "Enter" && handleSend()}
                   placeholder={
-                    isConnected
-                      ? "直接和 Second Me 聊天..."
-                      : "告诉我你想做什么嵌入式产品，或者让我介绍当前方案..."
+                    "告诉我你想做什么嵌入式产品，或者让我介绍当前方案..."
                   }
                   className={`w-full rounded-sm border py-2.5 pl-4 pr-12 text-[11px] focus:outline-none ${
                     isDark
@@ -460,7 +420,7 @@ export function ChatInterface({
                 </button>
               </div>
               <div className="mt-2 text-center">
-                {handoffUrl && !isConnected ? (
+                {handoffUrl ? (
                   <div className="mb-2">
                     <a
                       href={handoffUrl}
@@ -481,7 +441,7 @@ export function ChatInterface({
                     isDark ? "text-white/10" : "text-slate-300"
                   }`}
                 >
-                  {isConnected ? "secondme-direct-conversation" : "showcase-guided-conversation"}
+                  deepseek-powered-front-desk-agent
                 </span>
               </div>
             </div>

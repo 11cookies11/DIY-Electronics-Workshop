@@ -5,7 +5,7 @@ function hasPattern(message: string, patterns: RegExp[]) {
 }
 
 function normalizeMessage(message: string) {
-  return message.trim().replace(/[！!。？?\s]+/g, "").toLowerCase();
+  return message.trim().replace(/[，。！？、\s]+/g, "").toLowerCase();
 }
 
 function buildRequirementSummary(confirmed: ConfirmedRequirement) {
@@ -27,9 +27,10 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
 function buildIntroReply(state: IntakeAgentState) {
   const summary = buildRequirementSummary(state.confirmed);
   if (summary) {
-    return `当然可以。我现在既能陪你聊方案，也能把需求逐步整理成 3D 预览和实验室交接单。你当前这边我已经记住的是：${summary}。你想继续细化功能，还是先让我介绍一下这套方案怎么推进？`;
+    return `当然可以。我现在既能陪你聊方案，也能把需求逐步整理成 3D 预览和实验室交接单。你这边我已经记住的是：${summary}。你想继续细化功能，还是先让我介绍一下这套方案怎么推进？`;
   }
-  return "当然可以。我不是只能填表的前台，也可以先陪你聊产品方向、使用场景和方案思路。等信息够了，我再帮你整理成 3D 预览草案和实验室交接单。";
+
+  return "当然可以。我不是只会填表的前台，也可以先陪你聊产品方向、使用场景和方案思路。等信息够了，我再帮你整理成 3D 预览草案和实验室交接单。";
 }
 
 export function buildBaseConversationReply(
@@ -56,7 +57,11 @@ export function buildBaseConversationReply(
     return "你好呀，我在。你可以先随便和我聊聊想法，也可以让我帮你一起梳理设备方案。";
   }
 
-  if (hasPattern(message, [/(你是谁|你能做什么|你会什么|介绍一下你自己)/])) {
+  if (
+    hasPattern(message, [
+      /(你是谁|你能做什么|你会什么|介绍一下你自己)/,
+    ])
+  ) {
     return buildIntroReply(state);
   }
 
