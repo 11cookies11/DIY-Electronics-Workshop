@@ -110,6 +110,48 @@ function getFaceDimensions(
   }
 }
 
+function resolveScreenSize(
+  screen: NonNullable<PreviewInput["mainScreen"]>,
+): { width: number; height: number; depth: number } {
+  const defaults =
+    screen.type === "touch_display"
+      ? { width: 62, height: 38, depth: 5 }
+      : { width: 54, height: 34, depth: 4 };
+
+  return {
+    width: screen.sizeMm?.width ?? defaults.width,
+    height: screen.sizeMm?.height ?? defaults.height,
+    depth: screen.sizeMm?.depth ?? defaults.depth,
+  };
+}
+
+function resolvePortSize(
+  port: NonNullable<PreviewInput["ports"]>[number],
+): { width: number; height: number; depth: number } {
+  const defaults = (() => {
+    switch (port.type) {
+      case "rj45":
+        return { width: 18, height: 13, depth: 16 };
+      case "audio_jack":
+      case "power_jack":
+        return { width: 12, height: 10, depth: 12 };
+      case "button_cutout":
+        return { width: 10, height: 10, depth: 6 };
+      case "ir_window":
+        return { width: 10, height: 8, depth: 6 };
+      case "usb_c":
+      default:
+        return { width: 12, height: 8, depth: 8 };
+    }
+  })();
+
+  return {
+    width: port.sizeMm?.width ?? defaults.width,
+    height: port.sizeMm?.height ?? defaults.height,
+    depth: port.sizeMm?.depth ?? defaults.depth,
+  };
+}
+
 export function placeMainScreen(
   screen: NonNullable<PreviewInput["mainScreen"]>,
   shellSize: { width: number; height: number; depth: number },
@@ -121,11 +163,7 @@ export function placeMainScreen(
   }
 
   const grid = createFaceGrid(face, DEFAULT_SCREEN_GRID.cols, DEFAULT_SCREEN_GRID.rows);
-  const screenSize = screen.sizeMm ?? {
-    width: 54,
-    height: 34,
-    depth: 4,
-  };
+  const screenSize = resolveScreenSize(screen);
   const faceSize = getFaceDimensions(face, shellSize);
   const gridW = Math.min(
     grid.cols,
@@ -197,11 +235,7 @@ export function placePorts(
 
     for (let index = 0; index < facePorts.length; index += 1) {
       const port = facePorts[index];
-      const portSize = port.sizeMm ?? {
-        width: 12,
-        height: 8,
-        depth: 8,
-      };
+      const portSize = resolvePortSize(port);
       const faceSize = getFaceDimensions(face, shellSize);
       const gridW = Math.min(
         grid.cols,

@@ -60,9 +60,9 @@ export interface PreviewInput {
     face: FaceName;
     type?: "display_panel" | "touch_display";
     sizeMm?: {
-      width: number;
-      height: number;
-      depth: number;
+      width?: number;
+      height?: number;
+      depth?: number;
     };
   };
   ports?: Array<{
@@ -75,9 +75,9 @@ export interface PreviewInput {
       | "button_cutout"
       | "ir_window";
     sizeMm?: {
-      width: number;
-      height: number;
-      depth: number;
+      width?: number;
+      height?: number;
+      depth?: number;
     };
   }>;
   modules: Array<
