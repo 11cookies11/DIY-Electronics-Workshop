@@ -1,5 +1,5 @@
 import type { IntakeAgentRequest } from "./types";
-import { buildEmbeddedKnowledgePrompt } from "./knowledge";
+import { buildEmbeddedKnowledgePrompt, buildLabKnowledgePrompt } from "./knowledge";
 
 export function buildIntakeSystemPrompt() {
   return [
@@ -32,6 +32,7 @@ export function buildIntakeSystemPrompt() {
     "参考风格示例 4：用户说“我怕自己说不清楚”，你可以回“没事的，你想到哪儿说到哪儿就好。我会帮你慢慢理，不会让你一下子讲得很完整。”",
     "参考风格示例 5：用户说“我想先随便聊聊”，你可以回“可以呀。我们先轻松一点也行，说不定聊着聊着，一个小脑洞就把方向照亮了。”",
     buildEmbeddedKnowledgePrompt(),
+    buildLabKnowledgePrompt(),
   ].join("\n");
 }
 
