@@ -267,6 +267,14 @@ function categoryOrder(module: ModuleDefinition) {
   }
 }
 
+function getPlacementPriority(module: ModuleDefinition) {
+  return module.placementPriority ?? Number.POSITIVE_INFINITY;
+}
+
+function getModuleArea(module: ModuleDefinition) {
+  return module.gridW * module.gridH;
+}
+
 function getAnchorMetrics(
   board: BoardGrid,
   gridX: number,
@@ -410,7 +418,12 @@ export function placeModules(
 ): BoardPlacedModule[] {
   const placedModules: BoardPlacedModule[] = [];
   const sorted = [...modules].sort((a, b) => {
-    return categoryOrder(a) - categoryOrder(b) || a.id.localeCompare(b.id);
+    return (
+      getPlacementPriority(a) - getPlacementPriority(b) ||
+      getModuleArea(b) - getModuleArea(a) ||
+      categoryOrder(a) - categoryOrder(b) ||
+      a.id.localeCompare(b.id)
+    );
   });
 
   for (const module of sorted) {

@@ -100,6 +100,7 @@ export interface ModuleDefinition {
   category: ModuleCategory;
   gridW: number;
   gridH: number;
+  placementPriority?: number;
   clearanceCells?: number;
   keepoutCells?: {
     top?: number;
