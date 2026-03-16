@@ -6,6 +6,31 @@ import { getBoardCellSize } from "./boardGrid";
 const BOARD_COMPONENT_FOOTPRINT_RATIO = 0.84;
 const BOARD_COMPONENT_HEIGHT_RATIO = 0.92;
 
+function getBoardMountedVisualHeight(
+  board: BoardSpec,
+  module: ResolvedModuleDefinition,
+) {
+  const sourceId = module.sourceId ?? module.id;
+  const shellLimitedHeight = Math.max(
+    2,
+    board.maxComponentHeight * BOARD_COMPONENT_HEIGHT_RATIO,
+  );
+
+  if (sourceId === "battery") {
+    return Math.min(module.sizeMm.height, shellLimitedHeight, 6);
+  }
+
+  if (module.category === "thermal" || module.category === "actuator") {
+    return Math.min(module.sizeMm.height, shellLimitedHeight, 5);
+  }
+
+  if (module.category === "power") {
+    return Math.min(module.sizeMm.height, shellLimitedHeight, 4.5);
+  }
+
+  return Math.min(module.sizeMm.height, shellLimitedHeight, 3.6);
+}
+
 export function gridToBoardWorldPosition(
   board: BoardSpec,
   gridX: number,
@@ -53,7 +78,7 @@ export function createPlacedModule(
   );
   const visualHeight = Math.min(
     module.sizeMm.height,
-    Math.max(2, board.maxComponentHeight * BOARD_COMPONENT_HEIGHT_RATIO),
+    getBoardMountedVisualHeight(board, module),
   );
 
   return {

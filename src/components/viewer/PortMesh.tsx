@@ -9,6 +9,7 @@ const PORT_COLORS: Record<string, string> = {
   audio_jack: "#d4d4d8",
   power_jack: "#d8b4fe",
   button_cutout: "#86efac",
+  button_array: "#86efac",
   ir_window: "#fda4af",
   port: "#c7d9e8",
 };
@@ -106,6 +107,31 @@ export function PortMesh({ node }: { node: SceneNode }) {
         >
           <meshStandardMaterial color="#f0fdf4" roughness={0.14} metalness={0.06} />
         </RoundedBox>
+      </group>
+    );
+  }
+
+  if (type === "button_array") {
+    return (
+      <group position={node.position} rotation={node.rotation}>
+        <RoundedBox
+          args={node.size}
+          radius={Math.min(node.size[0], node.size[1], node.size[2]) * 0.12}
+          smoothness={4}
+        >
+          <meshStandardMaterial color="#d9f99d" roughness={0.18} metalness={0.06} />
+        </RoundedBox>
+        {[-0.28, 0, 0.28].map((offset) => (
+          <RoundedBox
+            key={offset}
+            args={[node.size[0] * 0.18, node.size[1] * 0.5, node.size[2] * 0.36]}
+            radius={Math.min(node.size[0], node.size[1], node.size[2]) * 0.1}
+            smoothness={4}
+            position={[node.size[0] * offset, 0, node.size[2] * 0.16]}
+          >
+            <meshStandardMaterial color="#f7fee7" roughness={0.14} metalness={0.04} />
+          </RoundedBox>
+        ))}
       </group>
     );
   }

@@ -7,7 +7,8 @@ import {
   placeModules,
 } from "./boardGrid";
 import { applyPreviewView } from "./exploded";
-import { placeMainScreen, placePorts } from "./faceGrid";
+import { createFaceGrid, placeMainScreen, placePorts } from "./faceGrid";
+import { faceGridToWorldPosition, getFaceRotation } from "./faceTransform";
 import { getPreviewModules } from "./moduleRegistry";
 import { createConstrainedPose, createPose } from "./nodePose";
 import { buildShellGeometry } from "./shellGeometry";
@@ -35,6 +36,74 @@ function createVisualDimensions(size: [number, number, number]) {
       depth: size[2],
     },
   } satisfies SceneNode["dimensions"];
+}
+
+function isShellInteractionModule(sourceId: string) {
+  return sourceId === "button_array";
+}
+
+function createShellInteractionNodes(
+  shellModules: ResolvedModuleDefinition[],
+  input: PreviewInput,
+  screenPlacement: ReturnType<typeof placeMainScreen>["item"] | null,
+): SceneNode[] {
+  if (shellModules.length === 0) {
+    return [];
+  }
+
+  return shellModules.map((module, index) => {
+    const face: FaceName = input.mainScreen?.face ?? "front";
+    const grid = createFaceGrid(face, 4, 6);
+    const size: [number, number, number] = [
+      module.sizeMm.width,
+      module.sizeMm.depth,
+      Math.min(module.sizeMm.height, 4),
+    ];
+    const gridW = Math.min(grid.cols, Math.max(1, Math.round((size[0] / input.shellSize.width) * grid.cols)));
+    const gridH = Math.min(grid.rows, Math.max(1, Math.round((size[1] / input.shellSize.height) * grid.rows)));
+    const gridX = Math.max(0, Math.floor((grid.cols - gridW) / 2));
+    const screenBottom =
+      screenPlacement && screenPlacement.face === face
+        ? screenPlacement.gridY + screenPlacement.gridH
+        : Math.floor(grid.rows / 2) - 1;
+    const preferredRow =
+      face === "front"
+        ? Math.min(grid.rows - gridH, screenBottom + index)
+        : Math.max(0, Math.floor((grid.rows - gridH) / 2));
+    const gridY = Math.max(0, preferredRow);
+    const constraints = createPortConstraint(face);
+    const position = faceGridToWorldPosition(
+      input.shellSize,
+      face,
+      grid,
+      gridX,
+      gridY,
+      gridW,
+      gridH,
+      size[2],
+    );
+
+    return {
+      id: `shell-interaction:${module.id}`,
+      type: module.id,
+      pose: createConstrainedPose(
+        position,
+        constraints,
+        getFaceRotation(face),
+      ),
+      position,
+      rotation: getFaceRotation(face),
+      size,
+      dimensions: createVisualDimensions(size),
+      constraints,
+      meta: {
+        layer: "port",
+        face,
+        componentType: module.id,
+        sourceId: module.sourceId,
+      },
+    };
+  });
 }
 
 function inferDeviceLayoutTemplate(input: PreviewInput) {
@@ -358,6 +427,12 @@ export function buildPreviewScene(
     input,
     getPreviewModules(input.modules),
   );
+  const shellModules = modules.filter((module) =>
+    isShellInteractionModule(module.sourceId ?? module.id),
+  );
+  const boardModules = modules.filter(
+    (module) => !isShellInteractionModule(module.sourceId ?? module.id),
+  );
   const screenPlacement = input.mainScreen
     ? placeMainScreen(input.mainScreen, input.shellSize).item
     : null;
@@ -365,7 +440,7 @@ export function buildPreviewScene(
   const boardSpec = createBoardSpec(
     input.shellSize,
     input.board,
-    modules,
+    boardModules,
     input.mainScreen,
   );
   const boardGrid = createBoardGrid(boardSpec.cols, boardSpec.rows);
@@ -378,12 +453,12 @@ export function buildPreviewScene(
   const placedModules = placeModules(
     boardGrid,
     boardSpec,
-    modules,
+    boardModules,
     boardLayoutHints,
   );
 
   const moduleNodes: SceneNode[] = placedModules.map((module) => {
-    const definition = modules.find((entry) => entry.id === module.id);
+    const definition = boardModules.find((entry) => entry.id === module.id);
     const constraints = createModuleConstraint(
       definition?.sourceId ?? module.type,
       definition?.category,
@@ -461,6 +536,11 @@ export function buildPreviewScene(
       },
     };
   });
+  const shellInteractionNodes = createShellInteractionNodes(
+    shellModules,
+    input,
+    screenPlacement,
+  );
 
   const connections: PreviewConnection[] = [
     ...moduleNodes.map((node) => ({
@@ -489,7 +569,7 @@ export function buildPreviewScene(
     boardNode: createBoardNode(input, modules),
     moduleNodes,
     screenNodes,
-    portNodes,
+    portNodes: [...portNodes, ...shellInteractionNodes],
     connections,
   };
 
