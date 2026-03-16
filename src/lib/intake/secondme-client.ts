@@ -15,15 +15,15 @@ function getChatEndpoint() {
     return override;
   }
 
-  const base = process.env.SECONDME_OPENAI_BASE_URL ?? getSecondMeConfig().apiBaseUrl;
+  const base =
+    process.env.SECONDME_OPENAI_BASE_URL ??
+    process.env.SECONDME_API_BASE_URL ??
+    getSecondMeConfig().apiBaseUrl;
   return `${base.replace(/\/$/, "")}/v1/chat/completions`;
 }
 
 export function isSecondMeChatConfigured() {
-  return Boolean(
-    process.env.SECONDME_CHAT_MODEL &&
-      (process.env.SECONDME_CHAT_API_KEY || process.env.SECONDME_CLIENT_ID),
-  );
+  return Boolean(process.env.SECONDME_CHAT_MODEL);
 }
 
 export async function requestSecondMeStructuredReply(messages: SecondMeChatMessage[]) {
@@ -33,13 +33,12 @@ export async function requestSecondMeStructuredReply(messages: SecondMeChatMessa
   }
 
   const accessToken = await getAccessToken();
-  const apiKey =
-    process.env.SECONDME_CHAT_API_KEY ??
-    accessToken ??
-    process.env.SECONDME_CLIENT_ID;
+  const apiKey = process.env.SECONDME_CHAT_API_KEY ?? accessToken;
 
   if (!apiKey) {
-    throw new Error("Missing Second Me chat credentials");
+    throw new Error(
+      "Missing Second Me chat credentials: connect OAuth or set SECONDME_CHAT_API_KEY",
+    );
   }
 
   const response = await fetch(getChatEndpoint(), {
