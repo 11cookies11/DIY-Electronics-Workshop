@@ -20,12 +20,12 @@ const DEFAULT_BOARD_ROWS = 6;
 const DEFAULT_BOARD_THICKNESS = 2;
 const DEFAULT_BOARD_WIDTH_RATIO = 0.78;
 const DEFAULT_BOARD_DEPTH_RATIO = 0.7;
-const BOARD_MODULE_MARGIN_RATIO = 1.16;
 const BOARD_MODULE_MIN_MARGIN_MM = 6;
 const BOARD_SCREEN_WIDTH_RATIO = 0.86;
 const BOARD_SCREEN_DEPTH_RATIO = 0.82;
 const BOARD_SCREEN_MARGIN_MM = 4;
 const BOARD_SHELL_INSET_MM = 3;
+const BOARD_PACKING_FILL_RATIO = 0.74;
 
 type BoardLayoutHints = {
   screenShadow?: {
@@ -46,7 +46,7 @@ function inferBoardMountFace(
     shellSize.depth <= Math.min(shellSize.width, shellSize.height) * 0.6 &&
     shellSize.height >= shellSize.depth * 2
   ) {
-    return mainScreen.face === "front" ? "back" : "front";
+    return mainScreen.face;
   }
 
   return "top";
@@ -96,24 +96,46 @@ export function getBoardDimensions(
   modules: ResolvedModuleDefinition[] = [],
   mainScreen?: PreviewInput["mainScreen"],
 ) {
+  const mountFace = inferBoardMountFace(shellSize, mainScreen);
   const cols = boardConfig?.grid?.cols ?? DEFAULT_BOARD_COLS;
   const rows = boardConfig?.grid?.rows ?? DEFAULT_BOARD_ROWS;
-  const widthFromModules = modules.reduce((currentMax, module) => {
-    const moduleCellWidth = module.sizeMm.width / Math.max(1, module.gridW);
-    return Math.max(currentMax, moduleCellWidth * cols);
-  }, 0);
-  const depthFromModules = modules.reduce((currentMax, module) => {
-    const moduleCellDepth = module.sizeMm.depth / Math.max(1, module.gridH);
-    return Math.max(currentMax, moduleCellDepth * rows);
-  }, 0);
-  const widthFloor =
-    widthFromModules > 0
-      ? widthFromModules * BOARD_MODULE_MARGIN_RATIO + BOARD_MODULE_MIN_MARGIN_MM
+  const planeSize =
+    mountFace === "front" || mountFace === "back"
+      ? { width: shellSize.width, depth: shellSize.height }
+      : mountFace === "left" || mountFace === "right"
+        ? { width: shellSize.depth, depth: shellSize.height }
+        : { width: shellSize.width, depth: shellSize.depth };
+  const maxModuleWidth = modules.reduce(
+    (currentMax, module) => Math.max(currentMax, module.sizeMm.width),
+    0,
+  );
+  const maxModuleDepth = modules.reduce(
+    (currentMax, module) => Math.max(currentMax, module.sizeMm.depth),
+    0,
+  );
+  const totalModuleArea = modules.reduce(
+    (total, module) => total + module.sizeMm.width * module.sizeMm.depth,
+    0,
+  );
+  const baseAspectRatio =
+    (boardConfig?.sizeMm?.width ?? planeSize.width) /
+    Math.max(1, boardConfig?.sizeMm?.depth ?? planeSize.depth);
+  const packedWidth =
+    totalModuleArea > 0
+      ? Math.sqrt((totalModuleArea * baseAspectRatio) / BOARD_PACKING_FILL_RATIO)
       : 0;
-  const depthFloor =
-    depthFromModules > 0
-      ? depthFromModules * BOARD_MODULE_MARGIN_RATIO + BOARD_MODULE_MIN_MARGIN_MM
+  const packedDepth =
+    totalModuleArea > 0
+      ? Math.sqrt((totalModuleArea / baseAspectRatio) / BOARD_PACKING_FILL_RATIO)
       : 0;
+  const widthFloor = Math.max(
+    maxModuleWidth + BOARD_MODULE_MIN_MARGIN_MM,
+    packedWidth + BOARD_MODULE_MIN_MARGIN_MM,
+  );
+  const depthFloor = Math.max(
+    maxModuleDepth + BOARD_MODULE_MIN_MARGIN_MM,
+    packedDepth + BOARD_MODULE_MIN_MARGIN_MM,
+  );
   const screenWidth = mainScreen?.sizeMm?.width ?? (
     mainScreen?.type === "touch_display" ? 62 : 54
   );
@@ -132,17 +154,25 @@ export function getBoardDimensions(
           width: 0,
           depth: 0,
         };
+  const maxBoardWidth = Math.max(12, planeSize.width - BOARD_SHELL_INSET_MM * 2);
+  const maxBoardDepth = Math.max(12, planeSize.depth - BOARD_SHELL_INSET_MM * 2);
 
   return {
-    width: Math.max(
-      boardConfig?.sizeMm?.width ?? shellSize.width * DEFAULT_BOARD_WIDTH_RATIO,
-      widthFloor,
-      boardFromScreen.width,
+    width: Math.min(
+      maxBoardWidth,
+      Math.max(
+        boardConfig?.sizeMm?.width ?? shellSize.width * DEFAULT_BOARD_WIDTH_RATIO,
+        widthFloor,
+        boardFromScreen.width,
+      ),
     ),
-    depth: Math.max(
-      boardConfig?.sizeMm?.depth ?? shellSize.depth * DEFAULT_BOARD_DEPTH_RATIO,
-      depthFloor,
-      boardFromScreen.depth,
+    depth: Math.min(
+      maxBoardDepth,
+      Math.max(
+        boardConfig?.sizeMm?.depth ?? shellSize.depth * DEFAULT_BOARD_DEPTH_RATIO,
+        depthFloor,
+        boardFromScreen.depth,
+      ),
     ),
     thickness:
       boardConfig?.sizeMm?.thickness ?? DEFAULT_BOARD_THICKNESS,
@@ -167,8 +197,7 @@ export function createBoardSpec(
   const descriptor = getFaceDescriptor("cuboid", shellSize, mountFace);
   const screenInset =
     mainScreen &&
-    ((mainScreen.face === "front" && mountFace === "back") ||
-      (mainScreen.face === "back" && mountFace === "front"))
+    mainScreen.face === mountFace
       ? (mainScreen.sizeMm?.depth ??
           (mainScreen.type === "touch_display" ? 5 : 4)) + 2
       : 0;
