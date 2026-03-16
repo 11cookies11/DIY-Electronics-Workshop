@@ -287,6 +287,7 @@ export interface BoardSpec {
   width: number;
   depth: number;
   thickness: number;
+  maxComponentHeight: number;
   topY: number;
   mountFace: FaceName;
   rotation: [number, number, number];

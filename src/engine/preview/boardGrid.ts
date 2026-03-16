@@ -26,6 +26,7 @@ const BOARD_SCREEN_DEPTH_RATIO = 0.82;
 const BOARD_SCREEN_MARGIN_MM = 4;
 const BOARD_SHELL_INSET_MM = 3;
 const BOARD_PACKING_FILL_RATIO = 0.74;
+const BOARD_COMPONENT_FOOTPRINT_RATIO = 0.84;
 
 type BoardLayoutHints = {
   screenShadow?: {
@@ -222,6 +223,16 @@ export function createBoardSpec(
       ? (mainScreen.sizeMm?.depth ??
           (mainScreen.type === "touch_display" ? 5 : 4)) + 2
       : 0;
+  const normalSpan =
+    mountFace === "front" || mountFace === "back"
+      ? shellSize.depth
+      : mountFace === "left" || mountFace === "right"
+        ? shellSize.width
+        : shellSize.height;
+  const innerDepthAvailable = Math.max(
+    6,
+    normalSpan - screenInset - BOARD_SHELL_INSET_MM * 2,
+  );
   const normalInset = dimensions.thickness / 2 + BOARD_SHELL_INSET_MM + screenInset;
   const center: [number, number, number] = [
     descriptor.center[0] - descriptor.normal[0] * normalInset,
@@ -235,6 +246,10 @@ export function createBoardSpec(
     width: dimensions.width,
     depth: dimensions.depth,
     thickness: dimensions.thickness,
+    maxComponentHeight: Math.max(
+      2,
+      innerDepthAvailable - dimensions.thickness - 2,
+    ),
     topY,
     mountFace,
     rotation: getBoardMountRotation(mountFace),

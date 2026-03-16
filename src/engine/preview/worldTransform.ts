@@ -3,6 +3,9 @@
 import type { BoardPlacedModule, BoardSpec, ResolvedModuleDefinition } from "./types";
 import { getBoardCellSize } from "./boardGrid";
 
+const BOARD_COMPONENT_FOOTPRINT_RATIO = 0.84;
+const BOARD_COMPONENT_HEIGHT_RATIO = 0.92;
+
 export function gridToBoardWorldPosition(
   board: BoardSpec,
   gridX: number,
@@ -39,6 +42,20 @@ export function createPlacedModule(
   gridX: number,
   gridY: number,
 ): BoardPlacedModule {
+  const { cellW, cellD } = getBoardCellSize(board);
+  const visualWidth = Math.min(
+    module.sizeMm.width,
+    Math.max(4, cellW * module.gridW * BOARD_COMPONENT_FOOTPRINT_RATIO),
+  );
+  const visualDepth = Math.min(
+    module.sizeMm.depth,
+    Math.max(4, cellD * module.gridH * BOARD_COMPONENT_FOOTPRINT_RATIO),
+  );
+  const visualHeight = Math.min(
+    module.sizeMm.height,
+    Math.max(2, board.maxComponentHeight * BOARD_COMPONENT_HEIGHT_RATIO),
+  );
+
   return {
     id: module.id,
     type: module.id,
@@ -53,8 +70,8 @@ export function createPlacedModule(
       gridY,
       module.gridW,
       module.gridH,
-      module.sizeMm.height,
+      visualHeight,
     ),
-    sizeMm: [module.sizeMm.width, module.sizeMm.height, module.sizeMm.depth],
+    sizeMm: [visualWidth, visualHeight, visualDepth],
   };
 }
