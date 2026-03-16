@@ -1,5 +1,5 @@
 import { LabExperience } from "@/components/lab/LabExperience";
-import { fetchSecondMe, getAccessToken } from "@/lib/secondme";
+import { fetchSecondMe, getSecondMeConnectionState } from "@/lib/secondme";
 
 type HomeProps = {
   searchParams?: Promise<{
@@ -14,8 +14,8 @@ export default async function Home({ searchParams }: HomeProps) {
   const params = (await searchParams) ?? {};
   const connected = params.connected === "1";
   const error = params.error;
-  const accessToken = await getAccessToken();
-  const isConnected = Boolean(accessToken);
+  const connectionState = await getSecondMeConnectionState();
+  const isConnected = connectionState.isConnected;
   let userInfo: UserInfo | null = null;
   let userInfoError: string | null = null;
 
