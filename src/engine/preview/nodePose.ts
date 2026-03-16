@@ -1,10 +1,31 @@
 "use client";
 
 import { getFaceRotation } from "./faceTransform";
-import type { EulerTuple, SceneNode, TransformPose, Vector3Tuple } from "./types";
+import type {
+  EulerTuple,
+  SceneNode,
+  TargetDirection,
+  TransformPose,
+  Vector3Tuple,
+} from "./types";
 
 const ZERO_ROTATION: EulerTuple = [0, 0, 0];
 const UNIT_SCALE: Vector3Tuple = [1, 1, 1];
+
+function getBoardDirectionRotation(targetDirection: TargetDirection): EulerTuple {
+  switch (targetDirection) {
+    case "deviceFront":
+      return [0, 0, 0];
+    case "deviceBack":
+      return [0, Math.PI, 0];
+    case "deviceRight":
+      return [0, Math.PI / 2, 0];
+    case "deviceLeft":
+      return [0, -Math.PI / 2, 0];
+    default:
+      return ZERO_ROTATION;
+  }
+}
 
 export function createPose(
   position: Vector3Tuple,
@@ -31,6 +52,16 @@ export function createConstrainedPose(
     placement.anchorFace === "top" &&
     placement.selfMountFace === "bottom"
   ) {
+    if (
+      poseConstraint?.functionalFace === "front" &&
+      poseConstraint.targetDirection
+    ) {
+      return createPose(
+        position,
+        getBoardDirectionRotation(poseConstraint.targetDirection),
+      );
+    }
+
     return createPose(position, ZERO_ROTATION);
   }
 

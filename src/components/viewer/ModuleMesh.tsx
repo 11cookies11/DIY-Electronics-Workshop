@@ -654,23 +654,47 @@ function renderSpecificModule(node: SceneNode, color: string) {
 export function ModuleMesh({ node }: { node: SceneNode }) {
   const color = getColor(node.meta?.category);
   const shape = String(node.meta?.shape ?? "box");
-  const specific = renderSpecificModule(node, color);
+  const localNode: SceneNode = {
+    ...node,
+    position: [0, 0, 0],
+  };
+  const specific = renderSpecificModule(localNode, color);
 
   if (specific) {
-    return specific;
+    return (
+      <group position={node.position} rotation={node.rotation}>
+        {specific}
+      </group>
+    );
   }
 
   if (shape === "panel") {
-    return <GenericPanel size={node.size} color={color} position={node.position} />;
+    return (
+      <group position={node.position} rotation={node.rotation}>
+        <GenericPanel size={node.size} color={color} position={[0, 0, 0]} />
+      </group>
+    );
   }
 
   if (shape === "chip") {
-    return <GenericChip size={node.size} color={color} position={node.position} />;
+    return (
+      <group position={node.position} rotation={node.rotation}>
+        <GenericChip size={node.size} color={color} position={[0, 0, 0]} />
+      </group>
+    );
   }
 
   if (shape === "board") {
-    return <GenericBoard size={node.size} color={color} position={node.position} />;
+    return (
+      <group position={node.position} rotation={node.rotation}>
+        <GenericBoard size={node.size} color={color} position={[0, 0, 0]} />
+      </group>
+    );
   }
 
-  return <GenericBoxModule size={node.size} color={color} position={node.position} />;
+  return (
+    <group position={node.position} rotation={node.rotation}>
+      <GenericBoxModule size={node.size} color={color} position={[0, 0, 0]} />
+    </group>
+  );
 }
