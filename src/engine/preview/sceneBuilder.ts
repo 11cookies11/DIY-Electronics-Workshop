@@ -1,6 +1,11 @@
 "use client";
 
-import { createBoardGrid, createBoardSpec, placeModules } from "./boardGrid";
+import {
+  createBoardGrid,
+  createBoardLayoutHints,
+  createBoardSpec,
+  placeModules,
+} from "./boardGrid";
 import { applyPreviewView } from "./exploded";
 import { placeMainScreen, placePorts } from "./faceGrid";
 import { getPreviewModules } from "./moduleRegistry";
@@ -176,7 +181,12 @@ function createBoardNode(
   input: PreviewInput,
   modules: ReturnType<typeof getPreviewModules>,
 ): SceneNode {
-  const board = createBoardSpec(input.shellSize, input.board, modules);
+  const board = createBoardSpec(
+    input.shellSize,
+    input.board,
+    modules,
+    input.mainScreen,
+  );
   const size: [number, number, number] = [board.width, board.thickness, board.depth];
 
   return {
@@ -216,9 +226,20 @@ export function buildPreviewScene(
   view: PreviewView = "assembled",
 ): PreviewScene {
   const modules = getPreviewModules(input.modules);
-  const boardSpec = createBoardSpec(input.shellSize, input.board, modules);
+  const boardSpec = createBoardSpec(
+    input.shellSize,
+    input.board,
+    modules,
+    input.mainScreen,
+  );
   const boardGrid = createBoardGrid(boardSpec.cols, boardSpec.rows);
-  const placedModules = placeModules(boardGrid, boardSpec, modules);
+  const boardLayoutHints = createBoardLayoutHints(boardSpec, input.mainScreen);
+  const placedModules = placeModules(
+    boardGrid,
+    boardSpec,
+    modules,
+    boardLayoutHints,
+  );
 
   const moduleNodes: SceneNode[] = placedModules.map((module) => {
     const definition = modules.find((entry) => entry.id === module.id);

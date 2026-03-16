@@ -20,6 +20,18 @@ const DEFAULT_BOARD_WIDTH_RATIO = 0.78;
 const DEFAULT_BOARD_DEPTH_RATIO = 0.7;
 const BOARD_MODULE_MARGIN_RATIO = 1.16;
 const BOARD_MODULE_MIN_MARGIN_MM = 6;
+const BOARD_SCREEN_WIDTH_RATIO = 0.86;
+const BOARD_SCREEN_DEPTH_RATIO = 0.82;
+const BOARD_SCREEN_MARGIN_MM = 4;
+
+type BoardLayoutHints = {
+  screenShadow?: {
+    gridX: number;
+    gridY: number;
+    gridW: number;
+    gridH: number;
+  };
+};
 
 function createGridCell(): GridCell {
   return {
@@ -44,6 +56,7 @@ export function getBoardDimensions(
   shellSize: ShellSize,
   boardConfig?: PreviewInput["board"],
   modules: ResolvedModuleDefinition[] = [],
+  mainScreen?: PreviewInput["mainScreen"],
 ) {
   const cols = boardConfig?.grid?.cols ?? DEFAULT_BOARD_COLS;
   const rows = boardConfig?.grid?.rows ?? DEFAULT_BOARD_ROWS;
@@ -63,15 +76,35 @@ export function getBoardDimensions(
     depthFromModules > 0
       ? depthFromModules * BOARD_MODULE_MARGIN_RATIO + BOARD_MODULE_MIN_MARGIN_MM
       : 0;
+  const screenWidth = mainScreen?.sizeMm?.width ?? (
+    mainScreen?.type === "touch_display" ? 62 : 54
+  );
+  const screenHeight = mainScreen?.sizeMm?.height ?? (
+    mainScreen?.type === "touch_display" ? 38 : 34
+  );
+  const boardFromScreen =
+    mainScreen && (mainScreen.face === "front" || mainScreen.face === "back")
+      ? {
+          width:
+            screenWidth * BOARD_SCREEN_WIDTH_RATIO + BOARD_SCREEN_MARGIN_MM,
+          depth:
+            screenHeight * BOARD_SCREEN_DEPTH_RATIO + BOARD_SCREEN_MARGIN_MM,
+        }
+      : {
+          width: 0,
+          depth: 0,
+        };
 
   return {
     width: Math.max(
       boardConfig?.sizeMm?.width ?? shellSize.width * DEFAULT_BOARD_WIDTH_RATIO,
       widthFloor,
+      boardFromScreen.width,
     ),
     depth: Math.max(
       boardConfig?.sizeMm?.depth ?? shellSize.depth * DEFAULT_BOARD_DEPTH_RATIO,
       depthFloor,
+      boardFromScreen.depth,
     ),
     thickness:
       boardConfig?.sizeMm?.thickness ?? DEFAULT_BOARD_THICKNESS,
@@ -82,10 +115,16 @@ export function createBoardSpec(
   shellSize: ShellSize,
   boardConfig?: PreviewInput["board"],
   modules: ResolvedModuleDefinition[] = [],
+  mainScreen?: PreviewInput["mainScreen"],
 ): BoardSpec {
   const cols = boardConfig?.grid?.cols ?? DEFAULT_BOARD_COLS;
   const rows = boardConfig?.grid?.rows ?? DEFAULT_BOARD_ROWS;
-  const dimensions = getBoardDimensions(shellSize, boardConfig, modules);
+  const dimensions = getBoardDimensions(
+    shellSize,
+    boardConfig,
+    modules,
+    mainScreen,
+  );
   const center: [number, number, number] = [0, 0, 0];
   const topY = center[1] + dimensions.thickness / 2;
 
@@ -348,6 +387,67 @@ function getModuleArea(module: ModuleDefinition) {
   return module.gridW * module.gridH;
 }
 
+function getScreenShadowHints(
+  boardSpec: BoardSpec,
+  mainScreen?: PreviewInput["mainScreen"],
+): BoardLayoutHints {
+  if (!mainScreen || (mainScreen.face !== "front" && mainScreen.face !== "back")) {
+    return {};
+  }
+
+  const screenWidth = mainScreen.sizeMm?.width ?? (
+    mainScreen.type === "touch_display" ? 62 : 54
+  );
+  const screenHeight = mainScreen.sizeMm?.height ?? (
+    mainScreen.type === "touch_display" ? 38 : 34
+  );
+  const gridW = Math.min(
+    boardSpec.cols,
+    Math.max(2, Math.round(((screenWidth * 0.66) / boardSpec.width) * boardSpec.cols)),
+  );
+  const gridH = Math.min(
+    boardSpec.rows,
+    Math.max(2, Math.round(((screenHeight * 0.62) / boardSpec.depth) * boardSpec.rows)),
+  );
+
+  return {
+    screenShadow: {
+      gridX: Math.max(0, Math.floor((boardSpec.cols - gridW) / 2)),
+      gridY: Math.max(0, Math.floor((boardSpec.rows - gridH) / 2)),
+      gridW,
+      gridH,
+    },
+  };
+}
+
+function overlapsRect(
+  gridX: number,
+  gridY: number,
+  gridW: number,
+  gridH: number,
+  rect: NonNullable<BoardLayoutHints["screenShadow"]>,
+) {
+  return !(
+    gridX + gridW <= rect.gridX ||
+    rect.gridX + rect.gridW <= gridX ||
+    gridY + gridH <= rect.gridY ||
+    rect.gridY + rect.gridH <= gridY
+  );
+}
+
+function shouldAvoidScreenShadow(module: ResolvedModuleDefinition) {
+  const sourceId = module.sourceId ?? module.id;
+
+  return (
+    module.sizeMm.height >= 9 ||
+    sourceId === "battery" ||
+    sourceId === "camera_module" ||
+    sourceId === "cooling_fan" ||
+    sourceId === "relay_module" ||
+    sourceId === "rj45_port"
+  );
+}
+
 function getAnchorMetrics(
   board: BoardGrid,
   gridX: number,
@@ -390,10 +490,19 @@ function getZoneScore(
   gridY: number,
   gridW: number,
   gridH: number,
+  module?: ResolvedModuleDefinition,
+  hints?: BoardLayoutHints,
 ) {
   const metrics = getAnchorMetrics(board, gridX, gridY, gridW, gridH);
   const widthBias = Math.max(0, gridW - 1) * 0.18;
   const heightBias = Math.max(0, gridH - 1) * 0.18;
+  const screenShadowPenalty =
+    module &&
+    hints?.screenShadow &&
+    shouldAvoidScreenShadow(module) &&
+    overlapsRect(gridX, gridY, gridW, gridH, hints.screenShadow)
+      ? 220
+      : 0;
 
   switch (zone) {
     case "center":
@@ -401,49 +510,56 @@ function getZoneScore(
         metrics.distanceToCenter * 10 +
         metrics.distanceToHorizontalCenter * 2 +
         metrics.distanceToVerticalCenter * 2 +
-        widthBias
+        widthBias +
+        screenShadowPenalty
       );
     case "top":
       return (
         metrics.topDistance * 12 +
         metrics.distanceToHorizontalCenter * 4 +
         metrics.distanceToVerticalCenter * 1.5 +
-        widthBias
+        widthBias +
+        screenShadowPenalty
       );
     case "bottom":
       return (
         metrics.bottomDistance * 12 +
         metrics.distanceToHorizontalCenter * 4 +
         metrics.distanceToVerticalCenter * 1.5 +
-        widthBias
+        widthBias +
+        screenShadowPenalty
       );
     case "left":
       return (
         metrics.leftDistance * 12 +
         metrics.distanceToVerticalCenter * 4 +
         metrics.distanceToHorizontalCenter * 1.5 +
-        heightBias
+        heightBias +
+        screenShadowPenalty
       );
     case "right":
       return (
         metrics.rightDistance * 12 +
         metrics.distanceToVerticalCenter * 4 +
         metrics.distanceToHorizontalCenter * 1.5 +
-        heightBias
+        heightBias +
+        screenShadowPenalty
       );
     case "edge":
       return (
         metrics.nearestEdge * 14 +
         metrics.distanceToCenter * 1.5 +
         widthBias +
-        heightBias
+        heightBias +
+        screenShadowPenalty
       );
     case "any":
     default:
       return (
         metrics.distanceToCenter * 5 +
         metrics.distanceToHorizontalCenter * 1.5 +
-        metrics.distanceToVerticalCenter * 1.5
+        metrics.distanceToVerticalCenter * 1.5 +
+        screenShadowPenalty
       );
   }
 }
@@ -453,6 +569,7 @@ function findPlacementInZone(
   module: ResolvedModuleDefinition,
   zone: BoardZone,
   relaxationLevel: number,
+  hints?: BoardLayoutHints,
 ) {
   const placementConfig = getPlacementConfig(module, relaxationLevel);
   const candidates = getZoneCells(board, zone)
@@ -460,8 +577,26 @@ function findPlacementInZone(
       return collection.findIndex((entry) => entry.x === candidate.x && entry.y === candidate.y) === index;
     })
     .sort((left, right) => {
-      const leftScore = getZoneScore(board, zone, left.x, left.y, module.gridW, module.gridH);
-      const rightScore = getZoneScore(board, zone, right.x, right.y, module.gridW, module.gridH);
+      const leftScore = getZoneScore(
+        board,
+        zone,
+        left.x,
+        left.y,
+        module.gridW,
+        module.gridH,
+        module,
+        hints,
+      );
+      const rightScore = getZoneScore(
+        board,
+        zone,
+        right.x,
+        right.y,
+        module.gridW,
+        module.gridH,
+        module,
+        hints,
+      );
       return leftScore - rightScore || left.y - right.y || left.x - right.x;
     });
 
@@ -493,6 +628,7 @@ function tryPlaceModules(
   boardSpec: BoardSpec,
   modules: ResolvedModuleDefinition[],
   relaxationLevel: number,
+  hints?: BoardLayoutHints,
 ) {
   const workingBoard = createBoardGrid(board.cols, board.rows);
   const placedModules: BoardPlacedModule[] = [];
@@ -507,11 +643,23 @@ function tryPlaceModules(
 
   for (const module of sorted) {
     let zone: BoardZone = module.preferredZone;
-    let placement = findPlacementInZone(workingBoard, module, zone, relaxationLevel);
+    let placement = findPlacementInZone(
+      workingBoard,
+      module,
+      zone,
+      relaxationLevel,
+      hints,
+    );
 
     if (!placement && zone !== "any") {
       zone = "any";
-      placement = findPlacementInZone(workingBoard, module, zone, relaxationLevel);
+      placement = findPlacementInZone(
+        workingBoard,
+        module,
+        zone,
+        relaxationLevel,
+        hints,
+      );
     }
 
     if (!placement) {
@@ -547,6 +695,7 @@ export function placeModules(
   board: BoardGrid,
   boardSpec: BoardSpec,
   modules: ResolvedModuleDefinition[],
+  hints?: BoardLayoutHints,
 ): BoardPlacedModule[] {
   for (const relaxationLevel of [0, 1, 2, 3]) {
     const placedModules = tryPlaceModules(
@@ -554,6 +703,7 @@ export function placeModules(
       boardSpec,
       modules,
       relaxationLevel,
+      hints,
     );
 
     if (placedModules) {
@@ -563,4 +713,11 @@ export function placeModules(
 
   const moduleIds = modules.map((module) => module.id).join(", ");
   throw new Error(`cannot place modules on board: ${moduleIds}`);
+}
+
+export function createBoardLayoutHints(
+  boardSpec: BoardSpec,
+  mainScreen?: PreviewInput["mainScreen"],
+) {
+  return getScreenShadowHints(boardSpec, mainScreen);
 }
