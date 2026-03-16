@@ -9,3 +9,4 @@ export * from "./faceGrid";
 export * from "./faceTransform";
 export * from "./sceneBuilder";
 export * from "./exploded";
+export * from "./nodePose";

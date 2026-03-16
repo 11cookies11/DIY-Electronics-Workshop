@@ -5,16 +5,22 @@ import type {
   PreviewView,
   SceneNode,
 } from "./types";
+import { createPose, getNodePosition, withNodePose } from "./nodePose";
 
 function offsetNode(node: SceneNode, offset: [number, number, number]): SceneNode {
-  return {
-    ...node,
-    position: [
-      node.position[0] + offset[0],
-      node.position[1] + offset[1],
-      node.position[2] + offset[2],
-    ],
-  };
+  const position = getNodePosition(node);
+  return withNodePose(
+    node,
+    createPose(
+      [
+        position[0] + offset[0],
+        position[1] + offset[1],
+        position[2] + offset[2],
+      ],
+      node.pose.rotation,
+      node.pose.scale,
+    ),
+  );
 }
 
 function getNodeScale(node: SceneNode) {
@@ -41,8 +47,9 @@ function getModuleExplodedOffset(
   const category = String(node.meta?.category ?? "");
   const scale = getNodeScale(node);
   const shellRadius = Math.max(shellSize[0], shellSize[1], shellSize[2]) * 0.18;
-  const deltaX = node.position[0] - boardCenter[0];
-  const deltaZ = node.position[2] - boardCenter[2];
+  const position = getNodePosition(node);
+  const deltaX = position[0] - boardCenter[0];
+  const deltaZ = position[2] - boardCenter[2];
   const spreadX =
     deltaX === 0
       ? 0
@@ -139,7 +146,7 @@ export function applyPreviewView(
     moduleNodes: scene.moduleNodes.map((node) =>
       offsetNode(
         node,
-        getModuleExplodedOffset(node, scene.boardNode.position, scene.shellNode.size),
+        getModuleExplodedOffset(node, getNodePosition(scene.boardNode), scene.shellNode.size),
       ),
     ),
     screenNodes: scene.screenNodes.map((node) =>

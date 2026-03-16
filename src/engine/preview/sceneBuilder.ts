@@ -4,23 +4,160 @@ import { createBoardGrid, createBoardSpec, placeModules } from "./boardGrid";
 import { applyPreviewView } from "./exploded";
 import { placeMainScreen, placePorts } from "./faceGrid";
 import { getPreviewModules } from "./moduleRegistry";
+import { createPose } from "./nodePose";
 import { buildShellGeometry } from "./shellGeometry";
 import type {
+  FaceName,
+  PlacementZone,
   PreviewConnection,
   PreviewInput,
   PreviewScene,
   PreviewView,
   SceneNode,
+  SceneNodeConstraint,
 } from "./types";
+
+function createVisualDimensions(size: [number, number, number]) {
+  return {
+    visual: {
+      width: size[0],
+      height: size[1],
+      depth: size[2],
+    },
+    footprint: {
+      width: size[0],
+      depth: size[2],
+    },
+  } satisfies SceneNode["dimensions"];
+}
+
+function createBoardConstraint(): SceneNodeConstraint {
+  return {
+    placement: {
+      anchorNodeId: "shell",
+      anchorFace: "bottom",
+      selfMountFace: "bottom",
+      preferredZone: "center",
+    },
+    pose: {
+      upFace: "top",
+    },
+    collision: {
+      clearance: 0,
+      footprintPadding: 0,
+      bodyPadding: 0,
+    },
+    priority: 1000,
+  };
+}
+
+function createModuleConstraint(
+  sourceId: string,
+  category: unknown,
+  zone: unknown,
+): SceneNodeConstraint {
+  const normalizedCategory = String(category ?? "");
+  const normalizedZone = String(zone ?? "center");
+  const isCamera = sourceId === "camera_module";
+  const preferredZone: PlacementZone =
+    normalizedZone === "top" ||
+    normalizedZone === "bottom" ||
+    normalizedZone === "left" ||
+    normalizedZone === "right" ||
+    normalizedZone === "edge"
+      ? normalizedZone
+      : "center";
+
+  return {
+    placement: {
+      anchorNodeId: "main-board",
+      anchorFace: "top",
+      selfMountFace: "bottom",
+      preferredZone,
+    },
+    pose: {
+      upFace: "top",
+      functionalFace: isCamera ? "front" : undefined,
+      targetDirection: isCamera ? "deviceFront" : undefined,
+    },
+    collision: {
+      clearance:
+        normalizedCategory === "core" ? 5 :
+        normalizedCategory === "power" ? 4 :
+        normalizedCategory === "communication" ? 4 :
+        3,
+      footprintPadding: normalizedCategory === "core" ? 2 : 1,
+      bodyPadding: 1,
+    },
+    priority:
+      normalizedCategory === "core" ? 900 :
+      normalizedCategory === "power" ? 800 :
+      normalizedCategory === "communication" ? 700 :
+      500,
+  };
+}
+
+function createScreenConstraint(face: FaceName): SceneNodeConstraint {
+  return {
+    placement: {
+      anchorNodeId: "shell",
+      anchorFace: face,
+      selfMountFace: "back",
+      preferredZone: "center",
+    },
+    pose: {
+      functionalFace: "front",
+      targetDirection: "outward",
+    },
+    collision: {
+      clearance: 2,
+      bodyPadding: 1,
+      keepout: {
+        back: 10,
+      },
+    },
+    priority: 950,
+  };
+}
+
+function getPortMountFace(face: FaceName) {
+  return face === "front" || face === "back" ? "back" : "bottom";
+}
+
+function createPortConstraint(face: FaceName): SceneNodeConstraint {
+  return {
+    placement: {
+      anchorNodeId: "shell",
+      anchorFace: face,
+      selfMountFace: getPortMountFace(face),
+      preferredZone: "edge",
+    },
+    pose: {
+      functionalFace: "front",
+      targetDirection: "outward",
+    },
+    collision: {
+      clearance: 2,
+      bodyPadding: 1,
+      keepout: {
+        front: 12,
+      },
+    },
+    priority: 850,
+  };
+}
 
 function createShellNode(input: PreviewInput): SceneNode {
   const shell = buildShellGeometry(input.shell, input.shellSize);
+  const size: [number, number, number] = [shell.size.width, shell.size.height, shell.size.depth];
 
   return {
     id: "shell",
     type: input.shell,
+    pose: createPose(shell.center),
     position: shell.center,
-    size: [shell.size.width, shell.size.height, shell.size.depth],
+    size,
+    dimensions: createVisualDimensions(size),
     meta: {
       layer: "shell",
       shellType: input.shell,
@@ -30,12 +167,16 @@ function createShellNode(input: PreviewInput): SceneNode {
 
 function createBoardNode(input: PreviewInput): SceneNode {
   const board = createBoardSpec(input.shellSize, input.board);
+  const size: [number, number, number] = [board.width, board.thickness, board.depth];
 
   return {
     id: "main-board",
     type: "main-board",
+    pose: createPose(board.center),
     position: board.center,
-    size: [board.width, board.thickness, board.depth],
+    size,
+    dimensions: createVisualDimensions(size),
+    constraints: createBoardConstraint(),
     meta: {
       layer: "board",
       placement: input.board.placement,
@@ -69,23 +210,34 @@ export function buildPreviewScene(
   const modules = getPreviewModules(input.modules);
   const placedModules = placeModules(boardGrid, boardSpec, modules);
 
-  const moduleNodes: SceneNode[] = placedModules.map((module) => ({
-    id: module.id,
-    type: module.type,
-    position: module.worldPosition,
-    size: module.sizeMm,
-    meta: {
-      layer: "module",
-      category: modules.find((entry) => entry.id === module.id)?.category,
-      shape: modules.find((entry) => entry.id === module.id)?.shape,
-      sourceId: modules.find((entry) => entry.id === module.id)?.sourceId,
-      zone: module.zone,
-      gridX: module.gridX,
-      gridY: module.gridY,
-      gridW: module.gridW,
-      gridH: module.gridH,
-    },
-  }));
+  const moduleNodes: SceneNode[] = placedModules.map((module) => {
+    const definition = modules.find((entry) => entry.id === module.id);
+
+    return {
+      id: module.id,
+      type: module.type,
+      pose: createPose(module.worldPosition),
+      position: module.worldPosition,
+      size: module.sizeMm,
+      dimensions: createVisualDimensions(module.sizeMm),
+      constraints: createModuleConstraint(
+        definition?.sourceId ?? module.type,
+        definition?.category,
+        module.zone,
+      ),
+      meta: {
+        layer: "module",
+        category: definition?.category,
+        shape: definition?.shape,
+        sourceId: definition?.sourceId,
+        zone: module.zone,
+        gridX: module.gridX,
+        gridY: module.gridY,
+        gridW: module.gridW,
+        gridH: module.gridH,
+      },
+    };
+  });
 
   const screenPlacement = input.mainScreen
     ? placeMainScreen(input.mainScreen, input.shellSize).item
@@ -97,9 +249,12 @@ export function buildPreviewScene(
         {
           id: screenPlacement.id,
           type: screenPlacement.componentType ?? "screen",
+          pose: createPose(screenPlacement.worldPosition, screenPlacement.rotation),
           position: screenPlacement.worldPosition,
           rotation: screenPlacement.rotation,
           size: screenPlacement.sizeMm,
+          dimensions: createVisualDimensions(screenPlacement.sizeMm),
+          constraints: createScreenConstraint(screenPlacement.face),
           meta: {
             layer: "screen",
             face: screenPlacement.face,
@@ -112,9 +267,12 @@ export function buildPreviewScene(
   const portNodes: SceneNode[] = portPlacements.map((port) => ({
     id: port.id,
     type: port.componentType ?? "port",
+    pose: createPose(port.worldPosition, port.rotation),
     position: port.worldPosition,
     rotation: port.rotation,
     size: port.sizeMm,
+    dimensions: createVisualDimensions(port.sizeMm),
+    constraints: createPortConstraint(port.face),
     meta: {
       layer: "port",
       face: port.face,

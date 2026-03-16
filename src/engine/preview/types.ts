@@ -157,12 +157,87 @@ export interface FacePlacedItem {
   sizeMm: [number, number, number];
 }
 
+export type Vector3Tuple = [number, number, number];
+
+export type EulerTuple = [number, number, number];
+
+export type NodeFace = "top" | "bottom" | "front" | "back" | "left" | "right";
+
+export type PlacementZone = "center" | "top" | "bottom" | "left" | "right" | "edge";
+
+export type TargetDirection =
+  | "deviceFront"
+  | "deviceBack"
+  | "deviceLeft"
+  | "deviceRight"
+  | "deviceTop"
+  | "deviceBottom"
+  | "outward"
+  | "inward";
+
+export interface TransformPose {
+  position: Vector3Tuple;
+  rotation: EulerTuple;
+  scale: Vector3Tuple;
+}
+
+export interface NodePlacementConstraint {
+  anchorNodeId: string;
+  anchorFace: NodeFace;
+  selfMountFace: NodeFace;
+  preferredZone?: PlacementZone;
+}
+
+export interface NodePoseConstraint {
+  functionalFace?: NodeFace;
+  upFace?: NodeFace;
+  targetDirection?: TargetDirection;
+}
+
+export interface NodeKeepout {
+  front?: number;
+  back?: number;
+  left?: number;
+  right?: number;
+  top?: number;
+  bottom?: number;
+}
+
+export interface NodeCollisionConstraint {
+  clearance?: number;
+  footprintPadding?: number;
+  bodyPadding?: number;
+  keepout?: NodeKeepout;
+}
+
+export interface NodeDimensions {
+  visual: {
+    width: number;
+    height: number;
+    depth: number;
+  };
+  footprint?: {
+    width: number;
+    depth: number;
+  };
+}
+
+export interface SceneNodeConstraint {
+  placement: NodePlacementConstraint;
+  pose?: NodePoseConstraint;
+  collision?: NodeCollisionConstraint;
+  priority?: number;
+}
+
 export interface SceneNode {
   id: string;
   type: string;
-  position: [number, number, number];
-  rotation?: [number, number, number];
-  size: [number, number, number];
+  pose: TransformPose;
+  position: Vector3Tuple;
+  rotation?: EulerTuple;
+  size: Vector3Tuple;
+  dimensions?: NodeDimensions;
+  constraints?: SceneNodeConstraint;
   meta?: Record<string, unknown>;
 }
 
