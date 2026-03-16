@@ -111,6 +111,13 @@ export type IntakeAgentRequest = {
   locale: "zh-CN";
   message: string;
   state: IntakeAgentState;
+  history?: ConversationTurn[];
+};
+
+export type ConversationTurn = {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
 };
 
 export type SecondMeChatMessage = {

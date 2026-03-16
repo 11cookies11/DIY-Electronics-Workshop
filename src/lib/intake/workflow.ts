@@ -1,16 +1,11 @@
 import type { PreviewInput } from "@/engine/preview/types";
+import { detectConversationBaseMode } from "./conversation-base";
 import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
-import {
-  isSecondMeChatConfigured,
-  requestSecondMeChatReply,
-} from "./secondme-client";
-import {
-  buildBaseConversationReply,
-  countStructuredSignals,
-} from "./conversation-base";
-import { renderSkillReply, routeIntakeSkills } from "./skills";
+import { isSecondMeChatConfigured, requestSecondMeChatReply } from "./secondme-client";
+import { routeIntakeSkills } from "./skills";
 import {
   createEmptyState,
+  type ConversationTurn,
   type ConfirmedRequirement,
   type IntakeAgentOutput,
   type IntakeAgentRequest,
@@ -38,9 +33,7 @@ function inferIntent(message: string): IntakeIntent {
   if (hasPattern(message, [/(维修|修复|问题|故障|异常)/])) return "support";
   if (hasPattern(message, [/(升级|改造|迭代)/])) return "upgrade";
   if (hasPattern(message, [/(原型|demo|验证|试做)/i])) return "prototype";
-  if (
-    hasPattern(message, [/(定制|做一个|开发一个|设计一个|产品)/])
-  ) {
+  if (hasPattern(message, [/(定制|做一个|开发一个|设计一个|产品)/])) {
     return "custom_device";
   }
   return "consulting";
@@ -377,53 +370,28 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
     .join("；");
 }
 
-function buildLocalCustomerReply(
-  message: string,
-  state: IntakeAgentState,
-  confirmed: ConfirmedRequirement,
-  unknowns: string[],
-  nextAction: IntakeNextAction,
-  previewDraft?: PreviewDraft,
-) {
-  const baseReply = buildBaseConversationReply(message, state);
-  const route = routeIntakeSkills({
-    message,
-    state,
-    confirmed,
-    unknowns,
-    previewDraft,
-  });
-  const skillReply = renderSkillReply(route.active_skill, {
-    message,
-    state,
-    confirmed,
-    unknowns,
-    previewDraft,
-  });
-  const summary = buildRequirementSummary(confirmed);
+function buildFallbackCustomerReply(args: {
+  confirmed: ConfirmedRequirement;
+  nextAction: IntakeNextAction;
+  previewDraft?: PreviewDraft;
+}) {
+  const summary = buildRequirementSummary(args.confirmed);
 
-  if (baseReply && countStructuredSignals(confirmed) === countStructuredSignals(state.confirmed)) {
-    return baseReply;
+  if (args.nextAction === "generate_preview" && args.previewDraft) {
+    return summary
+      ? "我已经可以先按这个方向给你生成一版 3D 草案了。"
+      : "我已经可以先给你生成一版 3D 草案了。";
   }
 
-  if (skillReply && countStructuredSignals(confirmed) === countStructuredSignals(state.confirmed)) {
-    return skillReply;
-  }
-
-  if (nextAction === "generate_preview" && previewDraft) {
-    return `${summary}。这些信息已经够我先生成一版 3D 结构草案了。你可以继续补充尺寸、使用场景或者外观偏好，我会顺着这版草案继续细化。`;
-  }
-
-  if (nextAction === "prepare_handoff" || nextAction === "handoff_to_lab") {
-    return `${summary}。这边我已经能整理出一版实验室交接单和预览草案了。后面你还可以继续补充使用场景和核心目标，我会一起带进交接结果里。`;
+  if (args.nextAction === "prepare_handoff" || args.nextAction === "handoff_to_lab") {
+    return "这边已经可以整理实验室交接单了。";
   }
 
   if (summary) {
-    const askFields = unknowns.slice(0, 2).join("、");
-    return `${summary}。我先按这个方向继续跟你推进。接下来我比较想确认的是：${askFields || "你最看重的功能和使用场景"}。`;
+    return "我先按你刚才说的方向继续往下收。";
   }
 
-  return "可以，我们先随意聊也没问题。你告诉我想做什么设备、准备给谁用、最想解决什么问题，我会边聊边帮你收成可落地的方案。";
+  return "你继续说，我先听着。";
 }
 
 async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
@@ -431,31 +399,41 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   unknowns: string[];
   nextAction: IntakeNextAction;
   previewDraft?: PreviewDraft;
-  localReply: string;
 }) {
   if (!isSecondMeChatConfigured()) {
     return null;
   }
 
+  const route = routeIntakeSkills({
+    message: request.message,
+    state: request.state,
+    confirmed: draft.confirmed,
+    unknowns: draft.unknowns,
+    previewDraft: draft.previewDraft,
+  });
+
   const prompt = [
     buildIntakeUserPrompt(request),
     JSON.stringify(
       {
+        conversation_mode: detectConversationBaseMode(request.message),
+        active_skill: route.active_skill,
+        matched_skills: route.matched_skills,
         confirmed: draft.confirmed,
         unknowns: draft.unknowns,
         next_action: draft.nextAction,
         preview_ready: Boolean(draft.previewDraft),
-        local_reply_reference: draft.localReply,
       },
       null,
       2,
     ),
     [
-      "请只输出一段自然中文回复，不要输出 JSON，不要重复字段名。",
-      "把自己当成真人前台接待，不要像销售，也不要像需求表单机器人。",
-      "优先先接住用户的话，再自然往下推进。",
-      "除非信息已经很完整，否则不要一下子抛很多问题，通常只追问一个最关键的点。",
-      "回复尽量控制在 2 到 5 句，口气放松一点。",
+      "请只输出一段自然中文回复，不要输出 JSON。",
+      "不要复述结构化字段名。",
+      "不要把自己说得像表单机器人。",
+      "如果只是闲聊或寒暄，就先接住话，不要急着办事。",
+      "如果需要追问，通常只问一个最关键的问题。",
+      "回复尽量控制在 2 到 5 句。",
     ].join("\n"),
   ].join("\n\n");
 
@@ -473,12 +451,14 @@ export async function runIntakeWorkflow(
   sessionId: string,
   message: string,
   state: IntakeAgentState = createEmptyState(),
+  history: ConversationTurn[] = [],
 ): Promise<IntakeAgentOutput> {
   const request: IntakeAgentRequest = {
     session_id: sessionId,
     locale: "zh-CN",
     message,
     state,
+    history,
   };
 
   const confirmed = deriveConfirmed(message, state.confirmed);
@@ -522,23 +502,18 @@ export async function runIntakeWorkflow(
     workflowState = "handoff_ready";
   }
 
-  const localReply = buildLocalCustomerReply(
-    message,
-    state,
-    confirmed,
-    unknowns,
-    nextAction,
-    previewDraft,
-  );
-
   const customerReply =
     (await buildModelCustomerReply(request, {
       confirmed,
       unknowns,
       nextAction,
       previewDraft,
-      localReply,
-    })) ?? localReply;
+    })) ??
+    buildFallbackCustomerReply({
+      confirmed,
+      nextAction,
+      previewDraft,
+    });
 
   return {
     customer_reply: customerReply,

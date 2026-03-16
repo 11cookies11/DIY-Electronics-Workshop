@@ -1,5 +1,6 @@
 import {
   createEmptyState,
+  type ConversationTurn,
   type IntakeAgentOutput,
   type IntakeAgentState,
 } from "./types";
@@ -9,6 +10,7 @@ export type SessionRecord = {
   createdAt: number;
   updatedAt: number;
   state: IntakeAgentState;
+  history: ConversationTurn[];
   lastOutput?: IntakeAgentOutput;
 };
 
@@ -53,6 +55,7 @@ export function getSessionState(sessionId: string) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     state,
+    history: [],
   });
   return state;
 }
@@ -66,6 +69,7 @@ export function saveSessionState(sessionId: string, state: IntakeAgentState) {
     createdAt: previous?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
     state,
+    history: previous?.history ?? [],
   });
 
   return state;
@@ -73,16 +77,28 @@ export function saveSessionState(sessionId: string, state: IntakeAgentState) {
 
 export function saveSessionOutput(
   sessionId: string,
+  userMessage: string,
   output: IntakeAgentOutput,
 ) {
   const store = getStore();
   const previous = store.get(sessionId);
+  const now = Date.now();
+  const nextHistory: ConversationTurn[] = [
+    ...(previous?.history ?? []),
+    { role: "user" as const, content: userMessage, timestamp: now },
+    {
+      role: "assistant" as const,
+      content: output.customer_reply,
+      timestamp: now,
+    },
+  ].slice(-16);
 
   store.set(sessionId, {
     id: sessionId,
     createdAt: previous?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
     state: output.state,
+    history: nextHistory,
     lastOutput: output,
   });
 

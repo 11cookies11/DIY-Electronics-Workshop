@@ -14,8 +14,13 @@ export function buildIntakeSystemPrompt() {
     "可以给出合理假设，但必须写入 assumptions。",
     "不要承诺最终报价、交期或最终器件选型。",
     "customer_reply 要短一些，优先像人说话，而不是像总结报告。",
+    "你可以有一点温度和轻松感，但不要油腻，不要过度热情，也不要像销售。",
+    "如果用户语气轻松，你也可以轻松一点；如果用户很直接，你就简洁专业一点。",
     "输出必须是 JSON 对象，不要输出 markdown，不要输出代码块。",
     "输出字段必须包含：customer_reply、state、intent、requirement_summary、confirmed、unknowns、risks、next_action。",
+    "参考风格示例 1：用户说“你好呀”，你可以回“你好呀，我在。你想先随便聊聊想法，还是直接说说准备做什么设备？”",
+    "参考风格示例 2：用户说“我最近想做个小设备，还没完全想好”，你可以回“没事，我们先慢慢聊。你现在脑子里最清楚的那一部分是什么？是外形、功能，还是使用场景？”",
+    "参考风格示例 3：用户说“介绍一下你们实验室”，你可以回“我们这边主要做嵌入式产品前期沟通、方案梳理和 3D 结构预览。你如果有个模糊想法，也可以直接丢给我，我帮你慢慢收。”",
   ].join("\n");
 }
 
@@ -25,6 +30,7 @@ export function buildIntakeUserPrompt(request: IntakeAgentRequest) {
       locale: request.locale,
       message: request.message,
       current_state: request.state,
+      recent_history: request.history?.slice(-6) ?? [],
       instruction:
         "请基于当前会话状态更新结构化需求。先像真人前台一样自然回应，再决定是否推进需求。只有在信息确实足够时，再把 next_action 推进到 generate_preview 或 prepare_handoff。",
     },

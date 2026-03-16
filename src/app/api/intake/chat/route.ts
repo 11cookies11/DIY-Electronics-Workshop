@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runIntakeWorkflow } from "@/lib/intake/workflow";
-import { getSessionState, saveSessionOutput } from "@/lib/intake/store";
+import { getSessionRecord, getSessionState, saveSessionOutput } from "@/lib/intake/store";
 
 type RequestBody = {
   sessionId?: string;
@@ -24,9 +24,15 @@ export async function POST(request: Request) {
     }
 
     const sessionId = body.sessionId?.trim() || createSessionId();
+    const record = getSessionRecord(sessionId);
     const currentState = getSessionState(sessionId);
-    const result = await runIntakeWorkflow(sessionId, message, currentState);
-    saveSessionOutput(sessionId, result);
+    const result = await runIntakeWorkflow(
+      sessionId,
+      message,
+      currentState,
+      record?.history ?? [],
+    );
+    saveSessionOutput(sessionId, message, result);
 
     return NextResponse.json({
       sessionId,
