@@ -40,6 +40,13 @@ function wantsHandoff(message: string) {
   ]);
 }
 
+function isAffirmative(message: string) {
+  return hasPattern(message, [
+    /^(可以|好|好的|好呀|好啊|行|行啊|来吧|开始吧|继续吧|就这样吧|没问题|可以的|那就这样|那就开始吧)[！。呀啊吧啦嘛？?]*$/i,
+    /(那就|那你就|那麻烦你).*(开始|继续|生成|整理|推进)/,
+  ]);
+}
+
 const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "capability-intro",
@@ -62,14 +69,20 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "handoff-promoter",
     description: "在交接单可用时把对话推进到 handoff 阶段",
-    match: ({ message, previewDraft, unknowns }) =>
-      Boolean(previewDraft) && unknowns.length <= 2 && wantsHandoff(message),
+    match: ({ message, state, previewDraft, unknowns }) =>
+      Boolean(previewDraft) &&
+      unknowns.length <= 2 &&
+      (wantsHandoff(message) ||
+        (state.workflow_state === "handoff_ready" && isAffirmative(message))),
     useSecondMe: true,
   },
   {
     id: "preview-promoter",
     description: "在预览草案已可生成时把对话推进到 preview 阶段",
-    match: ({ message, previewDraft }) => Boolean(previewDraft) && wantsPreview(message),
+    match: ({ message, state, previewDraft }) =>
+      Boolean(previewDraft) &&
+      (wantsPreview(message) ||
+        (state.workflow_state === "preview_ready" && isAffirmative(message))),
     useSecondMe: true,
   },
   {

@@ -105,10 +105,15 @@ function deriveConfirmed(
     [/(运动|记录运动数据)/, "运动记录"],
   ]);
 
+  const normalizedMessage = message.replace(/\s+/g, "");
   const useCase =
     current.use_case ??
     message.match(/用于([^，。；]+)/)?.[1]?.trim() ??
-    message.match(/给([^，。；]+)用/)?.[1]?.trim();
+    message.match(/给([^，。；]+)用/)?.[1]?.trim() ??
+    (hasPattern(normalizedMessage, [/(家里用|家用|家庭用)/]) ? "家庭环境" : undefined) ??
+    (hasPattern(normalizedMessage, [/(出门用|外出用|随身用|在外面用)/]) ? "外出环境" : undefined) ??
+    (hasPattern(normalizedMessage, [/(酒店|宾馆|民宿)/]) ? "酒店环境" : undefined) ??
+    (hasPattern(normalizedMessage, [/(办公室|办公桌|工位)/]) ? "办公环境" : undefined);
 
   return {
     ...current,
@@ -116,7 +121,7 @@ function deriveConfirmed(
     use_case: useCase,
     screen:
       current.screen ??
-      (hasPattern(message, [/(屏幕|显示|触控)/])
+      (hasPattern(message, [/(屏幕|显示|触控|触摸|触屏)/])
         ? hasPattern(message, [/(触控|触摸)/])
           ? "触控屏"
           : "显示屏"
