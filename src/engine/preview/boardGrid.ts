@@ -18,6 +18,8 @@ const DEFAULT_BOARD_ROWS = 6;
 const DEFAULT_BOARD_THICKNESS = 2;
 const DEFAULT_BOARD_WIDTH_RATIO = 0.78;
 const DEFAULT_BOARD_DEPTH_RATIO = 0.7;
+const BOARD_MODULE_MARGIN_RATIO = 1.16;
+const BOARD_MODULE_MIN_MARGIN_MM = 6;
 
 function createGridCell(): GridCell {
   return {
@@ -41,12 +43,36 @@ export function createBoardGrid(
 export function getBoardDimensions(
   shellSize: ShellSize,
   boardConfig?: PreviewInput["board"],
+  modules: ResolvedModuleDefinition[] = [],
 ) {
+  const cols = boardConfig?.grid?.cols ?? DEFAULT_BOARD_COLS;
+  const rows = boardConfig?.grid?.rows ?? DEFAULT_BOARD_ROWS;
+  const widthFromModules = modules.reduce((currentMax, module) => {
+    const moduleCellWidth = module.sizeMm.width / Math.max(1, module.gridW);
+    return Math.max(currentMax, moduleCellWidth * cols);
+  }, 0);
+  const depthFromModules = modules.reduce((currentMax, module) => {
+    const moduleCellDepth = module.sizeMm.depth / Math.max(1, module.gridH);
+    return Math.max(currentMax, moduleCellDepth * rows);
+  }, 0);
+  const widthFloor =
+    widthFromModules > 0
+      ? widthFromModules * BOARD_MODULE_MARGIN_RATIO + BOARD_MODULE_MIN_MARGIN_MM
+      : 0;
+  const depthFloor =
+    depthFromModules > 0
+      ? depthFromModules * BOARD_MODULE_MARGIN_RATIO + BOARD_MODULE_MIN_MARGIN_MM
+      : 0;
+
   return {
-    width:
+    width: Math.max(
       boardConfig?.sizeMm?.width ?? shellSize.width * DEFAULT_BOARD_WIDTH_RATIO,
-    depth:
+      widthFloor,
+    ),
+    depth: Math.max(
       boardConfig?.sizeMm?.depth ?? shellSize.depth * DEFAULT_BOARD_DEPTH_RATIO,
+      depthFloor,
+    ),
     thickness:
       boardConfig?.sizeMm?.thickness ?? DEFAULT_BOARD_THICKNESS,
   };
@@ -55,10 +81,11 @@ export function getBoardDimensions(
 export function createBoardSpec(
   shellSize: ShellSize,
   boardConfig?: PreviewInput["board"],
+  modules: ResolvedModuleDefinition[] = [],
 ): BoardSpec {
   const cols = boardConfig?.grid?.cols ?? DEFAULT_BOARD_COLS;
   const rows = boardConfig?.grid?.rows ?? DEFAULT_BOARD_ROWS;
-  const dimensions = getBoardDimensions(shellSize, boardConfig);
+  const dimensions = getBoardDimensions(shellSize, boardConfig, modules);
   const center: [number, number, number] = [0, 0, 0];
   const topY = center[1] + dimensions.thickness / 2;
 

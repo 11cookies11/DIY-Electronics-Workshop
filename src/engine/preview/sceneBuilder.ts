@@ -172,8 +172,11 @@ function createShellNode(input: PreviewInput): SceneNode {
   };
 }
 
-function createBoardNode(input: PreviewInput): SceneNode {
-  const board = createBoardSpec(input.shellSize, input.board);
+function createBoardNode(
+  input: PreviewInput,
+  modules: ReturnType<typeof getPreviewModules>,
+): SceneNode {
+  const board = createBoardSpec(input.shellSize, input.board, modules);
   const size: [number, number, number] = [board.width, board.thickness, board.depth];
 
   return {
@@ -212,9 +215,9 @@ export function buildPreviewScene(
   input: PreviewInput,
   view: PreviewView = "assembled",
 ): PreviewScene {
-  const boardSpec = createBoardSpec(input.shellSize, input.board);
-  const boardGrid = createBoardGrid(boardSpec.cols, boardSpec.rows);
   const modules = getPreviewModules(input.modules);
+  const boardSpec = createBoardSpec(input.shellSize, input.board, modules);
+  const boardGrid = createBoardGrid(boardSpec.cols, boardSpec.rows);
   const placedModules = placeModules(boardGrid, boardSpec, modules);
 
   const moduleNodes: SceneNode[] = placedModules.map((module) => {
@@ -325,7 +328,7 @@ export function buildPreviewScene(
   const scene: PreviewScene = {
     view: "assembled",
     shellNode: createShellNode(input),
-    boardNode: createBoardNode(input),
+    boardNode: createBoardNode(input, modules),
     moduleNodes,
     screenNodes,
     portNodes,
