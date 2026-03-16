@@ -2,7 +2,7 @@ import type { PreviewInput } from "@/engine/preview/types";
 import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
 import {
   isSecondMeChatConfigured,
-  requestSecondMeStructuredReply,
+  requestSecondMeChatReply,
 } from "./secondme-client";
 import {
   buildBaseConversationReply,
@@ -38,7 +38,9 @@ function inferIntent(message: string): IntakeIntent {
   if (hasPattern(message, [/(维修|修复|问题|故障|异常)/])) return "support";
   if (hasPattern(message, [/(升级|改造|迭代)/])) return "upgrade";
   if (hasPattern(message, [/(原型|demo|验证|试做)/i])) return "prototype";
-  if (hasPattern(message, [/(定制|做一个|开发一个|设计一个|产品)/])) {
+  if (
+    hasPattern(message, [/(定制|做一个|开发一个|设计一个|产品)/])
+  ) {
     return "custom_device";
   }
   return "consulting";
@@ -105,13 +107,15 @@ function deriveConfirmed(
     [/(显示|屏幕)/, "显示"],
     [/(遥控|红外)/, "红外控制"],
     [/(监测|检测|采集)/, "数据采集"],
-    [/(联网|连接)/, "无线连接"],
+    [/(联网|连接|同步手机)/, "无线连接"],
     [/(播放|音频|音响)/, "音频播放"],
+    [/(运动|记录运动数据)/, "运动记录"],
   ]);
+
   const useCase =
     current.use_case ??
-    (message.match(/用于([^，。；]+)/)?.[1]?.trim() ||
-      message.match(/给([^，。；]+)用/)?.[1]?.trim());
+    message.match(/用于([^，。；]+)/)?.[1]?.trim() ??
+    message.match(/给([^，。；]+)用/)?.[1]?.trim();
 
   return {
     ...current,
@@ -373,7 +377,7 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
     .join("；");
 }
 
-function buildCustomerReply(
+function buildLocalCustomerReply(
   message: string,
   state: IntakeAgentState,
   confirmed: ConfirmedRequirement,
@@ -422,36 +426,41 @@ function buildCustomerReply(
   return "可以，我们先随意聊也没问题。你告诉我想做什么设备、准备给谁用、最想解决什么问题，我会边聊边帮你收成可落地的方案。";
 }
 
-function validateStructuredOutput(value: unknown): IntakeAgentOutput | null {
-  if (!value || typeof value !== "object") return null;
-  const data = value as Partial<IntakeAgentOutput>;
-  if (
-    typeof data.customer_reply !== "string" ||
-    typeof data.requirement_summary !== "string" ||
-    !data.state ||
-    !data.confirmed ||
-    !Array.isArray(data.unknowns) ||
-    !Array.isArray(data.risks) ||
-    typeof data.next_action !== "string"
-  ) {
-    return null;
-  }
-  return data as IntakeAgentOutput;
-}
-
-async function trySecondMeStructured(
-  request: IntakeAgentRequest,
-): Promise<IntakeAgentOutput | null> {
+async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
+  confirmed: ConfirmedRequirement;
+  unknowns: string[];
+  nextAction: IntakeNextAction;
+  previewDraft?: PreviewDraft;
+  localReply: string;
+}) {
   if (!isSecondMeChatConfigured()) {
     return null;
   }
 
-  const raw = await requestSecondMeStructuredReply([
-    { role: "system", content: buildIntakeSystemPrompt() },
-    { role: "user", content: buildIntakeUserPrompt(request) },
-  ]);
-  const parsed = JSON.parse(raw) as unknown;
-  return validateStructuredOutput(parsed);
+  const prompt = [
+    buildIntakeUserPrompt(request),
+    JSON.stringify(
+      {
+        confirmed: draft.confirmed,
+        unknowns: draft.unknowns,
+        next_action: draft.nextAction,
+        preview_ready: Boolean(draft.previewDraft),
+        local_reply_reference: draft.localReply,
+      },
+      null,
+      2,
+    ),
+    "请只输出一段自然中文回复，不要输出 JSON，不要重复字段名。",
+  ].join("\n\n");
+
+  try {
+    return await requestSecondMeChatReply([
+      { role: "system", content: buildIntakeSystemPrompt() },
+      { role: "user", content: prompt },
+    ]);
+  } catch {
+    return null;
+  }
 }
 
 export async function runIntakeWorkflow(
@@ -466,15 +475,6 @@ export async function runIntakeWorkflow(
     state,
   };
 
-  try {
-    const result = await trySecondMeStructured(request);
-    if (result) {
-      return result;
-    }
-  } catch {
-    // Fall back to local workflow when the external model is unavailable.
-  }
-
   const confirmed = deriveConfirmed(message, state.confirmed);
   const unknowns = computeUnknowns(confirmed);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
@@ -485,6 +485,7 @@ export async function runIntakeWorkflow(
     unknowns,
     previewDraft,
   });
+
   const risks = unique([
     ...state.risks,
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
@@ -515,15 +516,26 @@ export async function runIntakeWorkflow(
     workflowState = "handoff_ready";
   }
 
-  return {
-    customer_reply: buildCustomerReply(
-      message,
-      state,
+  const localReply = buildLocalCustomerReply(
+    message,
+    state,
+    confirmed,
+    unknowns,
+    nextAction,
+    previewDraft,
+  );
+
+  const customerReply =
+    (await buildModelCustomerReply(request, {
       confirmed,
       unknowns,
       nextAction,
       previewDraft,
-    ),
+      localReply,
+    })) ?? localReply;
+
+  return {
+    customer_reply: customerReply,
     state: {
       workflow_state: workflowState,
       confirmed,
