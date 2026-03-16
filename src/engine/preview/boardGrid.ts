@@ -13,7 +13,6 @@ import type {
   ShellSize,
 } from "./types";
 import { getFaceDescriptor } from "./shellGeometry";
-import { getFaceRotation } from "./faceTransform";
 import { createPlacedModule } from "./worldTransform";
 
 const DEFAULT_BOARD_COLS = 6;
@@ -26,6 +25,7 @@ const BOARD_MODULE_MIN_MARGIN_MM = 6;
 const BOARD_SCREEN_WIDTH_RATIO = 0.86;
 const BOARD_SCREEN_DEPTH_RATIO = 0.82;
 const BOARD_SCREEN_MARGIN_MM = 4;
+const BOARD_SHELL_INSET_MM = 3;
 
 type BoardLayoutHints = {
   screenShadow?: {
@@ -50,6 +50,25 @@ function inferBoardMountFace(
   }
 
   return "top";
+}
+
+function getBoardMountRotation(face: FaceName): [number, number, number] {
+  switch (face) {
+    case "top":
+      return [0, 0, 0];
+    case "bottom":
+      return [Math.PI, 0, 0];
+    case "front":
+      return [Math.PI / 2, 0, 0];
+    case "back":
+      return [-Math.PI / 2, 0, 0];
+    case "right":
+      return [0, 0, -Math.PI / 2];
+    case "left":
+      return [0, 0, Math.PI / 2];
+    default:
+      return [0, 0, 0];
+  }
 }
 
 function createGridCell(): GridCell {
@@ -146,7 +165,19 @@ export function createBoardSpec(
   );
   const mountFace = inferBoardMountFace(shellSize, mainScreen);
   const descriptor = getFaceDescriptor("cuboid", shellSize, mountFace);
-  const center: [number, number, number] = [0, 0, 0];
+  const screenInset =
+    mainScreen &&
+    ((mainScreen.face === "front" && mountFace === "back") ||
+      (mainScreen.face === "back" && mountFace === "front"))
+      ? (mainScreen.sizeMm?.depth ??
+          (mainScreen.type === "touch_display" ? 5 : 4)) + 2
+      : 0;
+  const normalInset = dimensions.thickness / 2 + BOARD_SHELL_INSET_MM + screenInset;
+  const center: [number, number, number] = [
+    descriptor.center[0] - descriptor.normal[0] * normalInset,
+    descriptor.center[1] - descriptor.normal[1] * normalInset,
+    descriptor.center[2] - descriptor.normal[2] * normalInset,
+  ];
   const topY = center[1] + dimensions.thickness / 2;
 
   return {
@@ -156,7 +187,7 @@ export function createBoardSpec(
     thickness: dimensions.thickness,
     topY,
     mountFace,
-    rotation: getFaceRotation(mountFace),
+    rotation: getBoardMountRotation(mountFace),
     normal: descriptor.normal,
     axisU: descriptor.axisU,
     axisV: descriptor.axisV,

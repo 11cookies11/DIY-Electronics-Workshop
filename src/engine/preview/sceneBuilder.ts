@@ -36,11 +36,11 @@ function createVisualDimensions(size: [number, number, number]) {
   } satisfies SceneNode["dimensions"];
 }
 
-function createBoardConstraint(): SceneNodeConstraint {
+function createBoardConstraint(face: FaceName): SceneNodeConstraint {
   return {
     placement: {
       anchorNodeId: "shell",
-      anchorFace: "top",
+      anchorFace: face,
       selfMountFace: "bottom",
       preferredZone: "center",
     },
@@ -198,7 +198,7 @@ function createBoardNode(
     rotation: board.rotation,
     size,
     dimensions: createVisualDimensions(size),
-    constraints: createBoardConstraint(),
+    constraints: createBoardConstraint(board.mountFace),
     meta: {
       layer: "board",
       placement: input.board.placement,

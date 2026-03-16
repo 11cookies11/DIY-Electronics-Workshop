@@ -200,7 +200,7 @@ export function placeMainScreen(
         screenSize.depth,
       ),
       rotation: getFaceRotation(face),
-      sizeMm: [screenSize.width, screenSize.depth, screenSize.height] as [
+      sizeMm: [screenSize.width, screenSize.height, screenSize.depth] as [
         number,
         number,
         number,
@@ -273,7 +273,7 @@ export function placePorts(
           portSize.depth,
         ),
         rotation: getFaceRotation(face),
-        sizeMm: [portSize.width, portSize.depth, portSize.height],
+        sizeMm: [portSize.width, portSize.height, portSize.depth],
       });
     }
 

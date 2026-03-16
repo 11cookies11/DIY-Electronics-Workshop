@@ -5,17 +5,20 @@ import type { SceneNode } from "@/engine/preview";
 
 export function ScreenMesh({ node }: { node: SceneNode }) {
   const type = String(node.meta?.componentType ?? node.type);
-  const isRoundLike = node.size[0] === node.size[1] && node.size[0] <= 40;
+  const width = node.size[0];
+  const height = node.size[1];
+  const thickness = node.size[2];
+  const isRoundLike = width === height && width <= 40;
 
   if (type === "touch_display" && isRoundLike) {
-    const radius = Math.min(node.size[0], node.size[2]) * 0.48;
+    const radius = Math.min(width, height) * 0.48;
 
     return (
       <group position={node.position} rotation={node.rotation}>
         <Circle args={[radius, 40]}>
           <meshStandardMaterial color="#9fb7c8" roughness={0.2} metalness={0.18} />
         </Circle>
-        <Circle args={[radius * 0.82, 40]} position={[0, 0, node.size[2] * 0.08]}>
+        <Circle args={[radius * 0.82, 40]} position={[0, 0, thickness * 0.08]}>
           <meshStandardMaterial
             color="#dcfce7"
             emissive="#86efac"
@@ -31,17 +34,17 @@ export function ScreenMesh({ node }: { node: SceneNode }) {
   return (
     <group position={node.position} rotation={node.rotation}>
       <RoundedBox
-        args={node.size}
-        radius={Math.min(node.size[0], node.size[1], node.size[2]) * 0.08}
+        args={[width, height, thickness]}
+        radius={Math.min(width, height, thickness) * 0.08}
         smoothness={4}
       >
         <meshStandardMaterial color="#9eb8cc" roughness={0.18} metalness={0.14} />
       </RoundedBox>
       <RoundedBox
-        args={[node.size[0] * 0.88, Math.max(2, node.size[1] * 0.38), node.size[2] * 0.84]}
-        radius={Math.min(node.size[0], node.size[1], node.size[2]) * 0.06}
+        args={[width * 0.88, height * 0.84, Math.max(1.2, thickness * 0.55)]}
+        radius={Math.min(width, height, thickness) * 0.06}
         smoothness={4}
-        position={[0, 0, node.size[2] * 0.06]}
+        position={[0, 0, thickness * 0.08]}
       >
         <meshStandardMaterial
           color="#e0f2fe"
@@ -53,10 +56,10 @@ export function ScreenMesh({ node }: { node: SceneNode }) {
       </RoundedBox>
       {type === "touch_display" ? (
         <RoundedBox
-          args={[node.size[0] * 0.94, Math.max(1.5, node.size[1] * 0.16), node.size[2] * 0.9]}
-          radius={Math.min(node.size[0], node.size[1], node.size[2]) * 0.05}
+          args={[width * 0.94, height * 0.9, Math.max(0.8, thickness * 0.22)]}
+          radius={Math.min(width, height, thickness) * 0.05}
           smoothness={4}
-          position={[0, 0, node.size[2] * 0.12]}
+          position={[0, 0, thickness * 0.18]}
         >
           <meshStandardMaterial color="#ffffff" transparent opacity={0.28} roughness={0.03} metalness={0.04} />
         </RoundedBox>
