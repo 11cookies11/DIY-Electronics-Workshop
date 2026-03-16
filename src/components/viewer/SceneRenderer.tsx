@@ -99,6 +99,33 @@ function isSceneSettled(currentScene: PreviewScene, targetScene: PreviewScene) {
   });
 }
 
+function advanceSceneTowards(currentScene: PreviewScene, targetScene: PreviewScene) {
+  return {
+    view: targetScene.view,
+    shellNode: interpolateNode(currentScene.shellNode, targetScene.shellNode, 0.14),
+    boardNode: interpolateNode(currentScene.boardNode, targetScene.boardNode, 0.16),
+    moduleNodes: interpolateNodeList(
+      currentScene.moduleNodes,
+      targetScene.moduleNodes,
+      currentScene.boardNode.position,
+      0.18,
+    ),
+    screenNodes: interpolateNodeList(
+      currentScene.screenNodes,
+      targetScene.screenNodes,
+      currentScene.boardNode.position,
+      0.18,
+    ),
+    portNodes: interpolateNodeList(
+      currentScene.portNodes,
+      targetScene.portNodes,
+      currentScene.boardNode.position,
+      0.18,
+    ),
+    connections: targetScene.connections,
+  } satisfies PreviewScene;
+}
+
 function formatNodeLabel(node: SceneNode) {
   const sourceId =
     String(node.meta?.sourceId ?? node.meta?.componentType ?? node.type ?? "")
@@ -281,6 +308,50 @@ function NodeLabel({ node }: { node: SceneNode }) {
   );
 }
 
+function LabelWarmup() {
+  return (
+    <group position={[0, -10000, 0]} visible={false}>
+      <Billboard follow>
+        <group>
+          <RoundedBox args={[18, 22, 1.4]} radius={2.8} smoothness={4}>
+            <meshStandardMaterial
+              color="#ffffff"
+              emissive="#ffffff"
+              emissiveIntensity={0.04}
+              roughness={0.2}
+              metalness={0.02}
+              transparent
+              opacity={0.98}
+            />
+          </RoundedBox>
+          <RoundedBox
+            args={[18.8, 22.8, 0.22]}
+            radius={3}
+            smoothness={4}
+            position={[0, 0, -0.52]}
+          >
+            <meshBasicMaterial color="#d4d4d8" transparent opacity={0.95} />
+          </RoundedBox>
+          <Text
+            position={[0, 0, 0.86]}
+            maxWidth={14}
+            fontSize={5.4}
+            lineHeight={1.05}
+            textAlign="center"
+            anchorX="center"
+            anchorY="middle"
+            color="#111111"
+            outlineWidth={0.03}
+            outlineColor="#f5f5f5"
+          >
+            WARM
+          </Text>
+        </group>
+      </Billboard>
+    </group>
+  );
+}
+
 function SelectableNode({
   node,
   selected,
@@ -394,6 +465,7 @@ export function SceneRenderer({
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
 }) {
+  const { invalidate } = useThree();
   const [animatedScene, setAnimatedScene] = useState(scene);
   const targetSceneRef = useRef(scene);
   const isAnimatingRef = useRef(false);
@@ -401,7 +473,9 @@ export function SceneRenderer({
   useEffect(() => {
     targetSceneRef.current = scene;
     isAnimatingRef.current = true;
-  }, [scene]);
+    setAnimatedScene((currentScene) => advanceSceneTowards(currentScene, scene));
+    invalidate();
+  }, [scene, invalidate]);
 
   useFrame(() => {
     if (!isAnimatingRef.current) {
@@ -411,30 +485,7 @@ export function SceneRenderer({
     const targetScene = targetSceneRef.current;
 
     setAnimatedScene((currentScene) => {
-      const nextScene: PreviewScene = {
-        view: targetScene.view,
-        shellNode: interpolateNode(currentScene.shellNode, targetScene.shellNode, 0.14),
-        boardNode: interpolateNode(currentScene.boardNode, targetScene.boardNode, 0.16),
-        moduleNodes: interpolateNodeList(
-          currentScene.moduleNodes,
-          targetScene.moduleNodes,
-          currentScene.boardNode.position,
-          0.18,
-        ),
-        screenNodes: interpolateNodeList(
-          currentScene.screenNodes,
-          targetScene.screenNodes,
-          currentScene.boardNode.position,
-          0.18,
-        ),
-        portNodes: interpolateNodeList(
-          currentScene.portNodes,
-          targetScene.portNodes,
-          currentScene.boardNode.position,
-          0.18,
-        ),
-        connections: targetScene.connections,
-      };
+      const nextScene = advanceSceneTowards(currentScene, targetScene);
 
       if (isSceneSettled(nextScene, targetScene)) {
         isAnimatingRef.current = false;
@@ -489,6 +540,7 @@ export function SceneRenderer({
 
   return (
     <group position={viewTransform.position} scale={viewTransform.scale}>
+      <LabelWarmup />
       {animatedScene.view === "exploded"
         ? animatedScene.connections.map((connection) => (
             <ConnectionMesh
