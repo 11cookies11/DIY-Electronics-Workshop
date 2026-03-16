@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PreviewView } from "@/engine/preview";
+import type { PreviewDraft } from "@/lib/intake/types";
 import { useTheme } from "./theme-context";
 
 type Message = {
@@ -26,6 +27,7 @@ type ChatInterfaceProps = {
   userInfoError?: string | null;
   activePresetLabel: string;
   activeView: PreviewView;
+  onPreviewDraft?: (draft: PreviewDraft) => void;
 };
 
 const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
@@ -71,6 +73,7 @@ export function ChatInterface({
   userInfoError,
   activePresetLabel,
   activeView,
+  onPreviewDraft,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: buildSeedMessage(isConnected, activePresetLabel) },
@@ -78,6 +81,7 @@ export function ChatInterface({
   const [input, setInput] = useState("");
   const [isMinimized, setIsMinimized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { mode } = useTheme();
   const isDark = mode === "dark";
@@ -114,13 +118,50 @@ export function ChatInterface({
     setMessages((prev) => [...prev, { role: "user", content: nextInput }]);
     setIsLoading(true);
 
-    window.setTimeout(() => {
+    try {
+      const response = await fetch("/api/intake/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId,
+          message: nextInput,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("intake api request failed");
+      }
+
+      const payload = (await response.json()) as {
+        sessionId: string;
+        customer_reply?: string;
+        preview_input_draft?: PreviewDraft;
+      };
+
+      setSessionId(payload.sessionId);
+      if (payload.preview_input_draft) {
+        onPreviewDraft?.(payload.preview_input_draft);
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            payload.customer_reply ??
+            buildReply(nextInput, activePresetLabel),
+        },
+      ]);
+    } catch {
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: buildReply(nextInput, activePresetLabel) },
       ]);
+    } finally {
       setIsLoading(false);
-    }, 500);
+    }
   };
 
   const statusLine =

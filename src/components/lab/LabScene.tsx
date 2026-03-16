@@ -12,7 +12,12 @@ import { useTheme } from "./theme-context";
 import { DeviceViewer } from "@/components/viewer/DeviceViewer";
 import { PREVIEW_DEVICE_PRESETS } from "@/components/viewer/device-presets";
 import { SceneRenderer } from "@/components/viewer/SceneRenderer";
-import { buildPreviewScene, type PreviewView } from "@/engine/preview";
+import {
+  buildPreviewScene,
+  type PreviewInput,
+  type PreviewView,
+} from "@/engine/preview";
+import type { PreviewDraft } from "@/lib/intake/types";
 
 type LabSceneProps = {
   isConnected: boolean;
@@ -34,19 +39,23 @@ export function LabScene({
   const [view, setView] = useState<PreviewView>("assembled");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [generatedPreview, setGeneratedPreview] = useState<PreviewDraft | null>(null);
   const isDark = mode === "dark";
   const bgColor = isDark ? THEME.bg : THEME.bgLight;
   const activePreset =
     PREVIEW_DEVICE_PRESETS.find((preset) => preset.id === presetId) ??
     PREVIEW_DEVICE_PRESETS[0];
+  const activePreviewInput: PreviewInput =
+    generatedPreview?.input ?? activePreset.input;
+  const activePresetLabel = generatedPreview ? "AI 生成方案" : activePreset.label;
   const activeScene = useMemo(
-    () => buildPreviewScene(activePreset.input, view),
-    [activePreset, view],
+    () => buildPreviewScene(activePreviewInput, view),
+    [activePreviewInput, view],
   );
 
   useEffect(() => {
     setSelectedNodeId(null);
-  }, [presetId, view]);
+  }, [presetId, view, generatedPreview]);
   const heroCopy =
     "这是新的嵌入式产品 3D 预览系统。现在主舞台和左下控制面板都由同一套预览引擎驱动，可以直接切换设备方案、装配图和拆解图。";
 
@@ -165,7 +174,7 @@ export function LabScene({
                 isDark ? "text-cyan-300/70" : "text-cyan-700"
               }`}
             >
-              active preset | {activePreset.label}
+              active preset | {activePresetLabel}
             </p>
           </div>
 
@@ -203,6 +212,7 @@ export function LabScene({
             view={view}
             onPresetChange={(nextPresetId) => {
               setPresetId(nextPresetId);
+              setGeneratedPreview(null);
               setView("assembled");
             }}
             onViewChange={setView}
@@ -335,8 +345,13 @@ export function LabScene({
         error={error}
         userInfo={userInfo}
         userInfoError={userInfoError}
-        activePresetLabel={activePreset.label}
+        activePresetLabel={activePresetLabel}
         activeView={view}
+        onPreviewDraft={(draft) => {
+          setGeneratedPreview(draft);
+          setView("assembled");
+          setSelectedNodeId(null);
+        }}
       />
     </div>
   );
