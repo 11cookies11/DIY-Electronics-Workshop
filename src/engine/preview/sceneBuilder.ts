@@ -18,6 +18,7 @@ import type {
   PreviewInput,
   PreviewScene,
   PreviewView,
+  ResolvedModuleDefinition,
   SceneNode,
   SceneNodeConstraint,
 } from "./types";
@@ -34,6 +35,112 @@ function createVisualDimensions(size: [number, number, number]) {
       depth: size[2],
     },
   } satisfies SceneNode["dimensions"];
+}
+
+function inferDeviceLayoutTemplate(input: PreviewInput) {
+  if (
+    input.shellSize.width <= 60 &&
+    input.shellSize.height <= 60 &&
+    input.shellSize.depth <= 22 &&
+    input.mainScreen?.face === "front"
+  ) {
+    return "smart-watch" as const;
+  }
+
+  if (
+    input.shellSize.height >= input.shellSize.width * 2.4 &&
+    input.shellSize.depth <= 24 &&
+    input.ports?.some((port) => port.type === "ir_window")
+  ) {
+    return "ir-remote" as const;
+  }
+
+  return "default" as const;
+}
+
+function applyDeviceLayoutTemplate(
+  input: PreviewInput,
+  modules: ResolvedModuleDefinition[],
+) {
+  const template = inferDeviceLayoutTemplate(input);
+
+  if (template === "default") {
+    return modules;
+  }
+
+  return modules.map((module) => {
+    const sourceId = module.sourceId ?? module.id;
+    const patch: Partial<ResolvedModuleDefinition> = {};
+
+    if (template === "smart-watch") {
+      if (sourceId === "battery") {
+        patch.preferredZone = "bottom";
+        patch.placementPriority = 10;
+      } else if (
+        sourceId === "esp32" ||
+        sourceId === "esp32_s3" ||
+        sourceId === "stm32"
+      ) {
+        patch.preferredZone = "center";
+        patch.placementPriority = 10;
+      } else if (
+        sourceId === "bluetooth" ||
+        sourceId === "wifi" ||
+        sourceId === "gps"
+      ) {
+        patch.preferredZone = "top";
+        patch.placementPriority = 10;
+      } else if (sourceId === "imu_sensor") {
+        patch.preferredZone = "center";
+        patch.placementPriority = 20;
+      } else if (
+        sourceId === "emmc_chip" ||
+        sourceId === "nor_flash" ||
+        sourceId === "nand_flash" ||
+        sourceId === "eeprom"
+      ) {
+        patch.preferredZone = "bottom";
+        patch.placementPriority = 30;
+      } else if (sourceId === "status_led") {
+        patch.preferredZone = "edge";
+        patch.placementPriority = 40;
+      }
+    }
+
+    if (template === "ir-remote") {
+      if (sourceId === "infrared_blaster") {
+        patch.preferredZone = "top";
+        patch.placementPriority = 10;
+      } else if (sourceId === "battery") {
+        patch.preferredZone = "bottom";
+        patch.placementPriority = 10;
+      } else if (
+        sourceId === "esp32" ||
+        sourceId === "esp32_s3" ||
+        sourceId === "stm32"
+      ) {
+        patch.preferredZone = "center";
+        patch.placementPriority = 10;
+      } else if (
+        sourceId === "bluetooth" ||
+        sourceId === "wifi"
+      ) {
+        patch.preferredZone = "top";
+        patch.placementPriority = 20;
+      } else if (sourceId === "pmic") {
+        patch.preferredZone = "bottom";
+        patch.placementPriority = 20;
+      } else if (sourceId === "button_array") {
+        patch.preferredZone = "center";
+        patch.placementPriority = 30;
+      } else if (sourceId === "status_led") {
+        patch.preferredZone = "top";
+        patch.placementPriority = 40;
+      }
+    }
+
+    return Object.keys(patch).length > 0 ? { ...module, ...patch } : module;
+  });
 }
 
 function createBoardConstraint(face: FaceName): SceneNodeConstraint {
@@ -247,7 +354,10 @@ export function buildPreviewScene(
   input: PreviewInput,
   view: PreviewView = "assembled",
 ): PreviewScene {
-  const modules = getPreviewModules(input.modules);
+  const modules = applyDeviceLayoutTemplate(
+    input,
+    getPreviewModules(input.modules),
+  );
   const screenPlacement = input.mainScreen
     ? placeMainScreen(input.mainScreen, input.shellSize).item
     : null;
