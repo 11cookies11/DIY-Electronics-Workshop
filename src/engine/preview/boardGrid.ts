@@ -242,6 +242,43 @@ function getModuleKeepoutCells(module: ResolvedModuleDefinition) {
   return module.keepoutCells ?? {};
 }
 
+function getPlacementAttempts(module: ResolvedModuleDefinition) {
+  const clearanceCells = getModuleClearanceCells(module);
+  const keepoutCells = getModuleKeepoutCells(module);
+  const attempts: Array<{
+    clearanceCells: number;
+    keepoutCells: ModuleDefinition["keepoutCells"];
+  }> = [
+    { clearanceCells, keepoutCells },
+    { clearanceCells, keepoutCells: {} },
+  ];
+
+  if (clearanceCells > 0) {
+    attempts.push({
+      clearanceCells: Math.max(0, clearanceCells - 1),
+      keepoutCells: {},
+    });
+    attempts.push({
+      clearanceCells: 0,
+      keepoutCells: {},
+    });
+  }
+
+  return attempts.filter((attempt, index, collection) => {
+    return (
+      collection.findIndex((entry) => {
+        return (
+          entry.clearanceCells === attempt.clearanceCells &&
+          (entry.keepoutCells?.top ?? 0) === (attempt.keepoutCells?.top ?? 0) &&
+          (entry.keepoutCells?.bottom ?? 0) === (attempt.keepoutCells?.bottom ?? 0) &&
+          (entry.keepoutCells?.left ?? 0) === (attempt.keepoutCells?.left ?? 0) &&
+          (entry.keepoutCells?.right ?? 0) === (attempt.keepoutCells?.right ?? 0)
+        );
+      }) === index
+    );
+  });
+}
+
 function categoryOrder(module: ModuleDefinition) {
   switch (module.category) {
     case "core":
@@ -380,8 +417,6 @@ function findPlacementInZone(
   module: ResolvedModuleDefinition,
   zone: BoardZone,
 ) {
-  const clearanceCells = getModuleClearanceCells(module);
-  const keepoutCells = getModuleKeepoutCells(module);
   const candidates = getZoneCells(board, zone)
     .filter((candidate, index, collection) => {
       return collection.findIndex((entry) => entry.x === candidate.x && entry.y === candidate.y) === index;
@@ -392,19 +427,25 @@ function findPlacementInZone(
       return leftScore - rightScore || left.y - right.y || left.x - right.x;
     });
 
-  for (const candidate of candidates) {
-    if (
-      canPlace(
-        board,
-        candidate.x,
-        candidate.y,
-        module.gridW,
-        module.gridH,
-        clearanceCells,
-        keepoutCells,
-      )
-    ) {
-      return candidate;
+  for (const attempt of getPlacementAttempts(module)) {
+    for (const candidate of candidates) {
+      if (
+        canPlace(
+          board,
+          candidate.x,
+          candidate.y,
+          module.gridW,
+          module.gridH,
+          attempt.clearanceCells,
+          attempt.keepoutCells,
+        )
+      ) {
+        return {
+          candidate,
+          clearanceCells: attempt.clearanceCells,
+          keepoutCells: attempt.keepoutCells,
+        };
+      }
     }
   }
 
@@ -428,29 +469,35 @@ export function placeModules(
 
   for (const module of sorted) {
     let zone: BoardZone = module.preferredZone;
-    let candidate = findPlacementInZone(board, module, zone);
+    let placement = findPlacementInZone(board, module, zone);
 
-    if (!candidate && zone !== "any") {
+    if (!placement && zone !== "any") {
       zone = "any";
-      candidate = findPlacementInZone(board, module, zone);
+      placement = findPlacementInZone(board, module, zone);
     }
 
-    if (!candidate) {
+    if (!placement) {
       throw new Error(`cannot place module: ${module.id}`);
     }
 
     occupy(
       board,
       module.id,
-      candidate.x,
-      candidate.y,
+      placement.candidate.x,
+      placement.candidate.y,
       module.gridW,
       module.gridH,
-      getModuleClearanceCells(module),
-      getModuleKeepoutCells(module),
+      placement.clearanceCells,
+      placement.keepoutCells,
     );
     placedModules.push(
-      createPlacedModule(boardSpec, module, zone, candidate.x, candidate.y),
+      createPlacedModule(
+        boardSpec,
+        module,
+        zone,
+        placement.candidate.x,
+        placement.candidate.y,
+      ),
     );
   }
 
