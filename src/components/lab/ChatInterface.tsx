@@ -32,37 +32,37 @@ type ChatInterfaceProps = {
 
 const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
   { label: "介绍实验室", prompt: "介绍一下实验室" },
-  { label: "介绍当前方案", prompt: "介绍一下当前方案" },
+  { label: "看看当前方案", prompt: "介绍一下当前方案" },
   { label: "我想做手持设备", prompt: "我想做一个手持设备" },
   { label: "我想做桌面设备", prompt: "我想做一个桌面设备" },
 ];
 
 function buildSeedMessage(isConnected: boolean, activePresetLabel: string) {
   return isConnected
-    ? `你好，实验室平台已经接入 Second Me，前台 Agent 现在会结合 DeepSeek 和当前舞台方案来和你对话。当前主舞台正在展示“${activePresetLabel}”。`
-    : `你好，我是实验室前台接待助手 Twin-AI。当前主舞台正在展示“${activePresetLabel}”。你可以先告诉我想做什么嵌入式产品，我会一边聊天一边帮你收敛需求。`;
+    ? `你好，实验室平台已经接入 Second Me。当前主舞台展示的是“${activePresetLabel}”。你可以先随便聊聊想法，我会像前台一样帮你慢慢收敛成方案。`
+    : `你好，我是实验室前台接待助手 Twin-AI。当前主舞台展示的是“${activePresetLabel}”。你可以先跟我聊聊想法，我会边聊边帮你把需求收下来。`;
 }
 
 function buildFallbackReply(input: string, activePresetLabel: string) {
   const normalized = input.toLowerCase();
 
   if (normalized.includes("介绍") && normalized.includes("实验室")) {
-    return "这里是一个面向嵌入式产品概念验证的实验室。我们会把产品拆成外壳、主板、屏幕、端口和内部模块，再用 3D 预览把结构直观地展示出来。";
+    return "我们这边主要做嵌入式产品的前期接待、方案梳理和 3D 结构预览。你可以先把想法说给我听，我来帮你慢慢收。";
   }
 
   if (normalized.includes("当前") || normalized.includes("方案")) {
-    return `当前主舞台展示的是“${activePresetLabel}”。如果你愿意，我可以继续介绍它的屏幕、端口、主板布局，或者切到别的产品方向。`;
+    return `当前主舞台展示的是“${activePresetLabel}”。如果你愿意，我可以继续介绍它的结构特点，或者我们也可以直接聊你的新想法。`;
   }
 
   if (normalized.includes("手持")) {
-    return "手持设备通常会优先考虑窄长主板、小屏幕、电池位置和侧边端口。我们现在这套预览系统已经能表达这些结构。";
+    return "手持设备通常会更关注尺寸、电池、屏幕和侧边交互。你如果有想做的方向，可以直接往下说，我来帮你整理。";
   }
 
   if (normalized.includes("桌面")) {
-    return "桌面设备通常更适合更大的壳体、更大的屏幕和更完整的接口布局，也更容易容纳摄像头、麦克风和散热结构。";
+    return "桌面设备通常空间更宽裕，适合放更大的屏幕、更完整的接口和更多模块。你想偏展示型，还是偏工具型？";
   }
 
-  return `收到。你可以继续描述功能、交互方式或外形方向，我会基于“${activePresetLabel}”这类结构继续帮你梳理。`;
+  return `收到。你继续说就行，我会顺着你的思路慢慢帮你整理，不会一下子把对话弄得太“办事”。`;
 }
 
 export function ChatInterface({
@@ -106,8 +106,8 @@ export function ChatInterface({
         role: "assistant",
         content: visitorName
           ? isConnected
-            ? `你好，${visitorName}。实验室平台已经接入 Second Me，我会以实验室前台 Agent 的身份继续帮你梳理需求和方案。`
-            : `你好，${visitorName}。当前主舞台正在展示“${activePresetLabel}”，我可以先介绍这个方案，再一起梳理你的产品需求。`
+            ? `你好，${visitorName}。实验室平台已经接入 Second Me。你可以先跟我随便聊聊，我会在合适的时候帮你推进成方案。`
+            : `你好，${visitorName}。当前主舞台展示的是“${activePresetLabel}”。你想到哪儿都可以直接说，我来帮你收。`
           : buildSeedMessage(isConnected, activePresetLabel),
       },
     ]);
@@ -177,16 +177,16 @@ export function ChatInterface({
 
   const statusLine =
     error || userInfoError
-      ? "Second Me 授权状态异常"
+      ? "平台连接状态异常"
       : isConnected
-        ? "Second Me 平台已连接 / DeepSeek 已启用"
+        ? "Second Me 已接入 / DeepSeek 已启用"
         : "本地前台 Agent / DeepSeek 已启用";
 
   const statusMeta = connectedFromCallback
     ? "管理员刚完成绑定"
     : isConnected
-      ? "平台接入 + 前台 Agent 模式"
-      : "前台 Agent 模式";
+      ? "前台接待模式"
+      : "前台接待模式";
 
   const viewLabel = activeView === "exploded" ? "完整拆解" : "装配预览";
 
@@ -398,9 +398,7 @@ export function ChatInterface({
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => event.key === "Enter" && handleSend()}
-                  placeholder={
-                    "告诉我你想做什么嵌入式产品，或者让我介绍当前方案..."
-                  }
+                  placeholder="先随便聊聊想法，或者直接告诉我你想做什么设备..."
                   className={`w-full rounded-sm border py-2.5 pl-4 pr-12 text-[11px] focus:outline-none ${
                     isDark
                       ? "border-white/10 bg-black/40 text-white placeholder:text-white/20 focus:border-emerald-500/40"

@@ -24,13 +24,13 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
     .join("；");
 }
 
-function buildIntroReply(state: IntakeAgentState) {
+function buildCapabilityReply(state: IntakeAgentState) {
   const summary = buildRequirementSummary(state.confirmed);
   if (summary) {
-    return `当然可以。我现在既能陪你聊方案，也能把需求逐步整理成 3D 预览和实验室交接单。你这边我已经记住的是：${summary}。你想继续细化功能，还是先让我介绍一下这套方案怎么推进？`;
+    return `我这边主要帮你做三件事：先把想法聊清楚，再整理成 3D 预览草案，最后收成实验室能继续跟进的交接信息。你这边我已经记住的是：${summary}。`;
   }
 
-  return "当然可以。我不是只会填表的前台，也可以先陪你聊产品方向、使用场景和方案思路。等信息够了，我再帮你整理成 3D 预览草案和实验室交接单。";
+  return "我这边主要帮你做三件事：先把想法聊清楚，再整理成 3D 预览草案，最后收成实验室能继续跟进的交接信息。你也可以先把它当成一个会聊天、懂硬件的前台。";
 }
 
 export function buildBaseConversationReply(
@@ -54,19 +54,27 @@ export function buildBaseConversationReply(
       "哈啰",
     ].includes(normalized)
   ) {
-    return "你好呀，我在。你可以先随便和我聊聊想法，也可以让我帮你一起梳理设备方案。";
+    return "你好呀，我在。你想先随便聊聊想法，还是直接说说准备做什么设备？";
+  }
+
+  if (hasPattern(message, [/(最近怎么样|你忙吗|今天天气|随便聊聊)/])) {
+    return "可以啊，我们先轻松聊也没问题。你聊着聊着说到产品想法时，我再帮你顺手收需求。";
   }
 
   if (
     hasPattern(message, [
-      /(你是谁|你能做什么|你会什么|介绍一下你自己)/,
+      /(你是谁|你是做什么的|你能做什么|你会什么|介绍一下你自己)/,
     ])
   ) {
-    return buildIntroReply(state);
+    return buildCapabilityReply(state);
+  }
+
+  if (hasPattern(message, [/(介绍一下实验室|介绍实验室|你们实验室做什么)/])) {
+    return "我们这边主要接嵌入式产品的前期沟通、方案梳理和 3D 结构预览。简单说，就是先把客户想法聊清楚，再整理成实验室能继续推进的输入。";
   }
 
   if (hasPattern(message, [/(谢谢|多谢|辛苦了)/])) {
-    return "不客气。你继续说想法就行，我会一边聊天一边帮你把需求收成可执行的方案。";
+    return "不客气，我们慢慢聊就行。你想到哪儿说到哪儿，我帮你收。";
   }
 
   return null;
