@@ -1,4 +1,6 @@
 import { cookies } from "next/headers";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 const SECONDME_API_BASE_URL =
   process.env.SECONDME_API_BASE_URL ?? "https://api.mindverse.com/gate/lab";
@@ -9,11 +11,23 @@ const ACCESS_TOKEN_COOKIE = "secondme_access_token";
 const REFRESH_TOKEN_COOKIE = "secondme_refresh_token";
 const EXPIRES_AT_COOKIE = "secondme_token_expires_at";
 
+const TOKEN_STORE_PATH =
+  process.env.SECONDME_TOKEN_STORE_PATH ??
+  path.join(process.cwd(), ".secondme", "admin-token.json");
+
 type SecondMeTokenData = {
   accessToken: string;
   refreshToken: string;
   tokenType?: string;
   expiresIn: number;
+  scope?: string[];
+};
+
+type PersistedSecondMeTokenData = {
+  accessToken: string;
+  refreshToken: string;
+  tokenType?: string;
+  expiresAt: number;
   scope?: string[];
 };
 
@@ -55,6 +69,67 @@ export function buildAuthorizationUrl() {
   return `${config.oauthUrl}?${params.toString()}`;
 }
 
+function toPersistedTokenData(
+  tokenData: SecondMeTokenData,
+): PersistedSecondMeTokenData {
+  return {
+    accessToken: tokenData.accessToken,
+    refreshToken: tokenData.refreshToken,
+    tokenType: tokenData.tokenType,
+    expiresAt: Date.now() + tokenData.expiresIn * 1000,
+    scope: tokenData.scope,
+  };
+}
+
+async function ensureTokenStoreDir() {
+  await mkdir(path.dirname(TOKEN_STORE_PATH), { recursive: true });
+}
+
+async function readPersistedSecondMeTokens() {
+  try {
+    const raw = await readFile(TOKEN_STORE_PATH, "utf8");
+    const parsed = JSON.parse(raw) as PersistedSecondMeTokenData;
+    if (!parsed.accessToken || !parsed.refreshToken || !parsed.expiresAt) {
+      return null;
+    }
+
+    return parsed;
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+async function writePersistedSecondMeTokens(tokenData: PersistedSecondMeTokenData) {
+  await ensureTokenStoreDir();
+  await writeFile(TOKEN_STORE_PATH, JSON.stringify(tokenData, null, 2), "utf8");
+}
+
+async function clearPersistedSecondMeTokens() {
+  try {
+    await rm(TOKEN_STORE_PATH, { force: true });
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
 export async function exchangeCodeForToken(code: string) {
   const config = getSecondMeConfig();
   const body = new URLSearchParams({
@@ -86,9 +161,39 @@ export async function exchangeCodeForToken(code: string) {
   return result.data;
 }
 
-export async function storeSecondMeTokens(tokenData: SecondMeTokenData) {
+async function refreshAccessToken(refreshToken: string) {
+  const config = getSecondMeConfig();
+  const body = new URLSearchParams({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+  });
+
+  const response = await fetch(`${config.apiBaseUrl}/api/oauth/token/refresh`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: body.toString(),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Token refresh failed with status ${response.status}`);
+  }
+
+  const result = (await response.json()) as SecondMeEnvelope<SecondMeTokenData>;
+  if (result.code !== 0 || !result.data?.accessToken) {
+    throw new Error(result.message ?? "Token refresh returned an invalid payload");
+  }
+
+  return result.data;
+}
+
+async function storeSecondMeTokensInCookies(tokenData: SecondMeTokenData) {
   const cookieStore = await cookies();
-  const expiresAt = Date.now() + tokenData.expiresIn * 1000;
+  const persistedTokenData = toPersistedTokenData(tokenData);
   const common = {
     httpOnly: true,
     sameSite: "lax" as const,
@@ -98,10 +203,16 @@ export async function storeSecondMeTokens(tokenData: SecondMeTokenData) {
 
   cookieStore.set(ACCESS_TOKEN_COOKIE, tokenData.accessToken, common);
   cookieStore.set(REFRESH_TOKEN_COOKIE, tokenData.refreshToken, common);
-  cookieStore.set(EXPIRES_AT_COOKIE, String(expiresAt), common);
+  cookieStore.set(EXPIRES_AT_COOKIE, String(persistedTokenData.expiresAt), common);
 }
 
-export async function clearSecondMeTokens() {
+export async function storeSecondMeTokens(tokenData: SecondMeTokenData) {
+  const persistedTokenData = toPersistedTokenData(tokenData);
+  await storeSecondMeTokensInCookies(tokenData);
+  await writePersistedSecondMeTokens(persistedTokenData);
+}
+
+async function clearSecondMeTokenCookies() {
   const cookieStore = await cookies();
 
   cookieStore.delete(ACCESS_TOKEN_COOKIE);
@@ -109,16 +220,64 @@ export async function clearSecondMeTokens() {
   cookieStore.delete(EXPIRES_AT_COOKIE);
 }
 
-export async function getAccessToken() {
+export async function clearSecondMeTokens() {
+  await clearSecondMeTokenCookies();
+  await clearPersistedSecondMeTokens();
+}
+
+async function readCookieTokenData() {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+  const refreshToken = cookieStore.get(REFRESH_TOKEN_COOKIE)?.value;
   const expiresAt = Number(cookieStore.get(EXPIRES_AT_COOKIE)?.value ?? "0");
 
-  if (!accessToken || !expiresAt || Date.now() >= expiresAt) {
+  if (!accessToken || !refreshToken || !expiresAt) {
     return null;
   }
 
-  return accessToken;
+  return {
+    accessToken,
+    refreshToken,
+    expiresAt,
+  } satisfies PersistedSecondMeTokenData;
+}
+
+async function resolveValidTokenData() {
+  const persistedToken = await readPersistedSecondMeTokens();
+  const cookieToken = await readCookieTokenData();
+  const tokenData = persistedToken ?? cookieToken;
+
+  if (!tokenData) {
+    return null;
+  }
+
+  if (Date.now() < tokenData.expiresAt) {
+    return tokenData;
+  }
+
+  try {
+    const refreshed = await refreshAccessToken(tokenData.refreshToken);
+    await writePersistedSecondMeTokens(toPersistedTokenData(refreshed));
+    return toPersistedTokenData(refreshed);
+  } catch {
+    await clearPersistedSecondMeTokens();
+    return null;
+  }
+}
+
+export async function getAccessToken() {
+  const tokenData = await resolveValidTokenData();
+  return tokenData?.accessToken ?? null;
+}
+
+export async function getSecondMeConnectionState() {
+  const tokenData = await resolveValidTokenData();
+
+  return {
+    isConnected: Boolean(tokenData?.accessToken),
+    source: tokenData ? "platform" : "none",
+    expiresAt: tokenData?.expiresAt ?? null,
+  } as const;
 }
 
 export async function fetchSecondMe<T>(path: string) {
