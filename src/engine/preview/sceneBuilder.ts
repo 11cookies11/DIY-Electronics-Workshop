@@ -62,13 +62,29 @@ function createShellInteractionNodes(
     const gridW = Math.min(grid.cols, Math.max(1, Math.round((size[0] / input.shellSize.width) * grid.cols)));
     const gridH = Math.min(grid.rows, Math.max(1, Math.round((size[1] / input.shellSize.height) * grid.rows)));
     const gridX = Math.max(0, Math.floor((grid.cols - gridW) / 2));
-    const screenBottom =
+    const screenBottomRatio =
       screenPlacement && screenPlacement.face === face
-        ? screenPlacement.gridY + screenPlacement.gridH
-        : Math.floor(grid.rows / 2) - 1;
+        ? (screenPlacement.gridY + screenPlacement.gridH) / 3
+        : 0;
+    const screenBottom = Math.ceil(screenBottomRatio * grid.rows);
+    const minSafeRow =
+      screenPlacement && screenPlacement.face === face
+        ? Math.min(
+            grid.rows - gridH,
+            Math.max(
+              0,
+              Math.ceil(
+                ((screenPlacement.gridY + screenPlacement.gridH) / 3) * grid.rows,
+              ) + 1,
+            ),
+          )
+        : 0;
     const preferredRow =
       face === "front"
-        ? Math.min(grid.rows - gridH, screenBottom + index)
+        ? Math.max(
+            minSafeRow,
+            Math.min(grid.rows - gridH, screenBottom + index),
+          )
         : Math.max(0, Math.floor((grid.rows - gridH) / 2));
     const gridY = Math.max(0, preferredRow);
     const constraints = createPortConstraint(face);
