@@ -100,6 +100,7 @@ export interface ModuleDefinition {
   category: ModuleCategory;
   gridW: number;
   gridH: number;
+  clearanceCells?: number;
   sizeMm: {
     width: number;
     height: number;
@@ -116,6 +117,7 @@ export interface ResolvedModuleDefinition extends ModuleDefinition {
 export interface GridCell {
   occupied: boolean;
   moduleId?: string;
+  reservedBy?: string;
 }
 
 export interface BoardGrid {

@@ -90,38 +90,38 @@ function range(start: number, end: number) {
 export function getZoneCells(board: BoardGrid, zone: BoardZone) {
   const cols = board.cols;
   const rows = board.rows;
-  const centerCols = [Math.floor(cols / 2) - 1, Math.floor(cols / 2)];
-  const centerRows = [Math.floor(rows / 2) - 1, Math.floor(rows / 2)];
+  const topBand = Math.max(2, Math.ceil(rows / 3));
+  const sideBand = Math.max(2, Math.ceil(cols / 3));
 
   if (zone === "any") {
     return range(0, rows).flatMap((y) => range(0, cols).map((x) => ({ x, y })));
   }
 
   if (zone === "center") {
-    return centerRows.flatMap((y) => centerCols.map((x) => ({ x, y })));
+    return range(0, rows).flatMap((y) => range(0, cols).map((x) => ({ x, y })));
   }
 
   if (zone === "top") {
-    return range(0, Math.max(2, Math.ceil(rows / 3))).flatMap((y) =>
+    return range(0, topBand).flatMap((y) =>
       range(0, cols).map((x) => ({ x, y })),
     );
   }
 
   if (zone === "bottom") {
-    return range(rows - Math.max(2, Math.ceil(rows / 3)), rows).flatMap((y) =>
+    return range(rows - topBand, rows).flatMap((y) =>
       range(0, cols).map((x) => ({ x, y })),
     );
   }
 
   if (zone === "left") {
     return range(0, rows).flatMap((y) =>
-      range(0, Math.max(2, Math.ceil(cols / 3))).map((x) => ({ x, y })),
+      range(0, sideBand).map((x) => ({ x, y })),
     );
   }
 
   if (zone === "right") {
     return range(0, rows).flatMap((y) =>
-      range(cols - Math.max(2, Math.ceil(cols / 3)), cols).map((x) => ({ x, y })),
+      range(cols - sideBand, cols).map((x) => ({ x, y })),
     );
   }
 
@@ -139,6 +139,7 @@ export function canPlace(
   gridY: number,
   gridW: number,
   gridH: number,
+  clearanceCells = 0,
 ) {
   if (gridX < 0 || gridY < 0) {
     return false;
@@ -148,8 +149,13 @@ export function canPlace(
     return false;
   }
 
-  for (let y = gridY; y < gridY + gridH; y += 1) {
-    for (let x = gridX; x < gridX + gridW; x += 1) {
+  const startX = Math.max(0, gridX - clearanceCells);
+  const startY = Math.max(0, gridY - clearanceCells);
+  const endX = Math.min(board.cols, gridX + gridW + clearanceCells);
+  const endY = Math.min(board.rows, gridY + gridH + clearanceCells);
+
+  for (let y = startY; y < endY; y += 1) {
+    for (let x = startX; x < endX; x += 1) {
       if (board.cells[y]?.[x]?.occupied) {
         return false;
       }
@@ -166,14 +172,43 @@ export function occupy(
   gridY: number,
   gridW: number,
   gridH: number,
+  clearanceCells = 0,
 ) {
-  for (let y = gridY; y < gridY + gridH; y += 1) {
-    for (let x = gridX; x < gridX + gridW; x += 1) {
+  const startX = Math.max(0, gridX - clearanceCells);
+  const startY = Math.max(0, gridY - clearanceCells);
+  const endX = Math.min(board.cols, gridX + gridW + clearanceCells);
+  const endY = Math.min(board.rows, gridY + gridH + clearanceCells);
+
+  for (let y = startY; y < endY; y += 1) {
+    for (let x = startX; x < endX; x += 1) {
+      const isCoreCell =
+        x >= gridX &&
+        x < gridX + gridW &&
+        y >= gridY &&
+        y < gridY + gridH;
+
       board.cells[y][x] = {
         occupied: true,
-        moduleId,
+        moduleId: isCoreCell ? moduleId : undefined,
+        reservedBy: isCoreCell ? undefined : moduleId,
       };
     }
+  }
+}
+
+function getModuleClearanceCells(module: ResolvedModuleDefinition) {
+  if (typeof module.clearanceCells === "number") {
+    return module.clearanceCells;
+  }
+
+  switch (module.category) {
+    case "core":
+    case "power":
+    case "communication":
+    case "thermal":
+      return 1;
+    default:
+      return 0;
   }
 }
 
@@ -181,16 +216,124 @@ function categoryOrder(module: ModuleDefinition) {
   switch (module.category) {
     case "core":
       return 1;
-    case "power":
+    case "thermal":
       return 2;
-    case "communication":
+    case "power":
       return 3;
-    case "sensor":
+    case "storage":
       return 4;
-    case "actuator":
+    case "communication":
       return 5;
-    default:
+    case "interface":
       return 6;
+    case "sensor":
+      return 7;
+    case "actuator":
+      return 8;
+    case "mechanical":
+      return 9;
+    default:
+      return 10;
+  }
+}
+
+function getAnchorMetrics(
+  board: BoardGrid,
+  gridX: number,
+  gridY: number,
+  gridW: number,
+  gridH: number,
+) {
+  const centerX = gridX + gridW / 2;
+  const centerY = gridY + gridH / 2;
+  const boardCenterX = board.cols / 2;
+  const boardCenterY = board.rows / 2;
+  const distanceToCenter =
+    Math.abs(centerX - boardCenterX) + Math.abs(centerY - boardCenterY);
+  const distanceToVerticalCenter = Math.abs(centerY - boardCenterY);
+  const distanceToHorizontalCenter = Math.abs(centerX - boardCenterX);
+  const topDistance = gridY;
+  const bottomDistance = board.rows - (gridY + gridH);
+  const leftDistance = gridX;
+  const rightDistance = board.cols - (gridX + gridW);
+  const nearestEdge = Math.min(topDistance, bottomDistance, leftDistance, rightDistance);
+
+  return {
+    centerX,
+    centerY,
+    distanceToCenter,
+    distanceToVerticalCenter,
+    distanceToHorizontalCenter,
+    topDistance,
+    bottomDistance,
+    leftDistance,
+    rightDistance,
+    nearestEdge,
+  };
+}
+
+function getZoneScore(
+  board: BoardGrid,
+  zone: BoardZone,
+  gridX: number,
+  gridY: number,
+  gridW: number,
+  gridH: number,
+) {
+  const metrics = getAnchorMetrics(board, gridX, gridY, gridW, gridH);
+  const widthBias = Math.max(0, gridW - 1) * 0.18;
+  const heightBias = Math.max(0, gridH - 1) * 0.18;
+
+  switch (zone) {
+    case "center":
+      return (
+        metrics.distanceToCenter * 10 +
+        metrics.distanceToHorizontalCenter * 2 +
+        metrics.distanceToVerticalCenter * 2 +
+        widthBias
+      );
+    case "top":
+      return (
+        metrics.topDistance * 12 +
+        metrics.distanceToHorizontalCenter * 4 +
+        metrics.distanceToVerticalCenter * 1.5 +
+        widthBias
+      );
+    case "bottom":
+      return (
+        metrics.bottomDistance * 12 +
+        metrics.distanceToHorizontalCenter * 4 +
+        metrics.distanceToVerticalCenter * 1.5 +
+        widthBias
+      );
+    case "left":
+      return (
+        metrics.leftDistance * 12 +
+        metrics.distanceToVerticalCenter * 4 +
+        metrics.distanceToHorizontalCenter * 1.5 +
+        heightBias
+      );
+    case "right":
+      return (
+        metrics.rightDistance * 12 +
+        metrics.distanceToVerticalCenter * 4 +
+        metrics.distanceToHorizontalCenter * 1.5 +
+        heightBias
+      );
+    case "edge":
+      return (
+        metrics.nearestEdge * 14 +
+        metrics.distanceToCenter * 1.5 +
+        widthBias +
+        heightBias
+      );
+    case "any":
+    default:
+      return (
+        metrics.distanceToCenter * 5 +
+        metrics.distanceToHorizontalCenter * 1.5 +
+        metrics.distanceToVerticalCenter * 1.5
+      );
   }
 }
 
@@ -199,10 +342,28 @@ function findPlacementInZone(
   module: ResolvedModuleDefinition,
   zone: BoardZone,
 ) {
-  const candidates = getZoneCells(board, zone);
+  const clearanceCells = getModuleClearanceCells(module);
+  const candidates = getZoneCells(board, zone)
+    .filter((candidate, index, collection) => {
+      return collection.findIndex((entry) => entry.x === candidate.x && entry.y === candidate.y) === index;
+    })
+    .sort((left, right) => {
+      const leftScore = getZoneScore(board, zone, left.x, left.y, module.gridW, module.gridH);
+      const rightScore = getZoneScore(board, zone, right.x, right.y, module.gridW, module.gridH);
+      return leftScore - rightScore || left.y - right.y || left.x - right.x;
+    });
 
   for (const candidate of candidates) {
-    if (canPlace(board, candidate.x, candidate.y, module.gridW, module.gridH)) {
+    if (
+      canPlace(
+        board,
+        candidate.x,
+        candidate.y,
+        module.gridW,
+        module.gridH,
+        clearanceCells,
+      )
+    ) {
       return candidate;
     }
   }
@@ -233,7 +394,15 @@ export function placeModules(
       throw new Error(`cannot place module: ${module.id}`);
     }
 
-    occupy(board, module.id, candidate.x, candidate.y, module.gridW, module.gridH);
+    occupy(
+      board,
+      module.id,
+      candidate.x,
+      candidate.y,
+      module.gridW,
+      module.gridH,
+      getModuleClearanceCells(module),
+    );
     placedModules.push(
       createPlacedModule(boardSpec, module, zone, candidate.x, candidate.y),
     );
