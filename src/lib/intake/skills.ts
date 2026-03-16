@@ -25,6 +25,21 @@ function hasPattern(message: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(message));
 }
 
+function wantsPreview(message: string) {
+  return hasPattern(message, [
+    /(生成|出一版|来一版|搭一版|做一版).*(预览|草案|方案|模型|3d)/i,
+    /(看看|看下|想看).*(预览|草案|方案|模型|3d)/i,
+    /(直接|现在).*(生成|出).*(预览|草案|方案|模型|3d)/i,
+  ]);
+}
+
+function wantsHandoff(message: string) {
+  return hasPattern(message, [
+    /(交接|交给实验室|整理交接单|提交实验室)/,
+    /(继续推进|往下走|开始评估).*(实验室|交接)/,
+  ]);
+}
+
 const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "capability-intro",
@@ -47,14 +62,14 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "handoff-promoter",
     description: "在交接单可用时把对话推进到 handoff 阶段",
-    match: ({ previewDraft, unknowns }) =>
-      Boolean(previewDraft) && unknowns.length <= 2,
+    match: ({ message, previewDraft, unknowns }) =>
+      Boolean(previewDraft) && unknowns.length <= 2 && wantsHandoff(message),
     useSecondMe: true,
   },
   {
     id: "preview-promoter",
     description: "在预览草案已可生成时把对话推进到 preview 阶段",
-    match: ({ previewDraft }) => Boolean(previewDraft),
+    match: ({ message, previewDraft }) => Boolean(previewDraft) && wantsPreview(message),
     useSecondMe: true,
   },
   {

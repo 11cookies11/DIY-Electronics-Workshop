@@ -148,9 +148,11 @@ function buildPreviewReadiness(confirmed: ConfirmedRequirement): PreviewReadines
   const assumptions: string[] = [];
 
   if (!confirmed.device_type) missing.push("设备类型");
+  if (!confirmed.use_case) missing.push("使用场景");
   if (!confirmed.screen && !confirmed.controls?.length && !confirmed.ports?.length) {
     missing.push("交互方式");
   }
+  if (!confirmed.power?.length) missing.push("供电方式");
   if (
     !confirmed.core_features?.length &&
     !confirmed.sensors?.length &&
@@ -374,6 +376,7 @@ function buildFallbackCustomerReply(args: {
   confirmed: ConfirmedRequirement;
   nextAction: IntakeNextAction;
   previewDraft?: PreviewDraft;
+  unknowns?: string[];
 }) {
   const summary = buildRequirementSummary(args.confirmed);
 
@@ -385,6 +388,10 @@ function buildFallbackCustomerReply(args: {
 
   if (args.nextAction === "prepare_handoff" || args.nextAction === "handoff_to_lab") {
     return "这边已经可以整理实验室交接单了。";
+  }
+
+  if (args.previewDraft && args.unknowns?.length) {
+    return `我大概已经能先拼出一版方向了，不过还差${args.unknowns.slice(0, 2).join("、")}。你要是愿意，我也可以先给你一点建议，我们再决定要不要出 3D 草案。`;
   }
 
   if (summary) {
@@ -477,13 +484,14 @@ export async function runIntakeWorkflow(
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
-  let workflowState: IntakeAgentState["workflow_state"] =
-    unknowns.length > 0 ? "clarifying" : "preview_ready";
-  let nextAction: IntakeNextAction = unknowns.length > 0 ? "ask_more" : "generate_preview";
+  let workflowState: IntakeAgentState["workflow_state"] = previewDraft
+    ? "preview_ready"
+    : "clarifying";
+  let nextAction: IntakeNextAction = "ask_more";
 
   if (route.active_skill === "preview-promoter" && previewDraft) {
     workflowState = "preview_generated";
-    nextAction = "prepare_handoff";
+    nextAction = "generate_preview";
   }
 
   const requirementSummary = buildRequirementSummary(confirmed);
@@ -498,21 +506,28 @@ export async function runIntakeWorkflow(
   if (route.active_skill === "handoff-promoter" && labHandoff) {
     workflowState = "handoff_ready";
     nextAction = "prepare_handoff";
-  } else if (labHandoff && unknowns.length <= 2) {
-    workflowState = "handoff_ready";
   }
+
+  const exposedPreviewDraft =
+    nextAction === "generate_preview" ||
+    nextAction === "prepare_handoff"
+      ? previewDraft
+      : undefined;
+
+  const exposedLabHandoff = nextAction === "prepare_handoff" ? labHandoff : undefined;
 
   const customerReply =
     (await buildModelCustomerReply(request, {
       confirmed,
       unknowns,
       nextAction,
-      previewDraft,
+      previewDraft: exposedPreviewDraft ?? previewDraft,
     })) ??
     buildFallbackCustomerReply({
       confirmed,
       nextAction,
-      previewDraft,
+      previewDraft: exposedPreviewDraft ?? previewDraft,
+      unknowns,
     });
 
   return {
@@ -531,8 +546,8 @@ export async function runIntakeWorkflow(
     confirmed,
     unknowns,
     risks,
-    preview_input_draft: previewDraft,
-    lab_handoff: labHandoff,
+    preview_input_draft: exposedPreviewDraft,
+    lab_handoff: exposedLabHandoff,
     next_action: nextAction,
   };
 }
