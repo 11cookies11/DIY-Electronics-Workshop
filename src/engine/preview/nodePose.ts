@@ -82,7 +82,7 @@ export function createConstrainedPose(
       );
     }
 
-    return createPose(position, getMountFaceRotation(placement.anchorFace));
+    return createPose(position, fallbackRotation);
   }
 
   if (

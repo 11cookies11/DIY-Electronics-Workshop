@@ -470,7 +470,11 @@ export function buildPreviewScene(
     return {
       id: module.id,
       type: module.type,
-      pose: createConstrainedPose(module.worldPosition, constraints),
+      pose: createConstrainedPose(
+        module.worldPosition,
+        constraints,
+        boardSpec.rotation,
+      ),
       position: module.worldPosition,
       size: module.sizeMm,
       dimensions: createVisualDimensions(module.sizeMm),
