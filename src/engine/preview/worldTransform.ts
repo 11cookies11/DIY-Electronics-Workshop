@@ -12,11 +12,24 @@ export function gridToBoardWorldPosition(
   moduleHeight: number,
 ): [number, number, number] {
   const { cellW, cellD } = getBoardCellSize(board);
-  const centerX = -board.width / 2 + cellW * (gridX + gridW / 2);
-  const centerZ = -board.depth / 2 + cellD * (gridY + gridH / 2);
-  const centerY = board.topY + moduleHeight / 2;
+  const localU = -board.width / 2 + cellW * (gridX + gridW / 2);
+  const localV = -board.depth / 2 + cellD * (gridY + gridH / 2);
+  const normalOffset = board.thickness / 2 + moduleHeight / 2;
 
-  return [centerX, centerY, centerZ];
+  return [
+    board.center[0] +
+      board.axisU[0] * localU +
+      board.axisV[0] * localV +
+      board.normal[0] * normalOffset,
+    board.center[1] +
+      board.axisU[1] * localU +
+      board.axisV[1] * localV +
+      board.normal[1] * normalOffset,
+    board.center[2] +
+      board.axisU[2] * localU +
+      board.axisV[2] * localV +
+      board.normal[2] * normalOffset,
+  ];
 }
 
 export function createPlacedModule(

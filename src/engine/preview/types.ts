@@ -288,6 +288,11 @@ export interface BoardSpec {
   depth: number;
   thickness: number;
   topY: number;
+  mountFace: FaceName;
+  rotation: [number, number, number];
+  normal: [number, number, number];
+  axisU: [number, number, number];
+  axisV: [number, number, number];
   cols: number;
   rows: number;
 }

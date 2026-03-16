@@ -40,7 +40,7 @@ function createBoardConstraint(): SceneNodeConstraint {
   return {
     placement: {
       anchorNodeId: "shell",
-      anchorFace: "bottom",
+      anchorFace: "top",
       selfMountFace: "bottom",
       preferredZone: "center",
     },
@@ -60,6 +60,7 @@ function createModuleConstraint(
   sourceId: string,
   category: unknown,
   zone: unknown,
+  boardFace: FaceName,
   keepoutCells?: {
     top?: number;
     bottom?: number;
@@ -82,7 +83,7 @@ function createModuleConstraint(
   return {
     placement: {
       anchorNodeId: "main-board",
-      anchorFace: "top",
+      anchorFace: boardFace,
       selfMountFace: "bottom",
       preferredZone,
     },
@@ -192,14 +193,16 @@ function createBoardNode(
   return {
     id: "main-board",
     type: "main-board",
-    pose: createPose(board.center),
+    pose: createPose(board.center, board.rotation),
     position: board.center,
+    rotation: board.rotation,
     size,
     dimensions: createVisualDimensions(size),
     constraints: createBoardConstraint(),
     meta: {
       layer: "board",
       placement: input.board.placement,
+      face: board.mountFace,
       cols: board.cols,
       rows: board.rows,
     },
@@ -247,6 +250,7 @@ export function buildPreviewScene(
       definition?.sourceId ?? module.type,
       definition?.category,
       module.zone,
+      boardSpec.mountFace,
       definition?.keepoutCells,
     );
 

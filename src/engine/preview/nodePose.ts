@@ -3,6 +3,7 @@
 import { getFaceRotation } from "./faceTransform";
 import type {
   EulerTuple,
+  NodeFace,
   SceneNode,
   TargetDirection,
   TransformPose,
@@ -11,6 +12,25 @@ import type {
 
 const ZERO_ROTATION: EulerTuple = [0, 0, 0];
 const UNIT_SCALE: Vector3Tuple = [1, 1, 1];
+
+function getMountFaceRotation(face: NodeFace): EulerTuple {
+  switch (face) {
+    case "top":
+      return [0, 0, 0];
+    case "bottom":
+      return [Math.PI, 0, 0];
+    case "front":
+      return [Math.PI / 2, 0, 0];
+    case "back":
+      return [-Math.PI / 2, 0, 0];
+    case "right":
+      return [0, 0, -Math.PI / 2];
+    case "left":
+      return [0, 0, Math.PI / 2];
+    default:
+      return ZERO_ROTATION;
+  }
+}
 
 function getBoardDirectionRotation(targetDirection: TargetDirection): EulerTuple {
   switch (targetDirection) {
@@ -49,10 +69,10 @@ export function createConstrainedPose(
 
   if (
     placement?.anchorNodeId === "main-board" &&
-    placement.anchorFace === "top" &&
     placement.selfMountFace === "bottom"
   ) {
     if (
+      placement.anchorFace === "top" &&
       poseConstraint?.functionalFace === "front" &&
       poseConstraint.targetDirection
     ) {
@@ -62,7 +82,7 @@ export function createConstrainedPose(
       );
     }
 
-    return createPose(position, ZERO_ROTATION);
+    return createPose(position, getMountFaceRotation(placement.anchorFace));
   }
 
   if (

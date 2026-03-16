@@ -5,12 +5,15 @@ import type {
   BoardPlacedModule,
   BoardSpec,
   BoardZone,
+  FaceName,
   ModuleDefinition,
   GridCell,
   PreviewInput,
   ResolvedModuleDefinition,
   ShellSize,
 } from "./types";
+import { getFaceDescriptor } from "./shellGeometry";
+import { getFaceRotation } from "./faceTransform";
 import { createPlacedModule } from "./worldTransform";
 
 const DEFAULT_BOARD_COLS = 6;
@@ -32,6 +35,22 @@ type BoardLayoutHints = {
     gridH: number;
   };
 };
+
+function inferBoardMountFace(
+  shellSize: ShellSize,
+  mainScreen?: PreviewInput["mainScreen"],
+): FaceName {
+  if (
+    mainScreen &&
+    (mainScreen.face === "front" || mainScreen.face === "back") &&
+    shellSize.depth <= Math.min(shellSize.width, shellSize.height) * 0.6 &&
+    shellSize.height >= shellSize.depth * 2
+  ) {
+    return mainScreen.face === "front" ? "back" : "front";
+  }
+
+  return "top";
+}
 
 function createGridCell(): GridCell {
   return {
@@ -125,6 +144,8 @@ export function createBoardSpec(
     modules,
     mainScreen,
   );
+  const mountFace = inferBoardMountFace(shellSize, mainScreen);
+  const descriptor = getFaceDescriptor("cuboid", shellSize, mountFace);
   const center: [number, number, number] = [0, 0, 0];
   const topY = center[1] + dimensions.thickness / 2;
 
@@ -134,6 +155,11 @@ export function createBoardSpec(
     depth: dimensions.depth,
     thickness: dimensions.thickness,
     topY,
+    mountFace,
+    rotation: getFaceRotation(mountFace),
+    normal: descriptor.normal,
+    axisU: descriptor.axisU,
+    axisV: descriptor.axisV,
     cols,
     rows,
   };
