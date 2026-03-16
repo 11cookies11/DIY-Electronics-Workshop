@@ -84,7 +84,7 @@ export function DeviceViewer({
         })}
       </div>
 
-      <div className="mt-4 rounded-md border border-slate-200 bg-[radial-gradient(circle_at_top,_rgba(103,232,249,0.22),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#eef2f7_100%)] p-3">
+      <div className="mt-4 rounded-md border border-slate-200 bg-[radial-gradient(circle_at_top,_rgba(253,224,71,0.2),_transparent_34%),radial-gradient(circle_at_80%_20%,_rgba(125,211,252,0.18),_transparent_28%),linear-gradient(180deg,_#fefefe_0%,_#f4f7fb_100%)] p-3">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-slate-900">{activePreset.label}</div>
@@ -95,13 +95,16 @@ export function DeviceViewer({
           </div>
         </div>
 
-        <div className="mt-3 h-[220px] overflow-hidden rounded-md border border-white/60 bg-white/30">
+        <div className="mt-3 h-[220px] overflow-hidden rounded-md border border-white/70 bg-white/55">
           <Canvas dpr={[1, 2]}>
             <PerspectiveCamera makeDefault position={[120, 95, 150]} fov={34} />
             <OrbitControls enableDamping dampingFactor={0.08} />
-            <ambientLight intensity={1.2} />
-            <pointLight position={[120, 120, 120]} intensity={24000} />
-            <pointLight position={[-120, 80, 40]} intensity={12000} color="#67e8f9" />
+            <color attach="background" args={["#f7fafc"]} />
+            <ambientLight intensity={1.65} />
+            <hemisphereLight intensity={1.05} color="#fff8ef" groundColor="#dbeafe" />
+            <pointLight position={[120, 120, 120]} intensity={32000} color="#fff9f0" />
+            <pointLight position={[-120, 80, 40]} intensity={16000} color="#93c5fd" />
+            <pointLight position={[0, 140, -100]} intensity={12000} color="#fde68a" />
             <group scale={0.015}>
               <SceneRenderer
                 scene={scene}

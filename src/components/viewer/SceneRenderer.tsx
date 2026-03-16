@@ -1,9 +1,9 @@
 "use client";
 
-import { Box, Cylinder, Html, RoundedBox } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
-import { motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Billboard, Box, Cylinder, RoundedBox, Text } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Group, Vector3 } from "three";
 import type { PreviewScene, SceneNode } from "@/engine/preview";
 import { BoardMesh } from "./BoardMesh";
 import { ConnectionMesh } from "./ConnectionMesh";
@@ -70,6 +70,35 @@ function interpolateNodeList(
   });
 }
 
+function isSceneSettled(currentScene: PreviewScene, targetScene: PreviewScene) {
+  const collectNodes = (previewScene: PreviewScene) => [
+    previewScene.boardNode,
+    ...previewScene.moduleNodes,
+    ...previewScene.screenNodes,
+    ...previewScene.portNodes,
+  ];
+
+  const currentNodes = collectNodes(currentScene);
+  const targetNodes = collectNodes(targetScene);
+
+  if (currentNodes.length !== targetNodes.length) {
+    return false;
+  }
+
+  return currentNodes.every((node, index) => {
+    const targetNode = targetNodes[index];
+
+    return (
+      Math.abs(node.position[0] - targetNode.position[0]) < 0.18 &&
+      Math.abs(node.position[1] - targetNode.position[1]) < 0.18 &&
+      Math.abs(node.position[2] - targetNode.position[2]) < 0.18 &&
+      Math.abs(node.size[0] - targetNode.size[0]) < 0.12 &&
+      Math.abs(node.size[1] - targetNode.size[1]) < 0.12 &&
+      Math.abs(node.size[2] - targetNode.size[2]) < 0.12
+    );
+  });
+}
+
 function formatNodeLabel(node: SceneNode) {
   const sourceId =
     String(node.meta?.sourceId ?? node.meta?.componentType ?? node.type ?? "")
@@ -80,9 +109,9 @@ function formatNodeLabel(node: SceneNode) {
     "main-board": "主板",
     esp32: "ESP32 开发板",
     esp32_s3: "ESP32-S3 开发板",
-    stm32: "STM32 主控板",
+    stm32: "STM32 控制板",
     raspberry_pi_cm5: "树莓派 CM5",
-    battery: "电池模块",
+    battery: "电池模组",
     dc_input: "DC 电源输入",
     usb_c_power: "USB-C 供电口",
     buck_converter: "降压模块",
@@ -106,10 +135,10 @@ function formatNodeLabel(node: SceneNode) {
     gas_sensor: "气体传感器",
     current_sensor: "电流传感器",
     relay_module: "继电器模块",
-    motor_driver: "电机驱动",
-    servo_driver: "舵机驱动",
+    motor_driver: "电机驱动模块",
+    servo_driver: "舵机驱动模块",
     solenoid_driver: "电磁驱动模块",
-    led_driver: "状态灯",
+    led_driver: "LED 驱动模块",
     infrared_blaster: "红外发射模块",
     buzzer: "蜂鸣器",
     sd_card_slot: "SD 卡槽",
@@ -140,26 +169,159 @@ function formatNodeLabel(node: SceneNode) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+type LabelLayout = {
+  anchor: [number, number, number];
+  offsetX: number;
+  offsetY: number;
+};
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getNodeLabelLayout(node: SceneNode): LabelLayout {
+  const [x, y, z] = node.position;
+  const [width, height] = node.size;
+  const gap = clampNumber(Math.max(width, height) * 0.44, 20, 38);
+  const offsetX = width * 0.5 + gap;
+  const offsetY = clampNumber(height * 0.18, 1.5, 8);
+  return {
+    anchor: [x + offsetX, y + offsetY, z],
+    offsetX,
+    offsetY,
+  };
+}
+
+function estimateLabelUnits(label: string) {
+  return Array.from(label).reduce((total, char) => {
+    if (/\s/.test(char)) {
+      return total + 0.35;
+    }
+
+    if (/[\u4e00-\u9fff]/.test(char)) {
+      return total + 1;
+    }
+
+    return total + 0.62;
+  }, 0);
+}
+
 function NodeLabel({ node }: { node: SceneNode }) {
-  const anchorX = node.size[0] * 0.5 + 8;
+  const { camera } = useThree();
+  const layout = getNodeLabelLayout(node);
+  const groupRef = useRef<Group | null>(null);
+  const rightVectorRef = useRef(new Vector3(1, 0, 0));
+  const forwardVectorRef = useRef(new Vector3());
+  const upVectorRef = useRef(new Vector3());
+  const label = formatNodeLabel(node);
+  const labelUnits = estimateLabelUnits(label);
+  const fontSize = clampNumber(6.2 - Math.max(0, labelUnits - 6) * 0.12, 4.8, 6.2);
+  const plateWidth = clampNumber(labelUnits * 2.85 + 8.5, 17, 36);
+  const plateHeight = clampNumber(fontSize * 2.2 + 10.5, 20, 26);
+
+  useFrame(() => {
+    if (!groupRef.current) {
+      return;
+    }
+
+    camera.getWorldDirection(forwardVectorRef.current);
+    upVectorRef.current.copy(camera.up).normalize();
+    rightVectorRef.current
+      .copy(forwardVectorRef.current)
+      .cross(upVectorRef.current)
+      .normalize();
+
+    groupRef.current.position.set(
+      node.position[0] + rightVectorRef.current.x * layout.offsetX,
+      node.position[1] + rightVectorRef.current.y * layout.offsetX + layout.offsetY,
+      node.position[2] + rightVectorRef.current.z * layout.offsetX,
+    );
+  });
 
   return (
-    <Html
-      position={[anchorX, 0, 0]}
-      distanceFactor={10}
-      style={{ pointerEvents: "none" }}
+    <group ref={groupRef} position={layout.anchor}>
+      <Billboard follow>
+        <group userData={{ labelHelper: true }}>
+          <RoundedBox args={[plateWidth, plateHeight, 1.4]} radius={2.8} smoothness={4}>
+            <meshStandardMaterial
+              color="#ffffff"
+              emissive="#ffffff"
+              emissiveIntensity={0.04}
+              roughness={0.2}
+              metalness={0.02}
+              transparent
+              opacity={0.98}
+            />
+          </RoundedBox>
+          <RoundedBox
+            args={[plateWidth + 0.8, plateHeight + 0.8, 0.22]}
+            radius={3}
+            smoothness={4}
+            position={[0, 0, -0.52]}
+          >
+            <meshBasicMaterial color="#d4d4d8" transparent opacity={0.95} />
+          </RoundedBox>
+          <Text
+            position={[0, 0, 0.86]}
+            maxWidth={plateWidth * 0.74}
+            fontSize={fontSize}
+            lineHeight={1.05}
+            textAlign="center"
+            anchorX="center"
+            anchorY="middle"
+            color="#111111"
+            outlineWidth={0.03}
+            outlineColor="#f5f5f5"
+          >
+            {label}
+          </Text>
+        </group>
+      </Billboard>
+    </group>
+  );
+}
+
+function SelectableNode({
+  node,
+  selected,
+  scale,
+  onSelect,
+  children,
+}: {
+  node: SceneNode;
+  selected: boolean;
+  scale: number;
+  onSelect: (nodeId: string) => void;
+  children: ReactNode;
+}) {
+  const groupRef = useRef<Group | null>(null);
+
+  useEffect(() => {
+    if (!groupRef.current) {
+      return;
+    }
+
+    groupRef.current.traverse((child) => {
+      child.userData.previewNodeId = node.id;
+      if (child === groupRef.current) {
+        child.userData.labelHelper = true;
+      }
+    });
+  }, [node.id, selected]);
+
+  return (
+    <group
+      ref={groupRef}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect(node.id);
+      }}
+      scale={selected ? scale : 1}
     >
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1, scale: 1.02 }}
-        className="pointer-events-none flex select-none items-center"
-        style={{ transform: "translate(0, -50%)" }}
-      >
-        <div className="rounded-md border border-cyan-300/70 bg-slate-950/80 px-2 py-1 text-[10px] font-mono tracking-tight text-cyan-200 shadow-[0_0_14px_rgba(34,211,238,0.14)] backdrop-blur-md">
-          {formatNodeLabel(node)}
-        </div>
-      </motion.div>
-    </Html>
+      {selected ? <SelectionGlow node={node} /> : null}
+      {children}
+      {selected ? <NodeLabel node={node} /> : null}
+    </group>
   );
 }
 
@@ -169,43 +331,55 @@ function SelectionGlow({ node }: { node: SceneNode }) {
 
   return (
     <group>
-      <pointLight
-        position={node.position}
-        color="#67e8f9"
-        intensity={2200}
-        distance={90}
-        decay={1.6}
-      />
       {shape === "chip" ? (
-        <Cylinder
-          args={[
-            Math.max(5, Math.min(node.size[0], node.size[2]) * 0.52),
-            Math.max(5, Math.min(node.size[0], node.size[2]) * 0.52),
-            Math.max(3, node.size[1] * 1.2),
-            24,
-          ]}
-          position={node.position}
-        >
-          <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.26} />
-        </Cylinder>
+        <group position={node.position}>
+          <Cylinder
+            args={[
+              Math.max(5.6, Math.min(node.size[0], node.size[2]) * 0.58),
+              Math.max(5.6, Math.min(node.size[0], node.size[2]) * 0.58),
+              Math.max(3.6, node.size[1] * 1.35),
+              28,
+            ]}
+          >
+            <meshBasicMaterial color="#67e8f9" transparent opacity={0.08} />
+          </Cylinder>
+          <Cylinder
+            args={[
+              Math.max(5.2, Math.min(node.size[0], node.size[2]) * 0.54),
+              Math.max(5.2, Math.min(node.size[0], node.size[2]) * 0.54),
+              Math.max(3.2, node.size[1] * 1.24),
+              24,
+            ]}
+          >
+            <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.22} />
+          </Cylinder>
+        </group>
       ) : layer === "screen" ? (
-        <RoundedBox
-          args={[node.size[0] * 1.06, node.size[1] * 1.06, node.size[2] * 1.06]}
-          radius={Math.min(...node.size) * 0.08}
-          smoothness={4}
-          position={node.position}
-          rotation={node.rotation}
-        >
-          <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.2} />
-        </RoundedBox>
+        <group position={node.position} rotation={node.rotation}>
+          <RoundedBox
+            args={[node.size[0] * 1.1, node.size[1] * 1.1, node.size[2] * 1.12]}
+            radius={Math.min(...node.size) * 0.09}
+            smoothness={4}
+          >
+            <meshBasicMaterial color="#67e8f9" transparent opacity={0.07} />
+          </RoundedBox>
+          <RoundedBox
+            args={[node.size[0] * 1.06, node.size[1] * 1.06, node.size[2] * 1.08]}
+            radius={Math.min(...node.size) * 0.08}
+            smoothness={4}
+          >
+            <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.18} />
+          </RoundedBox>
+        </group>
       ) : (
-        <Box
-          args={[node.size[0] * 1.08, node.size[1] * 1.08, node.size[2] * 1.08]}
-          position={node.position}
-          rotation={node.rotation}
-        >
-          <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.2} />
-        </Box>
+        <group position={node.position} rotation={node.rotation}>
+          <Box args={[node.size[0] * 1.12, node.size[1] * 1.12, node.size[2] * 1.12]}>
+            <meshBasicMaterial color="#67e8f9" transparent opacity={0.07} />
+          </Box>
+          <Box args={[node.size[0] * 1.08, node.size[1] * 1.08, node.size[2] * 1.08]}>
+            <meshBasicMaterial color="#22d3ee" wireframe transparent opacity={0.18} />
+          </Box>
+        </group>
       )}
     </group>
   );
@@ -222,38 +396,53 @@ export function SceneRenderer({
 }) {
   const [animatedScene, setAnimatedScene] = useState(scene);
   const targetSceneRef = useRef(scene);
+  const isAnimatingRef = useRef(false);
 
   useEffect(() => {
     targetSceneRef.current = scene;
+    isAnimatingRef.current = true;
   }, [scene]);
 
   useFrame(() => {
+    if (!isAnimatingRef.current) {
+      return;
+    }
+
     const targetScene = targetSceneRef.current;
 
-    setAnimatedScene((currentScene) => ({
-      view: targetScene.view,
-      shellNode: interpolateNode(currentScene.shellNode, targetScene.shellNode, 0.12),
-      boardNode: interpolateNode(currentScene.boardNode, targetScene.boardNode, 0.14),
-      moduleNodes: interpolateNodeList(
-        currentScene.moduleNodes,
-        targetScene.moduleNodes,
-        currentScene.boardNode.position,
-        0.14,
-      ),
-      screenNodes: interpolateNodeList(
-        currentScene.screenNodes,
-        targetScene.screenNodes,
-        currentScene.boardNode.position,
-        0.16,
-      ),
-      portNodes: interpolateNodeList(
-        currentScene.portNodes,
-        targetScene.portNodes,
-        currentScene.boardNode.position,
-        0.16,
-      ),
-      connections: targetScene.connections,
-    }));
+    setAnimatedScene((currentScene) => {
+      const nextScene: PreviewScene = {
+        view: targetScene.view,
+        shellNode: interpolateNode(currentScene.shellNode, targetScene.shellNode, 0.14),
+        boardNode: interpolateNode(currentScene.boardNode, targetScene.boardNode, 0.16),
+        moduleNodes: interpolateNodeList(
+          currentScene.moduleNodes,
+          targetScene.moduleNodes,
+          currentScene.boardNode.position,
+          0.18,
+        ),
+        screenNodes: interpolateNodeList(
+          currentScene.screenNodes,
+          targetScene.screenNodes,
+          currentScene.boardNode.position,
+          0.18,
+        ),
+        portNodes: interpolateNodeList(
+          currentScene.portNodes,
+          targetScene.portNodes,
+          currentScene.boardNode.position,
+          0.18,
+        ),
+        connections: targetScene.connections,
+      };
+
+      if (isSceneSettled(nextScene, targetScene)) {
+        isAnimatingRef.current = false;
+        return targetScene;
+      }
+
+      return nextScene;
+    });
   });
 
   const viewTransform = useMemo(() => {
@@ -309,62 +498,46 @@ export function SceneRenderer({
             />
           ))
         : null}
-      <group
-        onClick={(event) => {
-          event.stopPropagation();
-          onSelectNode(animatedScene.boardNode.id);
-        }}
-        scale={selectedNodeId === animatedScene.boardNode.id ? 1.02 : 1}
+      <SelectableNode
+        node={animatedScene.boardNode}
+        selected={selectedNodeId === animatedScene.boardNode.id}
+        scale={1.02}
+        onSelect={onSelectNode}
       >
-        {selectedNodeId === animatedScene.boardNode.id ? (
-          <SelectionGlow node={animatedScene.boardNode} />
-        ) : null}
         <BoardMesh node={animatedScene.boardNode} />
-        {selectedNodeId === animatedScene.boardNode.id ? (
-          <NodeLabel node={animatedScene.boardNode} />
-        ) : null}
-      </group>
+      </SelectableNode>
       {animatedScene.moduleNodes.map((node) => (
-        <group
+        <SelectableNode
           key={node.id}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelectNode(node.id);
-          }}
-          scale={selectedNodeId === node.id ? 1.04 : 1}
+          node={node}
+          selected={selectedNodeId === node.id}
+          scale={1.04}
+          onSelect={onSelectNode}
         >
-          {selectedNodeId === node.id ? <SelectionGlow node={node} /> : null}
           <ModuleMesh node={node} />
-          {selectedNodeId === node.id ? <NodeLabel node={node} /> : null}
-        </group>
+        </SelectableNode>
       ))}
       {animatedScene.screenNodes.map((node) => (
-        <group
+        <SelectableNode
           key={node.id}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelectNode(node.id);
-          }}
-          scale={selectedNodeId === node.id ? 1.03 : 1}
+          node={node}
+          selected={selectedNodeId === node.id}
+          scale={1.03}
+          onSelect={onSelectNode}
         >
-          {selectedNodeId === node.id ? <SelectionGlow node={node} /> : null}
           <ScreenMesh node={node} />
-          {selectedNodeId === node.id ? <NodeLabel node={node} /> : null}
-        </group>
+        </SelectableNode>
       ))}
       {animatedScene.portNodes.map((node) => (
-        <group
+        <SelectableNode
           key={node.id}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelectNode(node.id);
-          }}
-          scale={selectedNodeId === node.id ? 1.03 : 1}
+          node={node}
+          selected={selectedNodeId === node.id}
+          scale={1.03}
+          onSelect={onSelectNode}
         >
-          {selectedNodeId === node.id ? <SelectionGlow node={node} /> : null}
           <PortMesh node={node} />
-          {selectedNodeId === node.id ? <NodeLabel node={node} /> : null}
-        </group>
+        </SelectableNode>
       ))}
     </group>
   );

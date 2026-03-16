@@ -13,15 +13,15 @@ export function ScreenMesh({ node }: { node: SceneNode }) {
     return (
       <group position={node.position} rotation={node.rotation}>
         <Circle args={[radius, 40]}>
-          <meshStandardMaterial color="#64748b" roughness={0.24} metalness={0.42} />
+          <meshStandardMaterial color="#9fb7c8" roughness={0.2} metalness={0.18} />
         </Circle>
         <Circle args={[radius * 0.82, 40]} position={[0, 0, node.size[2] * 0.08]}>
           <meshStandardMaterial
-            color="#67e8f9"
-            emissive="#22d3ee"
-            emissiveIntensity={1.2}
-            roughness={0.12}
-            metalness={0.22}
+            color="#dcfce7"
+            emissive="#86efac"
+            emissiveIntensity={0.85}
+            roughness={0.08}
+            metalness={0.12}
           />
         </Circle>
       </group>
@@ -35,7 +35,7 @@ export function ScreenMesh({ node }: { node: SceneNode }) {
         radius={Math.min(node.size[0], node.size[1], node.size[2]) * 0.08}
         smoothness={4}
       >
-        <meshStandardMaterial color="#475569" roughness={0.24} metalness={0.32} />
+        <meshStandardMaterial color="#9eb8cc" roughness={0.18} metalness={0.14} />
       </RoundedBox>
       <RoundedBox
         args={[node.size[0] * 0.88, Math.max(2, node.size[1] * 0.38), node.size[2] * 0.84]}
@@ -44,11 +44,11 @@ export function ScreenMesh({ node }: { node: SceneNode }) {
         position={[0, 0, node.size[2] * 0.06]}
       >
         <meshStandardMaterial
-          color="#67e8f9"
-          emissive="#22d3ee"
-          emissiveIntensity={type === "touch_display" ? 1.5 : 1.15}
-          roughness={0.1}
-          metalness={0.22}
+          color="#e0f2fe"
+          emissive="#7dd3fc"
+          emissiveIntensity={type === "touch_display" ? 1.08 : 0.84}
+          roughness={0.08}
+          metalness={0.1}
         />
       </RoundedBox>
       {type === "touch_display" ? (
@@ -58,7 +58,7 @@ export function ScreenMesh({ node }: { node: SceneNode }) {
           smoothness={4}
           position={[0, 0, node.size[2] * 0.12]}
         >
-          <meshStandardMaterial color="#e0f2fe" transparent opacity={0.16} roughness={0.04} metalness={0.1} />
+          <meshStandardMaterial color="#ffffff" transparent opacity={0.28} roughness={0.03} metalness={0.04} />
         </RoundedBox>
       ) : null}
     </group>

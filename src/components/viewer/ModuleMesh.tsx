@@ -6,30 +6,30 @@ import type { SceneNode } from "@/engine/preview";
 function getColor(category: unknown) {
   switch (String(category)) {
     case "core":
-      return "#2dd4bf";
+      return "#7dd3c7";
     case "power":
-      return "#fbbf24";
+      return "#f7c873";
     case "communication":
-      return "#60a5fa";
+      return "#93c5fd";
     case "storage":
-      return "#818cf8";
+      return "#a5b4fc";
     case "sensor":
-      return "#34d399";
+      return "#86efac";
     case "actuator":
-      return "#a78bfa";
+      return "#c4b5fd";
     case "interface":
-      return "#94a3b8";
-    case "thermal":
-      return "#fb7185";
-    case "mechanical":
-      return "#a8a29e";
-    default:
       return "#cbd5e1";
+    case "thermal":
+      return "#fda4af";
+    case "mechanical":
+      return "#d6d3d1";
+    default:
+      return "#e2e8f0";
   }
 }
 
 function ModuleMaterial({ color }: { color: string }) {
-  return <meshStandardMaterial color={color} roughness={0.36} metalness={0.24} />;
+  return <meshStandardMaterial color={color} roughness={0.2} metalness={0.08} />;
 }
 
 function GenericPanel({
@@ -44,7 +44,7 @@ function GenericPanel({
   return (
     <group position={position}>
       <RoundedBox args={size} radius={Math.min(...size) * 0.08} smoothness={4}>
-        <meshStandardMaterial color="#64748b" roughness={0.26} metalness={0.28} />
+        <meshStandardMaterial color="#c4d4df" roughness={0.18} metalness={0.08} />
       </RoundedBox>
       <RoundedBox
         args={[size[0] * 0.88, Math.max(1.5, size[1] * 0.26), size[2] * 0.8]}
@@ -52,13 +52,13 @@ function GenericPanel({
         smoothness={4}
         position={[0, 0, size[2] * 0.06]}
       >
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.42} roughness={0.12} metalness={0.18} />
+        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.22} roughness={0.08} metalness={0.08} />
       </RoundedBox>
       <Box
         args={[size[0] * 0.1, Math.max(1, size[1] * 0.16), size[2] * 0.2]}
         position={[-size[0] * 0.34, -size[1] * 0.26, size[2] * 0.08]}
       >
-        <meshStandardMaterial color="#cbd5e1" roughness={0.18} metalness={0.82} />
+        <meshStandardMaterial color="#fffaf0" roughness={0.12} metalness={0.16} />
       </Box>
     </group>
   );
@@ -78,19 +78,19 @@ function GenericChip({
   return (
     <group position={position}>
       <Cylinder args={[radius, radius * 1.08, Math.max(2, size[1]), 24]}>
-        <meshStandardMaterial color={color} roughness={0.24} metalness={0.18} />
+        <meshStandardMaterial color={color} roughness={0.16} metalness={0.08} />
       </Cylinder>
       <Cylinder
         args={[radius * 0.7, radius * 0.72, Math.max(0.9, size[1] * 0.16), 20]}
         position={[0, size[1] * 0.38, 0]}
       >
-        <meshStandardMaterial color="#e2e8f0" roughness={0.16} metalness={0.88} />
+        <meshStandardMaterial color="#ffffff" roughness={0.12} metalness={0.18} />
       </Cylinder>
       <Cylinder
         args={[radius * 0.16, radius * 0.16, Math.max(1.2, size[1] * 0.3), 18]}
         position={[0, -size[1] * 0.08, radius * 0.74]}
       >
-        <meshStandardMaterial color="#475569" roughness={0.18} metalness={0.42} />
+        <meshStandardMaterial color="#8ba0b3" roughness={0.14} metalness={0.12} />
       </Cylinder>
     </group>
   );
@@ -133,19 +133,19 @@ function GenericBoxModule({
   return (
     <group position={position}>
       <RoundedBox args={size} radius={Math.min(...size) * 0.08} smoothness={3}>
-        <meshStandardMaterial color={color} roughness={0.32} metalness={0.18} />
+        <meshStandardMaterial color={color} roughness={0.2} metalness={0.08} />
       </RoundedBox>
       <Box
         args={[size[0] * 0.5, Math.max(1, size[1] * 0.12), size[2] * 0.3]}
         position={[0, size[1] * 0.34, 0]}
       >
-        <meshStandardMaterial color="#f8fafc" roughness={0.16} metalness={0.58} />
+        <meshStandardMaterial color="#ffffff" roughness={0.12} metalness={0.14} />
       </Box>
       <Box
         args={[size[0] * 0.12, Math.max(1, size[1] * 0.2), size[2] * 0.16]}
         position={[size[0] * 0.34, 0, -size[2] * 0.26]}
       >
-        <meshStandardMaterial color="#94a3b8" roughness={0.18} metalness={0.74} />
+        <meshStandardMaterial color="#dbe4ec" roughness={0.12} metalness={0.16} />
       </Box>
     </group>
   );
@@ -168,22 +168,22 @@ function BoardWithChip({
         <meshStandardMaterial
           color={color}
           emissive={color}
-          emissiveIntensity={0.14}
-          roughness={0.34}
-          metalness={0.18}
+          emissiveIntensity={0.08}
+          roughness={0.2}
+          metalness={0.08}
         />
       </RoundedBox>
       <Box
         args={[size[0] * chipScale, Math.max(2, size[1] * 0.45), size[2] * chipScale]}
         position={[0, size[1] * 0.42, 0]}
       >
-        <meshStandardMaterial color="#475569" roughness={0.3} metalness={0.4} />
+        <meshStandardMaterial color="#d8e1e8" roughness={0.18} metalness={0.12} />
       </Box>
       <Box
         args={[size[0] * 0.18, Math.max(1.5, size[1] * 0.25), size[2] * 0.12]}
         position={[size[0] * 0.26, size[1] * 0.36, -size[2] * 0.28]}
       >
-        <meshStandardMaterial color={accent} roughness={0.18} metalness={0.9} />
+        <meshStandardMaterial color={accent} roughness={0.12} metalness={0.16} />
       </Box>
     </group>
   );

@@ -4,17 +4,17 @@ import { Box, Cylinder, RoundedBox } from "@react-three/drei";
 import type { SceneNode } from "@/engine/preview";
 
 const PORT_COLORS: Record<string, string> = {
-  usb_c: "#94a3b8",
-  rj45: "#64748b",
-  audio_jack: "#a1a1aa",
-  power_jack: "#a78bfa",
-  button_cutout: "#34d399",
-  ir_window: "#fb7185",
-  port: "#94a3b8",
+  usb_c: "#c7d9e8",
+  rj45: "#a8c0d4",
+  audio_jack: "#d4d4d8",
+  power_jack: "#d8b4fe",
+  button_cutout: "#86efac",
+  ir_window: "#fda4af",
+  port: "#c7d9e8",
 };
 
 function PortMaterial({ color }: { color: string }) {
-  return <meshStandardMaterial color={color} roughness={0.3} metalness={0.55} />;
+  return <meshStandardMaterial color={color} roughness={0.2} metalness={0.18} />;
 }
 
 export function PortMesh({ node }: { node: SceneNode }) {
@@ -43,7 +43,7 @@ export function PortMesh({ node }: { node: SceneNode }) {
           ]}
           position={[0, 0, node.size[2] * 0.18]}
         >
-          <meshStandardMaterial color="#64748b" roughness={0.18} metalness={0.4} />
+          <meshStandardMaterial color="#eef2f7" roughness={0.14} metalness={0.18} />
         </Cylinder>
       </group>
     );
@@ -65,7 +65,7 @@ export function PortMesh({ node }: { node: SceneNode }) {
           smoothness={3}
           position={[0, 0, node.size[2] * 0.18]}
         >
-          <meshStandardMaterial color="#e2e8f0" roughness={0.16} metalness={0.9} />
+          <meshStandardMaterial color="#ffffff" roughness={0.12} metalness={0.22} />
         </RoundedBox>
       </group>
     );
@@ -79,10 +79,10 @@ export function PortMesh({ node }: { node: SceneNode }) {
           radius={Math.min(node.size[0], node.size[1], node.size[2]) * 0.06}
           smoothness={3}
         >
-          <meshStandardMaterial color={color} roughness={0.28} metalness={0.62} />
+          <meshStandardMaterial color={color} roughness={0.18} metalness={0.2} />
         </RoundedBox>
         <Box args={[node.size[0] * 0.76, node.size[1] * 0.4, node.size[2] * 0.18]} position={[0, 0, node.size[2] * 0.32]}>
-          <meshStandardMaterial color="#cbd5e1" roughness={0.16} metalness={0.9} />
+          <meshStandardMaterial color="#ffffff" roughness={0.12} metalness={0.22} />
         </Box>
       </group>
     );
@@ -96,7 +96,7 @@ export function PortMesh({ node }: { node: SceneNode }) {
           radius={Math.min(node.size[0], node.size[1], node.size[2]) * 0.18}
           smoothness={4}
         >
-          <meshStandardMaterial color="#10b981" roughness={0.22} metalness={0.18} />
+          <meshStandardMaterial color="#86efac" roughness={0.16} metalness={0.08} />
         </RoundedBox>
         <RoundedBox
           args={[node.size[0] * 0.58, node.size[1] * 0.58, node.size[2] * 0.34]}
@@ -104,7 +104,7 @@ export function PortMesh({ node }: { node: SceneNode }) {
           smoothness={4}
           position={[0, 0, node.size[2] * 0.12]}
         >
-          <meshStandardMaterial color="#bbf7d0" roughness={0.18} metalness={0.24} />
+          <meshStandardMaterial color="#f0fdf4" roughness={0.14} metalness={0.06} />
         </RoundedBox>
       </group>
     );
@@ -121,9 +121,9 @@ export function PortMesh({ node }: { node: SceneNode }) {
           <meshStandardMaterial
             color={color}
             emissive={color}
-            emissiveIntensity={0.24}
-            roughness={0.22}
-            metalness={0.18}
+            emissiveIntensity={0.16}
+            roughness={0.16}
+            metalness={0.08}
           />
         </RoundedBox>
         <RoundedBox
@@ -132,7 +132,7 @@ export function PortMesh({ node }: { node: SceneNode }) {
           smoothness={3}
           position={[0, 0, node.size[2] * 0.16]}
         >
-          <meshStandardMaterial color="#fecdd3" roughness={0.18} metalness={0.2} />
+          <meshStandardMaterial color="#fff1f2" roughness={0.14} metalness={0.06} />
         </RoundedBox>
       </group>
     );
