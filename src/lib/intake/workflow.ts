@@ -1,8 +1,5 @@
 import type { PreviewInput } from "@/engine/preview/types";
-import {
-  buildIntakeSystemPrompt,
-  buildIntakeUserPrompt,
-} from "./prompt";
+import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
 import {
   isSecondMeChatConfigured,
   requestSecondMeStructuredReply,
@@ -28,20 +25,26 @@ function mergeArrays(left?: string[], right?: string[]) {
   return unique([...(left ?? []), ...(right ?? [])]);
 }
 
+function hasPattern(message: string, patterns: RegExp[]) {
+  return patterns.some((pattern) => pattern.test(message));
+}
+
 function inferIntent(message: string): IntakeIntent {
-  if (/(维修|修复|问题|故障|异常)/.test(message)) return "support";
-  if (/(升级|改造|迭代)/.test(message)) return "upgrade";
-  if (/(原型|demo|验证|试做)/i.test(message)) return "prototype";
-  if (/(定制|做一个|开发一个|设计一个|产品)/.test(message)) return "custom_device";
+  if (hasPattern(message, [/(维修|修复|问题|故障|异常)/])) return "support";
+  if (hasPattern(message, [/(升级|改造|迭代)/])) return "upgrade";
+  if (hasPattern(message, [/(原型|demo|验证|试做)/i])) return "prototype";
+  if (hasPattern(message, [/(定制|做一个|开发一个|设计一个|产品)/])) {
+    return "custom_device";
+  }
   return "consulting";
 }
 
 function inferDeviceType(message: string) {
-  if (/(手表|穿戴)/.test(message)) return "智能手表";
-  if (/(遥控器|红外)/.test(message)) return "红外遥控器";
-  if (/(桌面|桌宠|桌上)/.test(message)) return "桌面设备";
-  if (/(音箱|音响|speaker)/i.test(message)) return "蓝牙音箱";
-  if (/(手持|手持机|便携)/.test(message)) return "手持设备";
+  if (hasPattern(message, [/(手表|穿戴)/])) return "智能手表";
+  if (hasPattern(message, [/(遥控器|红外)/])) return "红外遥控器";
+  if (hasPattern(message, [/(桌面|桌宠|桌上)/])) return "桌面设备";
+  if (hasPattern(message, [/(音箱|音响|speaker)/i])) return "蓝牙音箱";
+  if (hasPattern(message, [/(手持|便携)/])) return "手持设备";
   return undefined;
 }
 
@@ -52,12 +55,17 @@ function collectKeywords(message: string, patterns: Array<[RegExp, string]>) {
 }
 
 function extractApproxSize(message: string) {
-  const matched = message.match(/(\d{2,4})\s*[x×*]\s*(\d{2,4})\s*[x×*]\s*(\d{2,4})\s*(mm|毫米)?/i);
+  const matched = message.match(
+    /(\d{2,4})\s*[xX*×]\s*(\d{2,4})\s*[xX*×]\s*(\d{2,4})\s*(mm|毫米)?/i,
+  );
   if (!matched) return undefined;
   return `${matched[1]} x ${matched[2]} x ${matched[3]} mm`;
 }
 
-function deriveConfirmed(message: string, current: ConfirmedRequirement): ConfirmedRequirement {
+function deriveConfirmed(
+  message: string,
+  current: ConfirmedRequirement,
+): ConfirmedRequirement {
   const connectivity = collectKeywords(message, [
     [/蓝牙/i, "蓝牙"],
     [/(wi-?fi|wifi)/i, "Wi-Fi"],
@@ -69,37 +77,48 @@ function deriveConfirmed(message: string, current: ConfirmedRequirement): Confir
     [/温度/, "温度传感器"],
     [/湿度/, "湿度传感器"],
     [/压力/, "压力传感器"],
-    [/摄像头|相机/, "摄像头"],
+    [/(摄像头|相机)/, "摄像头"],
     [/麦克风/, "麦克风"],
   ]);
   const controls = collectKeywords(message, [
-    [/按钮|按键/, "按钮"],
+    [/(按钮|按键)/, "按钮"],
     [/旋钮/, "旋钮"],
-    [/触控|触摸/, "触控"],
+    [/(触控|触摸)/, "触控"],
     [/语音/, "语音"],
   ]);
   const ports = collectKeywords(message, [
     [/(usb-?c|type-?c)/i, "USB-C"],
-    [/音频|耳机/, "音频口"],
-    [/电源口|dc/, "电源口"],
-    [/网口|rj45/i, "RJ45"],
+    [/(音频|耳机)/, "音频口"],
+    [/(电源口|dc)/i, "电源口"],
+    [/(网口|rj45)/i, "RJ45"],
   ]);
   const power = collectKeywords(message, [
-    [/电池|充电/, "电池供电"],
-    [/外接供电|适配器/, "外接供电"],
+    [/(电池|充电)/, "电池供电"],
+    [/(外接供电|适配器)/, "外接供电"],
   ]);
   const coreFeatures = collectKeywords(message, [
-    [/显示|屏幕/, "显示"],
-    [/遥控|红外/, "红外控制"],
-    [/监测|检测/, "数据采集"],
-    [/联网|连接/, "无线连接"],
-    [/播放|音频|音响/, "音频播放"],
+    [/(显示|屏幕)/, "显示"],
+    [/(遥控|红外)/, "红外控制"],
+    [/(监测|检测|采集)/, "数据采集"],
+    [/(联网|连接)/, "无线连接"],
+    [/(播放|音频|音响)/, "音频播放"],
   ]);
+  const useCase =
+    current.use_case ??
+    (message.match(/用于([^，。；]+)/)?.[1]?.trim() ||
+      message.match(/给([^，。；]+)用/)?.[1]?.trim());
 
   return {
     ...current,
     device_type: current.device_type ?? inferDeviceType(message),
-    screen: current.screen ?? (/(屏幕|显示|触控)/.test(message) ? (/(触控|触摸)/.test(message) ? "触控屏" : "显示屏") : undefined),
+    use_case: useCase,
+    screen:
+      current.screen ??
+      (hasPattern(message, [/(屏幕|显示|触控)/])
+        ? hasPattern(message, [/(触控|触摸)/])
+          ? "触控屏"
+          : "显示屏"
+        : undefined),
     controls: mergeArrays(current.controls, controls),
     sensors: mergeArrays(current.sensors, sensors),
     connectivity: mergeArrays(current.connectivity, connectivity),
@@ -130,7 +149,11 @@ function buildPreviewReadiness(confirmed: ConfirmedRequirement): PreviewReadines
   if (!confirmed.screen && !confirmed.controls?.length && !confirmed.ports?.length) {
     missing.push("交互方式");
   }
-  if (!confirmed.core_features?.length && !confirmed.sensors?.length && !confirmed.connectivity?.length) {
+  if (
+    !confirmed.core_features?.length &&
+    !confirmed.sensors?.length &&
+    !confirmed.connectivity?.length
+  ) {
     missing.push("主要功能模块");
   }
 
@@ -148,19 +171,46 @@ function buildPreviewReadiness(confirmed: ConfirmedRequirement): PreviewReadines
 function defaultShellForDevice(deviceType?: string) {
   switch (deviceType) {
     case "智能手表":
-      return { shell: "cuboid" as const, shellSize: { width: 48, height: 48, depth: 18 }, cols: 5, rows: 4 };
+      return {
+        shell: "cuboid" as const,
+        shellSize: { width: 48, height: 48, depth: 18 },
+        cols: 5,
+        rows: 4,
+      };
     case "红外遥控器":
-      return { shell: "cuboid" as const, shellSize: { width: 46, height: 156, depth: 18 }, cols: 6, rows: 3 };
+      return {
+        shell: "cuboid" as const,
+        shellSize: { width: 46, height: 156, depth: 18 },
+        cols: 6,
+        rows: 3,
+      };
     case "桌面设备":
-      return { shell: "cuboid" as const, shellSize: { width: 92, height: 110, depth: 86 }, cols: 6, rows: 5 };
+      return {
+        shell: "cuboid" as const,
+        shellSize: { width: 92, height: 110, depth: 86 },
+        cols: 6,
+        rows: 5,
+      };
     case "蓝牙音箱":
-      return { shell: "cuboid" as const, shellSize: { width: 160, height: 72, depth: 72 }, cols: 7, rows: 4 };
+      return {
+        shell: "cuboid" as const,
+        shellSize: { width: 160, height: 72, depth: 72 },
+        cols: 7,
+        rows: 4,
+      };
     default:
-      return { shell: "cuboid" as const, shellSize: { width: 88, height: 120, depth: 26 }, cols: 6, rows: 5 };
+      return {
+        shell: "cuboid" as const,
+        shellSize: { width: 88, height: 120, depth: 26 },
+        cols: 6,
+        rows: 5,
+      };
   }
 }
 
-function mapConfirmedToPreviewDraft(confirmed: ConfirmedRequirement): PreviewDraft | undefined {
+function mapConfirmedToPreviewDraft(
+  confirmed: ConfirmedRequirement,
+): PreviewDraft | undefined {
   const readiness = buildPreviewReadiness(confirmed);
   if (!readiness.ready) {
     return undefined;
@@ -182,9 +232,7 @@ function mapConfirmedToPreviewDraft(confirmed: ConfirmedRequirement): PreviewDra
   modules.push(useHighCore ? "esp32_s3" : "esp32");
   assumptions.push(`默认使用 ${useHighCore ? "ESP32-S3" : "ESP32"} 作为主控`);
 
-  if (confirmed.power?.includes("电池供电")) {
-    modules.push("battery");
-  }
+  if (confirmed.power?.includes("电池供电")) modules.push("battery");
   if (confirmed.connectivity?.includes("蓝牙")) modules.push("bluetooth");
   if (confirmed.connectivity?.includes("Wi-Fi")) modules.push("wifi");
   if (confirmed.connectivity?.includes("GPS")) modules.push("gps");
@@ -222,7 +270,6 @@ function mapConfirmedToPreviewDraft(confirmed: ConfirmedRequirement): PreviewDra
       sizeMm: { width: 12, height: 10, depth: 10 },
     });
   }
-
   if (confirmed.core_features?.includes("红外控制")) {
     ports.push({
       face: "front",
@@ -269,10 +316,7 @@ function buildLabHandoff(
   risks: string[],
   previewDraft?: PreviewDraft,
 ): LabHandoff | undefined {
-  if (
-    !confirmed.device_type ||
-    (!confirmed.core_features?.length && !previewDraft)
-  ) {
+  if (!confirmed.device_type || (!confirmed.core_features?.length && !previewDraft)) {
     return undefined;
   }
 
@@ -281,10 +325,9 @@ function buildLabHandoff(
     project_type: confirmed.device_type,
     use_case: confirmed.use_case ?? "待补充",
     target_users: confirmed.target_users,
-    core_features:
-      confirmed.core_features?.length
-        ? confirmed.core_features
-        : ["基于当前已确认硬件要素生成初步方案"],
+    core_features: confirmed.core_features?.length
+      ? confirmed.core_features
+      : ["基于当前已确认硬件要素生成初步方案"],
     hardware_requirements: {
       screen: confirmed.screen,
       controls: confirmed.controls,
@@ -316,33 +359,94 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
     confirmed.screen ? `屏幕：${confirmed.screen}` : undefined,
     confirmed.controls?.length ? `交互：${confirmed.controls.join("、")}` : undefined,
     confirmed.sensors?.length ? `传感器：${confirmed.sensors.join("、")}` : undefined,
-    confirmed.connectivity?.length ? `连接：${confirmed.connectivity.join("、")}` : undefined,
+    confirmed.connectivity?.length
+      ? `连接：${confirmed.connectivity.join("、")}`
+      : undefined,
     confirmed.power?.length ? `供电：${confirmed.power.join("、")}` : undefined,
   ]
     .filter(Boolean)
     .join("；");
 }
 
+function buildIntroReply(state: IntakeAgentState) {
+  const summary = buildRequirementSummary(state.confirmed);
+  if (summary) {
+    return `当然可以。我现在既能陪你聊方案，也能把需求逐步整理成 3D 预览和实验室交接单。你当前这边我已经记住的是：${summary}。你想继续细化功能，还是先让我介绍一下这套方案怎么推进？`;
+  }
+  return "当然可以。我不是只能填表的前台，也可以先陪你聊产品方向、使用场景和方案思路。等信息够了，我再帮你整理成 3D 预览草案和实验室交接单。";
+}
+
+function buildSmallTalkReply(message: string, state: IntakeAgentState) {
+  if (hasPattern(message, [/^(你好|您好|hi|hello|在吗)[！!。？?]*$/i])) {
+    return "你好，我在。你可以把我当成一个会接待、会梳理需求、也能帮你把设备方案拉成 3D 预览草案的前台伙伴。";
+  }
+
+  if (hasPattern(message, [/(你是谁|你能做什么|你会什么|介绍一下你自己)/])) {
+    return buildIntroReply(state);
+  }
+
+  if (hasPattern(message, [/(介绍一下实验室|介绍实验室|这个实验室是做什么的)/])) {
+    return "这个实验室主要做嵌入式产品需求接待、方案梳理和结构预览。我会先和你把产品想法聊清楚，再把信息整理成 3D preview 草案和实验室交接单，方便后面的工程评估继续接。";
+  }
+
+  if (hasPattern(message, [/(介绍一下当前方案|当前方案是什么|这个方案怎么样)/])) {
+    const summary = buildRequirementSummary(state.confirmed);
+    return summary
+      ? `当前我理解到的方案是：${summary}。如果你愿意，我可以继续帮你补齐使用场景、核心功能和尺寸约束，这样就能更稳地推进到实验室交接。`
+      : "当前还没有形成完整方案，但我们已经可以开始聊。你告诉我想做什么设备、给谁用、主要功能是什么，我就能一步步帮你收成方案。";
+  }
+
+  if (hasPattern(message, [/(谢谢|多谢|辛苦了)/])) {
+    return "不客气。你继续说想法就行，我会一边聊天一边帮你把需求收成可执行的方案。";
+  }
+
+  return null;
+}
+
+function countStructuredSignals(confirmed: ConfirmedRequirement) {
+  return [
+    confirmed.device_type,
+    confirmed.use_case,
+    confirmed.screen,
+    confirmed.size,
+    ...(confirmed.controls ?? []),
+    ...(confirmed.sensors ?? []),
+    ...(confirmed.connectivity ?? []),
+    ...(confirmed.ports ?? []),
+    ...(confirmed.power ?? []),
+    ...(confirmed.core_features ?? []),
+  ].filter(Boolean).length;
+}
+
 function buildCustomerReply(
+  message: string,
+  state: IntakeAgentState,
   confirmed: ConfirmedRequirement,
   unknowns: string[],
   nextAction: IntakeNextAction,
   previewDraft?: PreviewDraft,
 ) {
-  const summary = buildRequirementSummary(confirmed) || "我已经开始整理你的设备需求。";
+  const smallTalkReply = buildSmallTalkReply(message, state);
+  const summary = buildRequirementSummary(confirmed);
+
+  if (smallTalkReply && countStructuredSignals(confirmed) === countStructuredSignals(state.confirmed)) {
+    return smallTalkReply;
+  }
+
   if (nextAction === "generate_preview" && previewDraft) {
-    return `${summary}。我已经可以先给出一个 3D 结构草案，接下来会基于这个草案继续细化。`;
+    return `${summary}。这些信息已经够我先生成一版 3D 结构草案了。你可以继续补充尺寸、使用场景或者外观偏好，我会顺着这版草案继续细化。`;
   }
 
   if (nextAction === "prepare_handoff" || nextAction === "handoff_to_lab") {
-    return `${summary}。当前信息已经接近可以交给实验室评估，我会先整理成交接单。`;
+    return `${summary}。这边我已经能整理出一版实验室交接单和预览草案了。后面你还可以继续补充使用场景和核心目标，我会一起带进交接结果里。`;
   }
 
-  if (unknowns.length > 0) {
-    return `${summary}。为了继续推进，我还需要确认这些信息：${unknowns.join("、")}。`;
+  if (summary) {
+    const askFields = unknowns.slice(0, 2).join("、");
+    return `${summary}。我先按这个方向继续跟你推进。接下来我比较想确认的是：${askFields || "你最看重的功能和使用场景"}。`;
   }
 
-  return `${summary}。我已经记录下当前需求，可以继续细化交互、结构和模块配置。`;
+  return "可以，我们先随意聊也没问题。你告诉我想做什么设备、准备给谁用、最想解决什么问题，我会边聊边帮你收成可落地的方案。";
 }
 
 function validateStructuredOutput(value: unknown): IntakeAgentOutput | null {
@@ -403,7 +507,7 @@ export async function runIntakeWorkflow(
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
   const risks = unique([
     ...state.risks,
-    ...(previewDraft ? [] : ["当前信息仍不足以稳定生成 3D 预览草案"]),
+    ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
   let workflowState: IntakeAgentState["workflow_state"] =
@@ -429,7 +533,14 @@ export async function runIntakeWorkflow(
   }
 
   return {
-    customer_reply: buildCustomerReply(confirmed, unknowns, nextAction, previewDraft),
+    customer_reply: buildCustomerReply(
+      message,
+      state,
+      confirmed,
+      unknowns,
+      nextAction,
+      previewDraft,
+    ),
     state: {
       workflow_state: workflowState,
       confirmed,
@@ -440,7 +551,7 @@ export async function runIntakeWorkflow(
       lab_handoff: labHandoff,
     },
     intent: inferIntent(message),
-    requirement_summary: requirementSummary || "已记录客户需求，等待继续补充。",
+    requirement_summary: requirementSummary || "已记录当前对话，等待进一步补充。",
     confirmed,
     unknowns,
     risks,
