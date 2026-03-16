@@ -56,6 +56,25 @@ function createBoardConstraint(face: FaceName): SceneNodeConstraint {
   };
 }
 
+function getOppositeFace(face: FaceName): FaceName {
+  switch (face) {
+    case "front":
+      return "back";
+    case "back":
+      return "front";
+    case "left":
+      return "right";
+    case "right":
+      return "left";
+    case "top":
+      return "bottom";
+    case "bottom":
+      return "top";
+    default:
+      return face;
+  }
+}
+
 function createModuleConstraint(
   sourceId: string,
   category: unknown,
@@ -250,7 +269,7 @@ export function buildPreviewScene(
       definition?.sourceId ?? module.type,
       definition?.category,
       module.zone,
-      boardSpec.mountFace,
+      getOppositeFace(boardSpec.mountFace),
       definition?.keepoutCells,
     );
 

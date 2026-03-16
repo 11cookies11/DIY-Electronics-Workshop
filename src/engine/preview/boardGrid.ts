@@ -36,6 +36,25 @@ type BoardLayoutHints = {
   };
 };
 
+function getOppositeFace(face: FaceName): FaceName {
+  switch (face) {
+    case "front":
+      return "back";
+    case "back":
+      return "front";
+    case "left":
+      return "right";
+    case "right":
+      return "left";
+    case "top":
+      return "bottom";
+    case "bottom":
+      return "top";
+    default:
+      return face;
+  }
+}
+
 function inferBoardMountFace(
   shellSize: ShellSize,
   mainScreen?: PreviewInput["mainScreen"],
@@ -195,6 +214,8 @@ export function createBoardSpec(
   );
   const mountFace = inferBoardMountFace(shellSize, mainScreen);
   const descriptor = getFaceDescriptor("cuboid", shellSize, mountFace);
+  const componentFace = getOppositeFace(mountFace);
+  const componentDescriptor = getFaceDescriptor("cuboid", shellSize, componentFace);
   const screenInset =
     mainScreen &&
     mainScreen.face === mountFace
@@ -217,7 +238,7 @@ export function createBoardSpec(
     topY,
     mountFace,
     rotation: getBoardMountRotation(mountFace),
-    normal: descriptor.normal,
+    normal: componentDescriptor.normal,
     axisU: descriptor.axisU,
     axisV: descriptor.axisV,
     cols,
