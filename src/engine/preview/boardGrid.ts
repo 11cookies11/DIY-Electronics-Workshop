@@ -5,6 +5,7 @@ import type {
   BoardPlacedModule,
   BoardSpec,
   BoardZone,
+  FacePlacedItem,
   FaceName,
   ModuleDefinition,
   GridCell,
@@ -35,6 +36,14 @@ type BoardLayoutHints = {
     gridW: number;
     gridH: number;
   };
+  reservedRects?: Array<{
+    id: string;
+    kind: "screen" | "port";
+    gridX: number;
+    gridY: number;
+    gridW: number;
+    gridH: number;
+  }>;
 };
 
 function getOppositeFace(face: FaceName): FaceName {
@@ -570,6 +579,126 @@ function shouldAvoidScreenShadow(module: ResolvedModuleDefinition) {
   );
 }
 
+function dot(
+  left: [number, number, number],
+  right: [number, number, number],
+) {
+  return left[0] * right[0] + left[1] * right[1] + left[2] * right[2];
+}
+
+function projectShellItemToBoardRect(
+  boardSpec: BoardSpec,
+  shellSize: ShellSize,
+  item: FacePlacedItem,
+  paddingCells: number,
+) {
+  const descriptor = getFaceDescriptor("cuboid", shellSize, item.face);
+  const halfWidth = item.sizeMm[0] / 2;
+  const halfHeight = item.sizeMm[1] / 2;
+  const halfDepth = item.sizeMm[2] / 2;
+  const delta: [number, number, number] = [
+    item.worldPosition[0] - boardSpec.center[0],
+    item.worldPosition[1] - boardSpec.center[1],
+    item.worldPosition[2] - boardSpec.center[2],
+  ];
+  const { cellW, cellD } = getBoardCellSize(boardSpec);
+  const localU = dot(delta, boardSpec.axisU);
+  const localV = dot(delta, boardSpec.axisV);
+  const projectedHalfU =
+    Math.abs(dot(boardSpec.axisU, descriptor.axisU)) * halfWidth +
+    Math.abs(dot(boardSpec.axisU, descriptor.axisV)) * halfHeight +
+    Math.abs(dot(boardSpec.axisU, descriptor.normal)) * halfDepth;
+  const projectedHalfV =
+    Math.abs(dot(boardSpec.axisV, descriptor.axisU)) * halfWidth +
+    Math.abs(dot(boardSpec.axisV, descriptor.axisV)) * halfHeight +
+    Math.abs(dot(boardSpec.axisV, descriptor.normal)) * halfDepth;
+
+  const startX = Math.floor((localU - projectedHalfU + boardSpec.width / 2) / cellW) - paddingCells;
+  const endX = Math.ceil((localU + projectedHalfU + boardSpec.width / 2) / cellW) + paddingCells;
+  const startY = Math.floor((localV - projectedHalfV + boardSpec.depth / 2) / cellD) - paddingCells;
+  const endY = Math.ceil((localV + projectedHalfV + boardSpec.depth / 2) / cellD) + paddingCells;
+  const gridX = Math.max(0, startX);
+  const gridY = Math.max(0, startY);
+  const gridW = Math.min(boardSpec.cols, endX) - gridX;
+  const gridH = Math.min(boardSpec.rows, endY) - gridY;
+
+  if (gridW <= 0 || gridH <= 0) {
+    return null;
+  }
+
+  return {
+    gridX,
+    gridY,
+    gridW,
+    gridH,
+  };
+}
+
+function getInteractionReservedRects(
+  boardSpec: BoardSpec,
+  shellSize: ShellSize,
+  items: FacePlacedItem[],
+) {
+  return items
+    .map((item) => {
+      const paddingCells =
+        item.type === "screen"
+          ? 1
+          : item.componentType === "button_cutout" || item.componentType === "ir_window"
+            ? 1
+            : 0;
+      const rect = projectShellItemToBoardRect(
+        boardSpec,
+        shellSize,
+        item,
+        paddingCells,
+      );
+
+      if (!rect) {
+        return null;
+      }
+
+      return {
+        id: item.id,
+        kind: item.type,
+        ...rect,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+}
+
+function reserveRect(
+  board: BoardGrid,
+  rect: NonNullable<BoardLayoutHints["reservedRects"]>[number],
+) {
+  for (let y = rect.gridY; y < rect.gridY + rect.gridH; y += 1) {
+    for (let x = rect.gridX; x < rect.gridX + rect.gridW; x += 1) {
+      board.cells[y][x] = {
+        occupied: true,
+        reservedBy: rect.id,
+      };
+    }
+  }
+}
+
+function applyBoardHintReservations(
+  board: BoardGrid,
+  hints: BoardLayoutHints | undefined,
+  relaxationLevel: number,
+) {
+  if (!hints?.reservedRects || relaxationLevel >= 3) {
+    return;
+  }
+
+  for (const rect of hints.reservedRects) {
+    if (relaxationLevel >= 2 && rect.kind === "port") {
+      continue;
+    }
+
+    reserveRect(board, rect);
+  }
+}
+
 function getAnchorMetrics(
   board: BoardGrid,
   gridX: number,
@@ -753,6 +882,7 @@ function tryPlaceModules(
   hints?: BoardLayoutHints,
 ) {
   const workingBoard = createBoardGrid(board.cols, board.rows);
+  applyBoardHintReservations(workingBoard, hints, relaxationLevel);
   const placedModules: BoardPlacedModule[] = [];
   const sorted = [...modules].sort((a, b) => {
     return (
@@ -839,7 +969,35 @@ export function placeModules(
 
 export function createBoardLayoutHints(
   boardSpec: BoardSpec,
-  mainScreen?: PreviewInput["mainScreen"],
+  shellSize: ShellSize,
+  mainScreen?: FacePlacedItem | null,
+  ports: FacePlacedItem[] = [],
 ) {
-  return getScreenShadowHints(boardSpec, mainScreen);
+  const screenShadow = getScreenShadowHints(
+    boardSpec,
+    mainScreen
+      ? {
+          face: mainScreen.face,
+          type:
+            mainScreen.componentType === "touch_display"
+              ? "touch_display"
+              : "display_panel",
+          sizeMm: {
+            width: mainScreen.sizeMm[0],
+            height: mainScreen.sizeMm[1],
+            depth: mainScreen.sizeMm[2],
+          },
+        }
+      : undefined,
+  );
+  const reservedRects = getInteractionReservedRects(
+    boardSpec,
+    shellSize,
+    [...(mainScreen ? [mainScreen] : []), ...ports],
+  );
+
+  return {
+    ...screenShadow,
+    reservedRects,
+  };
 }

@@ -248,6 +248,10 @@ export function buildPreviewScene(
   view: PreviewView = "assembled",
 ): PreviewScene {
   const modules = getPreviewModules(input.modules);
+  const screenPlacement = input.mainScreen
+    ? placeMainScreen(input.mainScreen, input.shellSize).item
+    : null;
+  const portPlacements = placePorts(input.ports ?? [], input.shellSize);
   const boardSpec = createBoardSpec(
     input.shellSize,
     input.board,
@@ -255,7 +259,12 @@ export function buildPreviewScene(
     input.mainScreen,
   );
   const boardGrid = createBoardGrid(boardSpec.cols, boardSpec.rows);
-  const boardLayoutHints = createBoardLayoutHints(boardSpec, input.mainScreen);
+  const boardLayoutHints = createBoardLayoutHints(
+    boardSpec,
+    input.shellSize,
+    screenPlacement,
+    portPlacements,
+  );
   const placedModules = placeModules(
     boardGrid,
     boardSpec,
@@ -294,11 +303,6 @@ export function buildPreviewScene(
       },
     };
   });
-
-  const screenPlacement = input.mainScreen
-    ? placeMainScreen(input.mainScreen, input.shellSize).item
-    : null;
-  const portPlacements = placePorts(input.ports ?? [], input.shellSize);
 
   const screenNodes: SceneNode[] = screenPlacement
     ? [
