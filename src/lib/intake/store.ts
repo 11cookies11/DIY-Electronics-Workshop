@@ -1,10 +1,15 @@
-import { createEmptyState, type IntakeAgentState } from "./types";
+import {
+  createEmptyState,
+  type IntakeAgentOutput,
+  type IntakeAgentState,
+} from "./types";
 
-type SessionRecord = {
+export type SessionRecord = {
   id: string;
   createdAt: number;
   updatedAt: number;
   state: IntakeAgentState;
+  lastOutput?: IntakeAgentOutput;
 };
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 6;
@@ -64,4 +69,27 @@ export function saveSessionState(sessionId: string, state: IntakeAgentState) {
   });
 
   return state;
+}
+
+export function saveSessionOutput(
+  sessionId: string,
+  output: IntakeAgentOutput,
+) {
+  const store = getStore();
+  const previous = store.get(sessionId);
+
+  store.set(sessionId, {
+    id: sessionId,
+    createdAt: previous?.createdAt ?? Date.now(),
+    updatedAt: Date.now(),
+    state: output.state,
+    lastOutput: output,
+  });
+
+  return output;
+}
+
+export function getSessionRecord(sessionId: string) {
+  cleanupExpiredSessions();
+  return getStore().get(sessionId) ?? null;
 }

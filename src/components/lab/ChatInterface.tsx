@@ -82,6 +82,7 @@ export function ChatInterface({
   const [isMinimized, setIsMinimized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { mode } = useTheme();
   const isDark = mode === "dark";
@@ -138,9 +139,11 @@ export function ChatInterface({
         sessionId: string;
         customer_reply?: string;
         preview_input_draft?: PreviewDraft;
+        handoffUrl?: string | null;
       };
 
       setSessionId(payload.sessionId);
+      setHandoffUrl(payload.handoffUrl ?? null);
       if (payload.preview_input_draft) {
         onPreviewDraft?.(payload.preview_input_draft);
       }
@@ -401,6 +404,22 @@ export function ChatInterface({
                 </button>
               </div>
               <div className="mt-2 text-center">
+                {handoffUrl ? (
+                  <div className="mb-2">
+                    <a
+                      href={handoffUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`pointer-events-auto inline-flex rounded-full border px-3 py-1 text-[10px] transition-all ${
+                        isDark
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                      }`}
+                    >
+                      查看实验室交接单
+                    </a>
+                  </div>
+                ) : null}
                 <span
                   className={`font-mono text-[7px] uppercase tracking-[0.3em] ${
                     isDark ? "text-white/10" : "text-slate-300"

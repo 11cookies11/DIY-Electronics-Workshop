@@ -269,7 +269,10 @@ function buildLabHandoff(
   risks: string[],
   previewDraft?: PreviewDraft,
 ): LabHandoff | undefined {
-  if (!confirmed.device_type || !confirmed.core_features?.length) {
+  if (
+    !confirmed.device_type ||
+    (!confirmed.core_features?.length && !previewDraft)
+  ) {
     return undefined;
   }
 
@@ -278,7 +281,10 @@ function buildLabHandoff(
     project_type: confirmed.device_type,
     use_case: confirmed.use_case ?? "待补充",
     target_users: confirmed.target_users,
-    core_features: confirmed.core_features,
+    core_features:
+      confirmed.core_features?.length
+        ? confirmed.core_features
+        : ["基于当前已确认硬件要素生成初步方案"],
     hardware_requirements: {
       screen: confirmed.screen,
       controls: confirmed.controls,
