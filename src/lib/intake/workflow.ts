@@ -2,6 +2,7 @@ import type { PreviewInput } from "@/engine/preview/types";
 import { detectConversationBaseMode } from "./conversation-base";
 import { planReplyOrchestration } from "./orchestration";
 import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
+import { decideReadinessFlow } from "./readiness";
 import { analyzeRequirementReasoning } from "./reasoning";
 import { isSecondMeChatConfigured, requestSecondMeChatReply } from "./secondme-client";
 import { routeIntakeSkills } from "./skills";
@@ -525,19 +526,6 @@ export async function runIntakeWorkflow(
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
-  let workflowState: IntakeAgentState["workflow_state"] =
-    orchestration.transitionMode === "stay_conversational"
-      ? "collecting"
-      : previewDraft
-        ? "preview_ready"
-        : "clarifying";
-  let nextAction: IntakeNextAction = "ask_more";
-
-  if (route.active_skill === "preview-promoter" && previewDraft) {
-    workflowState = "preview_generated";
-    nextAction = "generate_preview";
-  }
-
   const requirementSummary = buildRequirementSummary(confirmed);
   const labHandoff = buildLabHandoff(
     confirmed,
@@ -546,19 +534,27 @@ export async function runIntakeWorkflow(
     risks,
     previewDraft,
   );
+  const readiness = decideReadinessFlow({
+    message,
+    previewDraft,
+    labHandoff,
+    previousWorkflowState:
+      orchestration.transitionMode === "stay_conversational" ? "collecting" : state.workflow_state,
+    activeSkill: route.active_skill,
+    unknowns,
+  });
 
-  if (route.active_skill === "handoff-promoter" && labHandoff) {
-    workflowState = "handoff_ready";
-    nextAction = "prepare_handoff";
-  }
+  const workflowState: IntakeAgentState["workflow_state"] =
+    orchestration.transitionMode === "stay_conversational"
+      ? "collecting"
+      : readiness.workflowState;
+  const nextAction: IntakeNextAction =
+    orchestration.transitionMode === "stay_conversational"
+      ? "ask_more"
+      : readiness.nextAction;
 
-  const exposedPreviewDraft =
-    nextAction === "generate_preview" ||
-    nextAction === "prepare_handoff"
-      ? previewDraft
-      : undefined;
-
-  const exposedLabHandoff = nextAction === "prepare_handoff" ? labHandoff : undefined;
+  const exposedPreviewDraft = readiness.exposePreview ? previewDraft : undefined;
+  const exposedLabHandoff = readiness.exposeHandoff ? labHandoff : undefined;
 
   const customerReply =
     (await buildModelCustomerReply(request, {
