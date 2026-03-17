@@ -54,6 +54,14 @@ export type PreviewDraft = {
   input: PreviewInput;
 };
 
+export type IntakeSuggestion = {
+  id: string;
+  category: "interaction" | "power" | "connectivity" | "sensor" | "structure" | "module";
+  title: string;
+  detail: string;
+  reason: string;
+};
+
 export type LabHandoff = {
   customer_summary: string;
   project_type: string;
@@ -87,6 +95,7 @@ export type IntakeAgentState = {
   confirmed: ConfirmedRequirement;
   unknowns: string[];
   risks: string[];
+  suggestions: IntakeSuggestion[];
   assumptions: string[];
   preview_input_draft?: PreviewDraft;
   lab_handoff?: LabHandoff;
@@ -100,6 +109,7 @@ export type IntakeAgentOutput = {
   confirmed: ConfirmedRequirement;
   unknowns: string[];
   risks: string[];
+  suggestions: IntakeSuggestion[];
   preview_input_draft?: PreviewDraft;
   lab_handoff?: LabHandoff;
   next_action: IntakeNextAction;
@@ -145,6 +155,7 @@ export function createEmptyState(): IntakeAgentState {
     confirmed: {},
     unknowns: [],
     risks: [],
+    suggestions: [],
     assumptions: [],
   };
 }
