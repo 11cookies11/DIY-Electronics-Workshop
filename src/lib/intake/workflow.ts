@@ -7,6 +7,7 @@ import { decideReadinessFlow } from "./readiness";
 import { buildReminderBundle } from "./reminders";
 import { analyzeRequirementReasoning } from "./reasoning";
 import { isSecondMeChatConfigured, requestSecondMeChatReply } from "./secondme-client";
+import { parseConversationSignals } from "./signals";
 import { routeIntakeSkills } from "./skills";
 import { buildIntakeSuggestions } from "./suggestions";
 import { buildStructuredIntakeOutput } from "./state-pipeline";
@@ -31,6 +32,35 @@ function unique(values: string[]) {
 
 function mergeArrays(left?: string[], right?: string[]) {
   return unique([...(left ?? []), ...(right ?? [])]);
+}
+
+function mergeOrReplaceArrays(
+  left: string[] | undefined,
+  right: string[],
+  shouldReplace: boolean,
+) {
+  if (!right.length) return left;
+  return shouldReplace ? unique(right) : mergeArrays(left, right);
+}
+
+function preferOverride<T>(
+  current: T | undefined,
+  candidate: T | undefined,
+  shouldReplace: boolean,
+) {
+  if (shouldReplace && candidate !== undefined) return candidate;
+  return current ?? candidate;
+}
+
+function uniqueModules(modules: PreviewInput["modules"]) {
+  const seen = new Set<string>();
+
+  return modules.filter((entry) => {
+    const id = typeof entry === "string" ? entry : entry.id;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
 }
 
 function hasPattern(message: string, patterns: RegExp[]) {
@@ -77,6 +107,27 @@ function extractRecentAssistantQuestion(history: ConversationTurn[] = []) {
     ?.content;
 }
 
+function extractCorrectionReplacementText(message: string) {
+  const patterns = [
+    /不是.*?而是(.+)/,
+    /不是.*?[，, ]?是(.+)/,
+    /改成(.+)/,
+    /换成(.+)/,
+    /应该是(.+)/,
+    /准确地说(.+)/,
+    /我说的是(.+)/,
+  ];
+
+  for (const pattern of patterns) {
+    const matched = message.match(pattern);
+    if (matched?.[1]?.trim()) {
+      return matched[1].trim();
+    }
+  }
+
+  return undefined;
+}
+
 function extractDeviceMentions(text?: string) {
   if (!text) return [];
 
@@ -106,6 +157,13 @@ function extractButtonPreferences(text?: string) {
       [/(方向|上下左右)/, "方向键"],
     ]),
   );
+}
+
+function inferTargetUsers(message: string) {
+  if (hasPattern(message, [/(自己用|我自己用|个人使用)/])) return "个人用户";
+  if (hasPattern(message, [/(家人|全家|家里人)/])) return "家庭成员";
+  if (hasPattern(message, [/(团队|同事|办公室)/])) return "团队内部";
+  return undefined;
 }
 
 function inferUseCaseFromTargetDevices(targetDevices: string[]) {
@@ -171,6 +229,7 @@ function mergeContextualAnswer(args: {
   message: string;
   current: ConfirmedRequirement;
   recentQuestion?: string;
+  shouldReplace?: boolean;
 }) {
   const targetDevicesFromMessage = extractDeviceMentions(args.message);
   const targetDevicesFromQuestion =
@@ -199,22 +258,43 @@ function mergeContextualAnswer(args: {
   );
 
   return {
-    target_devices: mergeArrays(
+    target_devices: mergeOrReplaceArrays(
       args.current.target_devices,
       unique([...targetDevicesFromMessage, ...targetDevicesFromQuestion]),
+      Boolean(args.shouldReplace),
     ),
-    button_preferences: mergeArrays(
+    button_preferences: mergeOrReplaceArrays(
       args.current.button_preferences,
       unique([...buttonPreferencesFromMessage, ...buttonPreferencesFromQuestion]),
+      Boolean(args.shouldReplace),
     ),
-    interaction_layout:
-      args.current.interaction_layout ?? inferInteractionLayout(args.message),
-    placement: args.current.placement ?? inferPlacement(args.message),
-    portability: args.current.portability ?? inferPortability(args.message),
-    use_case: args.current.use_case ?? useCaseFromDevices,
-    size: args.current.size ?? delegatedSizePreference,
-    screen_size_preference:
-      args.current.screen_size_preference ?? delegatedScreenSizePreference,
+    interaction_layout: preferOverride(
+      args.current.interaction_layout,
+      inferInteractionLayout(args.message),
+      Boolean(args.shouldReplace),
+    ),
+    placement: preferOverride(
+      args.current.placement,
+      inferPlacement(args.message),
+      Boolean(args.shouldReplace),
+    ),
+    portability: preferOverride(
+      args.current.portability,
+      inferPortability(args.message),
+      Boolean(args.shouldReplace),
+    ),
+    use_case: preferOverride(args.current.use_case, useCaseFromDevices, Boolean(args.shouldReplace)),
+    size: preferOverride(args.current.size, delegatedSizePreference, Boolean(args.shouldReplace)),
+    screen_size_preference: preferOverride(
+      args.current.screen_size_preference,
+      delegatedScreenSizePreference,
+      Boolean(args.shouldReplace),
+    ),
+    target_users: preferOverride(
+      args.current.target_users,
+      inferTargetUsers(args.message),
+      Boolean(args.shouldReplace),
+    ),
   } satisfies Partial<ConfirmedRequirement>;
 }
 
@@ -223,13 +303,16 @@ function deriveConfirmed(
   current: ConfirmedRequirement,
   history: ConversationTurn[] = [],
 ): ConfirmedRequirement {
-  const connectivity = collectKeywords(message, [
+  const signals = parseConversationSignals(message);
+  const replacementText = signals.isCorrection ? extractCorrectionReplacementText(message) : undefined;
+  const extractionText = replacementText ?? message;
+  const connectivity = collectKeywords(extractionText, [
     [/蓝牙/i, "蓝牙"],
     [/(wi-?fi|wifi)/i, "Wi-Fi"],
     [/(4g|lte)/i, "4G"],
     [/gps/i, "GPS"],
   ]);
-  const sensors = collectKeywords(message, [
+  const sensors = collectKeywords(extractionText, [
     [/imu/i, "IMU"],
     [/温度/, "温度传感器"],
     [/湿度/, "湿度传感器"],
@@ -237,23 +320,23 @@ function deriveConfirmed(
     [/(摄像头|相机)/, "摄像头"],
     [/麦克风/, "麦克风"],
   ]);
-  const controls = collectKeywords(message, [
+  const controls = collectKeywords(extractionText, [
     [/(按钮|按键)/, "按钮"],
     [/旋钮/, "旋钮"],
-    [/(触控|触摸)/, "触控"],
+    [/(触控|触摸|触屏)/, "触控"],
     [/语音/, "语音"],
   ]);
-  const ports = collectKeywords(message, [
+  const ports = collectKeywords(extractionText, [
     [/(usb-?c|type-?c)/i, "USB-C"],
     [/(音频|耳机)/, "音频口"],
     [/(电源口|dc)/i, "电源口"],
     [/(网口|rj45)/i, "RJ45"],
   ]);
-  const power = collectKeywords(message, [
+  const power = collectKeywords(extractionText, [
     [/(电池|充电)/, "电池供电"],
     [/(外接供电|适配器)/, "外接供电"],
   ]);
-  const coreFeatures = collectKeywords(message, [
+  const coreFeatures = collectKeywords(extractionText, [
     [/(显示|屏幕)/, "显示"],
     [/(遥控|红外)/, "红外控制"],
     [/(监测|检测|采集)/, "数据采集"],
@@ -266,40 +349,52 @@ function deriveConfirmed(
   const recentQuestion = extractRecentAssistantQuestion(history);
   const useCase =
     current.use_case ??
-    message.match(/用于([^，。；]+)/)?.[1]?.trim() ??
-    message.match(/给([^，。；]+)用/)?.[1]?.trim() ??
+    extractionText.match(/用于([^，。；]+)/)?.[1]?.trim() ??
+    extractionText.match(/给([^，。；]+)用/)?.[1]?.trim() ??
     (hasPattern(normalizedMessage, [/(家里用|家用|家庭用)/]) ? "家庭环境" : undefined) ??
     (hasPattern(normalizedMessage, [/(出门用|外出用|随身用|在外面用)/]) ? "外出环境" : undefined) ??
     (hasPattern(normalizedMessage, [/(酒店|宾馆|民宿)/]) ? "酒店环境" : undefined) ??
     (hasPattern(normalizedMessage, [/(办公室|办公桌|工位)/]) ? "办公环境" : undefined);
   const contextualAnswer = mergeContextualAnswer({
-    message,
+    message: extractionText,
     current,
     recentQuestion,
+    shouldReplace: signals.isCorrection,
   });
+  const screenCandidate =
+    hasPattern(extractionText, [/(屏幕|显示|触控|触摸|触屏)/])
+      ? hasPattern(extractionText, [/(触控|触摸|触屏)/])
+        ? "触控屏"
+        : "显示屏"
+      : undefined;
+  const normalizedControls =
+    screenCandidate === "触控屏" ? mergeArrays(controls, ["触控"]) : controls;
 
   return {
     ...current,
-    device_type: current.device_type ?? inferDeviceType(message),
+    device_type: preferOverride(
+      current.device_type,
+      inferDeviceType(extractionText),
+      signals.isCorrection,
+    ),
     use_case: contextualAnswer.use_case ?? useCase,
+    target_users: contextualAnswer.target_users ?? current.target_users,
     target_devices: contextualAnswer.target_devices,
-    screen:
-      current.screen ??
-      (hasPattern(message, [/(屏幕|显示|触控|触摸|触屏)/])
-        ? hasPattern(message, [/(触控|触摸)/])
-          ? "触控屏"
-          : "显示屏"
-        : undefined),
+    screen: preferOverride(current.screen, screenCandidate, signals.isCorrection),
     screen_size_preference: contextualAnswer.screen_size_preference,
-    controls: mergeArrays(current.controls, controls),
+    controls: mergeOrReplaceArrays(current.controls, normalizedControls, signals.isCorrection),
     button_preferences: contextualAnswer.button_preferences,
     interaction_layout: contextualAnswer.interaction_layout,
-    sensors: mergeArrays(current.sensors, sensors),
-    connectivity: mergeArrays(current.connectivity, connectivity),
-    ports: mergeArrays(current.ports, ports),
-    power: mergeArrays(current.power, power),
+    sensors: mergeOrReplaceArrays(current.sensors, sensors, signals.isCorrection),
+    connectivity: mergeOrReplaceArrays(current.connectivity, connectivity, signals.isCorrection),
+    ports: mergeOrReplaceArrays(current.ports, ports, signals.isCorrection),
+    power: mergeOrReplaceArrays(current.power, power, signals.isCorrection),
     core_features: mergeArrays(current.core_features, coreFeatures),
-    size: current.size ?? extractApproxSize(message) ?? contextualAnswer.size,
+    size: preferOverride(
+      current.size,
+      extractApproxSize(extractionText) ?? contextualAnswer.size,
+      signals.isCorrection,
+    ),
     placement: contextualAnswer.placement,
     portability: contextualAnswer.portability,
   };
@@ -410,9 +505,39 @@ function mapConfirmedToPreviewDraft(
   const assumptions = [...readiness.assumptions];
   const modules: PreviewInput["modules"] = [];
   const ports: NonNullable<PreviewInput["ports"]> = [];
+  const shellSize = { ...base.shellSize };
+  let boardGrid = { cols: base.cols, rows: base.rows };
 
   if (confirmed.screen) {
     assumptions.push("默认屏幕位于前壳");
+  }
+
+  if (confirmed.device_type === "红外遥控器") {
+    if (confirmed.screen_size_preference === "比智能手表更大") {
+      shellSize.width += 4;
+      shellSize.height += 6;
+      assumptions.push("按更大的屏幕偏好，机身正面做了加宽加长");
+    } else if (confirmed.screen_size_preference === "名片大小") {
+      shellSize.width += 8;
+      shellSize.height = Math.max(shellSize.height - 10, 132);
+      assumptions.push("按名片级屏幕偏好，机身改成更扁宽的比例");
+    }
+
+    if (confirmed.interaction_layout === "屏幕与按键并排") {
+      shellSize.width += 14;
+      shellSize.height = Math.max(shellSize.height - 18, 126);
+      boardGrid = { cols: base.cols + 1, rows: base.rows };
+      assumptions.push("按屏幕与按键并排布局，正面改成更宽的横向排布");
+    }
+
+    if (confirmed.portability === "居家常驻，偶尔手持") {
+      shellSize.depth += 2;
+      assumptions.push("按居家常驻场景，内部给电池和握持厚度留了更多余量");
+    } else if (confirmed.portability === "便携随身") {
+      shellSize.height = Math.max(shellSize.height - 14, 120);
+      shellSize.depth = Math.max(shellSize.depth - 2, 14);
+      assumptions.push("按随身便携方向，机身被收紧成更短更薄的比例");
+    }
   }
 
   const useHighCore =
@@ -422,7 +547,17 @@ function mapConfirmedToPreviewDraft(
   modules.push(useHighCore ? "esp32_s3" : "esp32");
   assumptions.push(`默认使用 ${useHighCore ? "ESP32-S3" : "ESP32"} 作为主控`);
 
-  if (confirmed.power?.includes("电池供电")) modules.push("battery");
+  if (confirmed.power?.includes("电池供电")) {
+    modules.push({
+      id: "battery",
+      sizeOverride:
+        confirmed.portability === "居家常驻，偶尔手持"
+          ? { width: 30, height: 12, depth: 16 }
+          : confirmed.portability === "便携随身"
+            ? { width: 22, height: 9, depth: 12 }
+            : { width: 26, height: 10, depth: 14 },
+    });
+  }
   if (confirmed.connectivity?.includes("蓝牙")) modules.push("bluetooth");
   if (confirmed.connectivity?.includes("Wi-Fi")) modules.push("wifi");
   if (confirmed.connectivity?.includes("GPS")) modules.push("gps");
@@ -431,12 +566,28 @@ function mapConfirmedToPreviewDraft(
   if (confirmed.sensors?.includes("麦克风")) modules.push("microphone_array");
 
   if (confirmed.controls?.includes("按钮")) {
-    modules.push("button_array");
+    modules.push({
+      id: "button_array",
+      sizeOverride:
+        confirmed.button_preferences?.length && confirmed.button_preferences.length >= 3
+          ? { width: 28, height: 10, depth: 14 }
+          : { width: 20, height: 8, depth: 12 },
+    });
     ports.push({
       face: confirmed.device_type === "红外遥控器" ? "front" : "left",
       type: "button_cutout",
-      sizeMm: { width: 8, height: 8, depth: 4 },
+      sizeMm:
+        confirmed.interaction_layout === "屏幕与按键并排"
+          ? { width: 12, height: 24, depth: 4 }
+          : confirmed.button_preferences?.length && confirmed.button_preferences.length >= 3
+            ? { width: 10, height: 18, depth: 4 }
+            : { width: 8, height: 8, depth: 4 },
     });
+    assumptions.push(
+      confirmed.button_preferences?.length
+        ? `正面按键区按 ${confirmed.button_preferences.join("、")} 这组常用功能键预留`
+        : "正面按键区按常用功能键做了基础预留",
+    );
   }
 
   if (confirmed.ports?.includes("USB-C")) {
@@ -471,10 +622,10 @@ function mapConfirmedToPreviewDraft(
 
   const input: PreviewInput = {
     shell: base.shell,
-    shellSize: base.shellSize,
+    shellSize,
     board: {
       placement: "center",
-      grid: { cols: base.cols, rows: base.rows },
+      grid: boardGrid,
     },
     mainScreen: confirmed.screen
         ? {
@@ -484,6 +635,9 @@ function mapConfirmedToPreviewDraft(
             confirmed.device_type === "红外遥控器" &&
             confirmed.screen_size_preference === "比智能手表更大"
               ? { width: 30, height: 78, depth: 4 }
+              : confirmed.device_type === "红外遥控器" &&
+                confirmed.screen_size_preference === "名片大小"
+                ? { width: 38, height: 62, depth: 4 }
               : confirmed.device_type === "红外遥控器"
               ? { width: 22, height: 68, depth: 4 }
               : confirmed.device_type === "智能手表"
@@ -492,7 +646,7 @@ function mapConfirmedToPreviewDraft(
         }
       : undefined,
     ports: ports.length ? ports : undefined,
-    modules: unique(modules.map(String)),
+    modules: uniqueModules(modules),
   };
 
   return {
