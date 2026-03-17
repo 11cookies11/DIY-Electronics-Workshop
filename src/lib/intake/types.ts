@@ -147,6 +147,7 @@ export type IntakeSkillRoute = {
   active_skill: IntakeSkillId;
   matched_skills: IntakeSkillId[];
   use_secondme: boolean;
+  reason: string;
 };
 
 export function createEmptyState(): IntakeAgentState {

@@ -442,6 +442,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
     confirmed: draft.confirmed,
     unknowns: draft.unknowns,
     previewDraft: draft.previewDraft,
+    history: request.history,
   });
 
   const prompt = [
@@ -451,6 +452,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
         conversation_mode: detectConversationBaseMode(request.message),
         active_skill: route.active_skill,
         matched_skills: route.matched_skills,
+        routing_reason: route.reason,
         confirmed: draft.confirmed,
         unknowns: draft.unknowns,
         reasoning_profile: draft.reasoning.profile,
@@ -515,6 +517,7 @@ export async function runIntakeWorkflow(
     confirmed,
     unknowns,
     previewDraft,
+    history,
   });
   const orchestration = planReplyOrchestration({
     message,
