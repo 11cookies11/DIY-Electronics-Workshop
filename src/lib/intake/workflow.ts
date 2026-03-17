@@ -392,36 +392,44 @@ function buildFallbackCustomerReply(args: {
   unknowns?: string[];
   suggestions?: string[];
   recommendationCards?: IntakeSuggestion[];
+  orchestration?: ReturnType<typeof planReplyOrchestration>;
 }) {
   const summary = buildRequirementSummary(args.confirmed);
+  const focus = args.orchestration?.singleFocus ?? args.unknowns?.[0];
 
   if (args.nextAction === "generate_preview" && args.previewDraft) {
     return summary
-      ? "我已经可以先按这个方向给你生成一版 3D 草案了。"
-      : "我已经可以先给你生成一版 3D 草案了。";
+      ? "好呀，我先按我们刚刚理出来的方向把 3D 草案立起来了。主舞台已经切到新方案，你可以直接看看结构顺不顺眼。"
+      : "好呀，我先把 3D 草案立起来了。你可以先看看主舞台里的结构方向顺不顺眼。";
   }
 
   if (args.nextAction === "prepare_handoff" || args.nextAction === "handoff_to_lab") {
-    return "这边已经可以整理实验室交接单了。";
+    return args.unknowns?.length
+      ? `我先把能交给实验室的内容收好了，像${args.unknowns.slice(0, 2).join("、")}这类小项我们后面还能继续补，不过现在已经可以先整理交接单。`
+      : "我先把要交给实验室的内容整理好了，你可以直接打开交接单看看。";
   }
 
   if (args.previewDraft && args.unknowns?.length) {
-    return `我大概已经能先拼出一版方向了，不过还差${args.unknowns.slice(0, 2).join("、")}。你要是愿意，我也可以先给你一点建议，我们再决定要不要出 3D 草案。`;
+    return `我已经能先拼出一版方向了。现在最想再确认一下${focus ?? args.unknowns.slice(0, 2).join("、")}，这样后面的预览会更稳一点。`;
   }
 
   if (args.recommendationCards?.length) {
-    return `我先给你一个方向：${args.recommendationCards[0]?.detail}`;
+    return `我先帮你收一个方向：${args.recommendationCards[0]?.detail}`;
   }
 
   if (args.suggestions?.length) {
     return `我先给你一个小建议：${args.suggestions[0]}`;
   }
 
-  if (summary) {
-    return "我先按你刚才说的方向继续往下收。";
+  if (summary && focus) {
+    return `我先把你刚才那条线接住了。接下来我想先确认一下${focus}，这样我就不容易把方案带偏。`;
   }
 
-  return "你继续说，我先听着。";
+  if (summary) {
+    return "我先听明白一个大概方向了。你继续往下说就好，我会边听边帮你收。";
+  }
+
+  return "嗯，我在听。你想到哪儿说到哪儿就好，我来帮你慢慢理。";
 }
 
 async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
@@ -482,6 +490,8 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
       "不要把自己说得像表单机器人。",
       "如果只是闲聊或寒暄，就先接住话，不要急着办事。",
       "如果需要追问，通常只问一个最关键的问题。",
+      "如果已经可以 preview 或 handoff，先给用户一个被接住、被整理好的感觉，再邀请他进入下一步。",
+      "尽量少用生硬的状态播报句式，比如“当前已进入”“现已生成”。",
       "回复尽量控制在 2 到 5 句。",
     ].join("\n"),
   ].join("\n\n");
@@ -597,6 +607,7 @@ export async function runIntakeWorkflow(
       unknowns,
       suggestions: reasoning.suggestions,
       recommendationCards: suggestions,
+      orchestration,
     });
 
   const structuredOutput = buildStructuredIntakeOutput({

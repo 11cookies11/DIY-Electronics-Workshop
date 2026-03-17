@@ -46,6 +46,14 @@ type StageFeedback = {
   actionHref?: string;
 };
 
+type ContextGuide = {
+  eyebrow: string;
+  title: string;
+  detail: string;
+  placeholder: string;
+  actions: Array<{ label: string; prompt: string }>;
+};
+
 const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
   { label: "介绍实验室", prompt: "介绍一下实验室" },
   { label: "看看当前方案", prompt: "介绍一下当前方案" },
@@ -134,6 +142,83 @@ export function ChatInterface({
     setDebugInfo(null);
     setStageFeedback(null);
   }, [activePresetLabel, isConnected, visitorName]);
+
+  const contextGuide = useMemo<ContextGuide>(() => {
+    if (!debugInfo || debugInfo.workflow_state === "collecting") {
+      return {
+        eyebrow: "front desk",
+        title: "先把想法接住",
+        detail: "你可以先随便聊设备方向、使用场景，或者先让我介绍实验室能力。",
+        placeholder: "先随便聊聊想法，或者直接告诉我你想做什么设备...",
+        actions: QUICK_ACTIONS,
+      };
+    }
+
+    if (debugInfo.workflow_state === "clarifying") {
+      const focus = debugInfo.single_focus ?? debugInfo.unknowns[0] ?? "关键需求";
+      return {
+        eyebrow: "clarifying",
+        title: `先补齐 ${focus}`,
+        detail: "我会优先收一个最关键的信息点，避免把对话聊成问卷。",
+        placeholder: `补充一下${focus}，比如场景、交互、供电或核心功能...`,
+        actions: [
+          { label: `补充${focus}`, prompt: `我来补充一下${focus}` },
+          { label: "说下使用场景", prompt: "我补充一下使用场景" },
+          { label: "说下供电方式", prompt: "我补充一下供电方式" },
+        ],
+      };
+    }
+
+    if (debugInfo.workflow_state === "preview_ready") {
+      return {
+        eyebrow: "preview ready",
+        title: "已经可以出一版草案",
+        detail: "信息基本够了，现在更适合确认是否生成 3D preview，而不是继续分散追问。",
+        placeholder: "如果你想继续，就直接说“可以生成预览”...",
+        actions: [
+          { label: "生成预览", prompt: "可以，生成预览吧" },
+          { label: "先讲讲方向", prompt: "先讲讲你现在理解的方案方向" },
+          { label: "我再补一点", prompt: "我再补充一点需求" },
+        ],
+      };
+    }
+
+    if (debugInfo.workflow_state === "preview_generated") {
+      return {
+        eyebrow: "preview active",
+        title: "草案已经在主舞台里",
+        detail: "现在适合看结构方向、提修改意见，或者直接推进实验室交接。",
+        placeholder: "你可以让我调整方案，或者直接说整理交接单...",
+        actions: [
+          { label: "整理交接单", prompt: "那就整理交接单吧" },
+          { label: "调整方案", prompt: "我想再调整一下方案" },
+          { label: "解释结构", prompt: "你介绍一下这个方案结构" },
+        ],
+      };
+    }
+
+    if (debugInfo.workflow_state === "handoff_ready") {
+      return {
+        eyebrow: "handoff ready",
+        title: "已经进入实验室交接阶段",
+        detail: "核心内容已经收好，现在更适合确认交接范围或补最后几个小缺口。",
+        placeholder: "可以继续补充细节，或者直接打开交接单查看...",
+        actions: [
+          { label: "打开交接单", prompt: "我先看一下交接单" },
+          { label: "补一点细节", prompt: "我再补充一点细节" },
+          { label: "说明风险", prompt: "你把当前风险再讲清楚一点" },
+        ],
+      };
+    }
+
+    return {
+      eyebrow: "front desk",
+      title: "继续往下推进",
+      detail: "你可以继续补充需求，或者让我先帮你总结当前方向。",
+      placeholder: "继续补充你的想法，或者让我先总结当前方向...",
+      actions: QUICK_ACTIONS,
+    };
+  }, [debugInfo]);
 
   function buildStageFeedback(args: {
     nextAction?: IntakeNextAction;
@@ -499,8 +584,37 @@ export function ChatInterface({
             ) : null}
 
             <div className="border-b border-black/5 px-4 py-3 dark:border-white/10">
+              <div
+                className={`mb-3 rounded-sm border px-3 py-2.5 ${
+                  isDark
+                    ? "border-white/8 bg-white/[0.025]"
+                    : "border-slate-200 bg-slate-50/85"
+                }`}
+              >
+                <div
+                  className={`font-mono text-[8px] uppercase tracking-[0.24em] ${
+                    isDark ? "text-white/35" : "text-slate-400"
+                  }`}
+                >
+                  {contextGuide.eyebrow}
+                </div>
+                <div
+                  className={`mt-1 text-[11px] font-medium ${
+                    isDark ? "text-white/85" : "text-slate-900"
+                  }`}
+                >
+                  {contextGuide.title}
+                </div>
+                <div
+                  className={`mt-1 text-[10px] leading-5 ${
+                    isDark ? "text-white/55" : "text-slate-600"
+                  }`}
+                >
+                  {contextGuide.detail}
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2">
-                {QUICK_ACTIONS.map((action) => (
+                {contextGuide.actions.map((action) => (
                   <button
                     key={action.label}
                     onClick={() => handleSend(action.prompt)}
@@ -598,7 +712,7 @@ export function ChatInterface({
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => event.key === "Enter" && handleSend()}
-                  placeholder="先随便聊聊想法，或者直接告诉我你想做什么设备..."
+                  placeholder={contextGuide.placeholder}
                   className={`w-full rounded-sm border py-2.5 pl-4 pr-12 text-[11px] focus:outline-none ${
                     isDark
                       ? "border-white/10 bg-black/40 text-white placeholder:text-white/20 focus:border-emerald-500/40"
