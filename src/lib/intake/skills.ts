@@ -1,3 +1,4 @@
+import { parseConversationSignals } from "./signals";
 import type {
   ConfirmedRequirement,
   IntakeAgentState,
@@ -25,28 +26,6 @@ function hasPattern(message: string, patterns: RegExp[]) {
   return patterns.some((pattern) => pattern.test(message));
 }
 
-function wantsPreview(message: string) {
-  return hasPattern(message, [
-    /(生成|出一版|来一版|搭一版|做一版).*(预览|草案|方案|模型|3d)/i,
-    /(看看|看下|想看).*(预览|草案|方案|模型|3d)/i,
-    /(直接|现在).*(生成|出).*(预览|草案|方案|模型|3d)/i,
-  ]);
-}
-
-function wantsHandoff(message: string) {
-  return hasPattern(message, [
-    /(交接|交给实验室|整理交接单|提交实验室)/,
-    /(继续推进|往下走|开始评估).*(实验室|交接)/,
-  ]);
-}
-
-function isAffirmative(message: string) {
-  return hasPattern(message, [
-    /^(可以|好|好的|好呀|好啊|行|行啊|来吧|开始吧|继续吧|就这样吧|没问题|可以的|那就这样|那就开始吧)[！。呀啊吧啦嘛？?]*$/i,
-    /(那就|那你就|那麻烦你).*(开始|继续|生成|整理|推进)/,
-  ]);
-}
-
 const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "capability-intro",
@@ -69,20 +48,30 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "handoff-promoter",
     description: "在交接单可用时把对话推进到 handoff 阶段",
-    match: ({ message, state, previewDraft, unknowns }) =>
-      Boolean(previewDraft) &&
-      unknowns.length <= 2 &&
-      (wantsHandoff(message) ||
-        (state.workflow_state === "handoff_ready" && isAffirmative(message))),
+    match: ({ message, state, previewDraft, unknowns }) => {
+      const signals = parseConversationSignals(message);
+      return (
+        Boolean(previewDraft) &&
+        unknowns.length <= 2 &&
+        !signals.isNegative &&
+        (signals.wantsHandoff ||
+          (state.workflow_state === "handoff_ready" && signals.isAffirmative))
+      );
+    },
     useSecondMe: true,
   },
   {
     id: "preview-promoter",
     description: "在预览草案已可生成时把对话推进到 preview 阶段",
-    match: ({ message, state, previewDraft }) =>
-      Boolean(previewDraft) &&
-      (wantsPreview(message) ||
-        (state.workflow_state === "preview_ready" && isAffirmative(message))),
+    match: ({ message, state, previewDraft }) => {
+      const signals = parseConversationSignals(message);
+      return (
+        Boolean(previewDraft) &&
+        !signals.isNegative &&
+        (signals.wantsPreview ||
+          (state.workflow_state === "preview_ready" && signals.isAffirmative))
+      );
+    },
     useSecondMe: true,
   },
   {
