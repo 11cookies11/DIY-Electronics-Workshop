@@ -1,5 +1,6 @@
 import type { PreviewInput } from "@/engine/preview/types";
 import { detectConversationBaseMode } from "./conversation-base";
+import { planReplyOrchestration } from "./orchestration";
 import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
 import { analyzeRequirementReasoning } from "./reasoning";
 import { isSecondMeChatConfigured, requestSecondMeChatReply } from "./secondme-client";
@@ -426,6 +427,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   previewDraft?: PreviewDraft;
   reasoning: ReturnType<typeof analyzeRequirementReasoning>;
   suggestions: IntakeSuggestion[];
+  orchestration: ReturnType<typeof planReplyOrchestration>;
 }) {
   if (!isSecondMeChatConfigured()) {
     return null;
@@ -453,6 +455,9 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
         reasoning_suggestions: draft.reasoning.suggestions,
         reasoning_risks: draft.reasoning.risks,
         recommendation_cards: draft.suggestions,
+        reply_priorities: draft.orchestration.priorities,
+        transition_mode: draft.orchestration.transitionMode,
+        single_focus: draft.orchestration.singleFocus,
         next_action: draft.nextAction,
         preview_ready: Boolean(draft.previewDraft),
       },
@@ -505,6 +510,14 @@ export async function runIntakeWorkflow(
     unknowns,
     previewDraft,
   });
+  const orchestration = planReplyOrchestration({
+    message,
+    confirmed,
+    unknowns,
+    nextAction: "ask_more",
+    route,
+    previewDraft,
+  });
 
   const risks = unique([
     ...state.risks,
@@ -512,9 +525,12 @@ export async function runIntakeWorkflow(
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
-  let workflowState: IntakeAgentState["workflow_state"] = previewDraft
-    ? "preview_ready"
-    : "clarifying";
+  let workflowState: IntakeAgentState["workflow_state"] =
+    orchestration.transitionMode === "stay_conversational"
+      ? "collecting"
+      : previewDraft
+        ? "preview_ready"
+        : "clarifying";
   let nextAction: IntakeNextAction = "ask_more";
 
   if (route.active_skill === "preview-promoter" && previewDraft) {
@@ -552,6 +568,7 @@ export async function runIntakeWorkflow(
       previewDraft: exposedPreviewDraft ?? previewDraft,
       reasoning,
       suggestions,
+      orchestration,
     })) ??
     buildFallbackCustomerReply({
       confirmed,

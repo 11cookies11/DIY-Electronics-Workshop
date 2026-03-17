@@ -1,4 +1,4 @@
-type ConversationBaseMode =
+export type ConversationBaseMode =
   | "greeting"
   | "smalltalk"
   | "capability"
@@ -35,7 +35,7 @@ export function detectConversationBaseMode(message: string): ConversationBaseMod
     return "greeting";
   }
 
-  if (hasPattern(message, [/(最近怎么样|你忙吗|今天天气|随便聊聊)/])) {
+  if (hasPattern(message, [/(最近怎么样|你忙吗|今天天气|随便聊聊|聊聊天)/])) {
     return "smalltalk";
   }
 
@@ -47,11 +47,11 @@ export function detectConversationBaseMode(message: string): ConversationBaseMod
     return "capability";
   }
 
-  if (hasPattern(message, [/(介绍一下实验室|介绍实验室|你们实验室做什么)/])) {
+  if (hasPattern(message, [/(介绍一下实验室|介绍实验室|你们实验室做什么|实验室是做什么的)/])) {
     return "lab_intro";
   }
 
-  if (hasPattern(message, [/(谢谢|多谢|辛苦了)/])) {
+  if (hasPattern(message, [/(谢谢|多谢|辛苦了|感谢)/])) {
     return "gratitude";
   }
 
