@@ -1,6 +1,7 @@
 import type { PreviewInput } from "@/engine/preview/types";
 import { detectConversationBaseMode } from "./conversation-base";
 import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
+import { analyzeRequirementReasoning } from "./reasoning";
 import { isSecondMeChatConfigured, requestSecondMeChatReply } from "./secondme-client";
 import { routeIntakeSkills } from "./skills";
 import {
@@ -382,6 +383,7 @@ function buildFallbackCustomerReply(args: {
   nextAction: IntakeNextAction;
   previewDraft?: PreviewDraft;
   unknowns?: string[];
+  suggestions?: string[];
 }) {
   const summary = buildRequirementSummary(args.confirmed);
 
@@ -399,6 +401,10 @@ function buildFallbackCustomerReply(args: {
     return `我大概已经能先拼出一版方向了，不过还差${args.unknowns.slice(0, 2).join("、")}。你要是愿意，我也可以先给你一点建议，我们再决定要不要出 3D 草案。`;
   }
 
+  if (args.suggestions?.length) {
+    return `我先给你一个小建议：${args.suggestions[0]}`;
+  }
+
   if (summary) {
     return "我先按你刚才说的方向继续往下收。";
   }
@@ -411,6 +417,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   unknowns: string[];
   nextAction: IntakeNextAction;
   previewDraft?: PreviewDraft;
+  reasoning: ReturnType<typeof analyzeRequirementReasoning>;
 }) {
   if (!isSecondMeChatConfigured()) {
     return null;
@@ -433,6 +440,10 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
         matched_skills: route.matched_skills,
         confirmed: draft.confirmed,
         unknowns: draft.unknowns,
+        reasoning_profile: draft.reasoning.profile,
+        reasoning_must_confirm: draft.reasoning.mustConfirm,
+        reasoning_suggestions: draft.reasoning.suggestions,
+        reasoning_risks: draft.reasoning.risks,
         next_action: draft.nextAction,
         preview_ready: Boolean(draft.previewDraft),
       },
@@ -474,7 +485,8 @@ export async function runIntakeWorkflow(
   };
 
   const confirmed = deriveConfirmed(message, state.confirmed);
-  const unknowns = computeUnknowns(confirmed);
+  const reasoning = analyzeRequirementReasoning(confirmed);
+  const unknowns = unique([...computeUnknowns(confirmed), ...reasoning.mustConfirm]);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
   const route = routeIntakeSkills({
     message,
@@ -486,6 +498,7 @@ export async function runIntakeWorkflow(
 
   const risks = unique([
     ...state.risks,
+    ...reasoning.risks,
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
@@ -527,12 +540,14 @@ export async function runIntakeWorkflow(
       unknowns,
       nextAction,
       previewDraft: exposedPreviewDraft ?? previewDraft,
+      reasoning,
     })) ??
     buildFallbackCustomerReply({
       confirmed,
       nextAction,
       previewDraft: exposedPreviewDraft ?? previewDraft,
       unknowns,
+      suggestions: reasoning.suggestions,
     });
 
   return {
