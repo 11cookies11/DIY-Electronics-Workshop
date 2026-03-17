@@ -9,8 +9,10 @@ import {
   Maximize2,
   Minimize2,
   Send,
+  Settings,
   User,
   WandSparkles,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PreviewView } from "@/engine/preview";
@@ -104,6 +106,7 @@ export function ChatInterface({
   ]);
   const [input, setInput] = useState("");
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
@@ -142,6 +145,7 @@ export function ChatInterface({
     setHandoffUrl(null);
     setDebugInfo(null);
     setStageFeedback(null);
+    setIsSettingsOpen(false);
   }, [activePresetLabel, isConnected, visitorName]);
 
   const contextGuide = useMemo<ContextGuide>(() => {
@@ -410,232 +414,27 @@ export function ChatInterface({
                   </span>
                 </div>
               </div>
-              <button
-                onClick={() => setIsMinimized(true)}
-                className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
-                  isDark
-                    ? "text-white/40 hover:bg-white/5 hover:text-white"
-                    : "text-slate-400 hover:bg-slate-200 hover:text-slate-700"
-                }`}
-              >
-                <Minimize2 className="h-3 w-3" />
-              </button>
-            </div>
-
-            <div
-              className={`flex items-center justify-between border-b px-4 py-2 text-[10px] ${
-                isDark
-                  ? "border-white/10 bg-white/[0.02] text-white/45"
-                  : "border-slate-200 bg-white/60 text-slate-500"
-              }`}
-            >
-              <span>{statusLine}</span>
-              <span>{statusMeta}</span>
-            </div>
-
-            <div
-              className={`grid grid-cols-2 gap-2 border-b px-4 py-3 text-[10px] ${
-                isDark
-                  ? "border-white/10 bg-white/[0.02]"
-                  : "border-slate-200 bg-slate-50/75"
-              }`}
-            >
-              <div>
-                <div className={isDark ? "text-white/30" : "text-slate-400"}>
-                  当前方案
-                </div>
-                <div className={isDark ? "mt-1 text-white/75" : "mt-1 text-slate-700"}>
-                  {activePresetLabel}
-                </div>
-              </div>
-              <div>
-                <div className={isDark ? "text-white/30" : "text-slate-400"}>
-                  视图
-                </div>
-                <div className={isDark ? "mt-1 text-white/75" : "mt-1 text-slate-700"}>
-                  {viewLabel}
-                </div>
-              </div>
-            </div>
-
-            {showDebug && debugInfo ? (
-              <div
-                className={`border-b px-4 py-3 text-[10px] ${
-                  isDark
-                    ? "border-white/10 bg-white/[0.025] text-white/70"
-                    : "border-slate-200 bg-white/75 text-slate-600"
-                }`}
-              >
-                <div
-                  className={`mb-2 font-mono uppercase tracking-[0.18em] ${
-                    isDark ? "text-cyan-300/70" : "text-cyan-700"
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsSettingsOpen(true)}
+                  className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
+                    isDark
+                      ? "text-white/40 hover:bg-white/5 hover:text-white"
+                      : "text-slate-400 hover:bg-slate-200 hover:text-slate-700"
                   }`}
                 >
-                  intake debug
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                  <div>
-                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
-                      workflow
-                    </div>
-                    <div>{debugInfo.workflow_state}</div>
-                  </div>
-                  <div>
-                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
-                      skill
-                    </div>
-                    <div>{debugInfo.active_skill}</div>
-                  </div>
-                  <div>
-                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
-                      memory
-                    </div>
-                    <div>{debugInfo.memory_mode}</div>
-                  </div>
-                  <div>
-                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
-                      next action
-                    </div>
-                    <div>{debugInfo.next_action}</div>
-                  </div>
-                </div>
-                <div className="mt-2 space-y-2">
-                  <div>
-                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
-                      routing reason
-                    </div>
-                    <div>{debugInfo.routing_reason}</div>
-                  </div>
-                  <div>
-                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
-                      single focus
-                    </div>
-                    <div>{debugInfo.single_focus ?? "—"}</div>
-                  </div>
-                  <div>
-                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
-                      unknowns
-                    </div>
-                    <div>{debugInfo.unknowns.length ? debugInfo.unknowns.join(" / ") : "—"}</div>
-                  </div>
-                  <div>
-                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
-                      risks
-                    </div>
-                    <div>{debugInfo.risks.length ? debugInfo.risks.slice(0, 2).join(" / ") : "—"}</div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {stageFeedback ? (
-              <div
-                className={`border-b px-4 py-3 ${
-                  isDark
-                    ? "border-white/10 bg-white/[0.03]"
-                    : "border-slate-200 bg-emerald-50/70"
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-full ${
-                      stageFeedback.kind === "handoff"
-                        ? isDark
-                          ? "bg-cyan-400/15 text-cyan-300"
-                          : "bg-cyan-100 text-cyan-700"
-                        : isDark
-                          ? "bg-emerald-400/15 text-emerald-300"
-                          : "bg-emerald-100 text-emerald-700"
-                    }`}
-                  >
-                    {stageFeedback.kind === "handoff" ? (
-                      <ClipboardCheck className="h-4 w-4" />
-                    ) : (
-                      <Boxes className="h-4 w-4" />
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className={`text-[11px] font-medium ${
-                        isDark ? "text-white/88" : "text-slate-900"
-                      }`}
-                    >
-                      {stageFeedback.title}
-                    </div>
-                    <div
-                      className={`mt-1 text-[10px] leading-5 ${
-                        isDark ? "text-white/58" : "text-slate-600"
-                      }`}
-                    >
-                      {stageFeedback.detail}
-                    </div>
-                    {stageFeedback.actionHref && stageFeedback.actionLabel ? (
-                      <div className="mt-3">
-                        <a
-                          href={stageFeedback.actionHref}
-                          target="_blank"
-                          rel="noreferrer"
-                          className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
-                            isDark
-                              ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/15"
-                              : "border-cyan-200 bg-white text-cyan-700 hover:bg-cyan-50"
-                          }`}
-                        >
-                          {stageFeedback.actionLabel}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            <div className="border-b border-black/5 px-4 py-3 dark:border-white/10">
-              <div
-                className={`mb-3 rounded-sm border px-3 py-2.5 ${
-                  isDark
-                    ? "border-white/8 bg-white/[0.025]"
-                    : "border-slate-200 bg-slate-50/85"
-                }`}
-              >
-                <div
-                  className={`font-mono text-[8px] uppercase tracking-[0.24em] ${
-                    isDark ? "text-white/35" : "text-slate-400"
+                  <Settings className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={() => setIsMinimized(true)}
+                  className={`flex h-6 w-6 items-center justify-center rounded-full transition-all ${
+                    isDark
+                      ? "text-white/40 hover:bg-white/5 hover:text-white"
+                      : "text-slate-400 hover:bg-slate-200 hover:text-slate-700"
                   }`}
                 >
-                  {contextGuide.eyebrow}
-                </div>
-                <div
-                  className={`mt-1 text-[11px] font-medium ${
-                    isDark ? "text-white/85" : "text-slate-900"
-                  }`}
-                >
-                  {contextGuide.title}
-                </div>
-                <div
-                  className={`mt-1 text-[10px] leading-5 ${
-                    isDark ? "text-white/55" : "text-slate-600"
-                  }`}
-                >
-                  {contextGuide.detail}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {contextGuide.actions.map((action) => (
-                  <button
-                    key={action.label}
-                    onClick={() => handleSend(action.prompt)}
-                    className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
-                      isDark
-                        ? "border-white/10 bg-white/[0.03] text-white/70 hover:border-emerald-400/30 hover:text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
-                    }`}
-                  >
-                    <WandSparkles className="h-3 w-3" />
-                    {action.label}
-                  </button>
-                ))}
+                  <Minimize2 className="h-3 w-3" />
+                </button>
               </div>
             </div>
 
@@ -740,22 +539,6 @@ export function ChatInterface({
                 </button>
               </div>
               <div className="mt-2 text-center">
-                {handoffUrl ? (
-                  <div className="mb-2">
-                    <a
-                      href={handoffUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`pointer-events-auto inline-flex rounded-full border px-3 py-1 text-[10px] transition-all ${
-                        isDark
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                      }`}
-                    >
-                      查看实验室交接单
-                    </a>
-                  </div>
-                ) : null}
                 <span
                   className={`font-mono text-[7px] uppercase tracking-[0.3em] ${
                     isDark ? "text-white/10" : "text-slate-300"
@@ -765,6 +548,313 @@ export function ChatInterface({
                 </span>
               </div>
             </div>
+
+            <AnimatePresence>
+              {isSettingsOpen ? (
+                <>
+                  <motion.button
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="absolute inset-0 z-10 bg-black/35 backdrop-blur-[2px]"
+                  />
+                  <motion.div
+                    initial={{ x: 24, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    exit={{ x: 24, opacity: 0 }}
+                    className={`absolute inset-y-0 right-0 z-20 w-[86%] max-w-[340px] overflow-y-auto border-l p-4 ${
+                      isDark
+                        ? "border-white/10 bg-[#080808]/96"
+                        : "border-slate-200 bg-white/98"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div
+                          className={`font-mono text-[9px] uppercase tracking-[0.22em] ${
+                            isDark ? "text-white/35" : "text-slate-400"
+                          }`}
+                        >
+                          settings
+                        </div>
+                        <div
+                          className={`mt-1 text-sm font-medium ${
+                            isDark ? "text-white/88" : "text-slate-900"
+                          }`}
+                        >
+                          聊天侧栏信息
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIsSettingsOpen(false)}
+                        className={`flex h-7 w-7 items-center justify-center rounded-full transition-all ${
+                          isDark
+                            ? "text-white/45 hover:bg-white/5 hover:text-white"
+                            : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        }`}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="mt-4 space-y-4">
+                      <section
+                        className={`rounded-sm border p-3 ${
+                          isDark
+                            ? "border-white/10 bg-white/[0.02]"
+                            : "border-slate-200 bg-slate-50/85"
+                        }`}
+                      >
+                        <div className={`text-[10px] ${isDark ? "text-white/35" : "text-slate-400"}`}>
+                          运行状态
+                        </div>
+                        <div className={`mt-1 text-[11px] ${isDark ? "text-white/80" : "text-slate-700"}`}>
+                          {statusLine}
+                        </div>
+                        <div className={`mt-1 text-[10px] ${isDark ? "text-white/45" : "text-slate-500"}`}>
+                          {statusMeta}
+                        </div>
+                      </section>
+
+                      <section
+                        className={`rounded-sm border p-3 ${
+                          isDark
+                            ? "border-white/10 bg-white/[0.02]"
+                            : "border-slate-200 bg-slate-50/85"
+                        }`}
+                      >
+                        <div className={`text-[10px] ${isDark ? "text-white/35" : "text-slate-400"}`}>
+                          场景信息
+                        </div>
+                        <div className={`mt-2 text-[10px] ${isDark ? "text-white/35" : "text-slate-400"}`}>
+                          当前方案
+                        </div>
+                        <div className={`mt-1 text-[11px] ${isDark ? "text-white/80" : "text-slate-700"}`}>
+                          {activePresetLabel}
+                        </div>
+                        <div className={`mt-3 text-[10px] ${isDark ? "text-white/35" : "text-slate-400"}`}>
+                          视图
+                        </div>
+                        <div className={`mt-1 text-[11px] ${isDark ? "text-white/80" : "text-slate-700"}`}>
+                          {viewLabel}
+                        </div>
+                      </section>
+
+                      {stageFeedback ? (
+                        <section
+                          className={`rounded-sm border p-3 ${
+                            isDark
+                              ? "border-white/10 bg-white/[0.02]"
+                              : "border-slate-200 bg-slate-50/85"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-full ${
+                                stageFeedback.kind === "handoff"
+                                  ? isDark
+                                    ? "bg-cyan-400/15 text-cyan-300"
+                                    : "bg-cyan-100 text-cyan-700"
+                                  : isDark
+                                    ? "bg-emerald-400/15 text-emerald-300"
+                                    : "bg-emerald-100 text-emerald-700"
+                              }`}
+                            >
+                              {stageFeedback.kind === "handoff" ? (
+                                <ClipboardCheck className="h-4 w-4" />
+                              ) : (
+                                <Boxes className="h-4 w-4" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div
+                                className={`text-[11px] font-medium ${
+                                  isDark ? "text-white/88" : "text-slate-900"
+                                }`}
+                              >
+                                {stageFeedback.title}
+                              </div>
+                              <div
+                                className={`mt-1 text-[10px] leading-5 ${
+                                  isDark ? "text-white/58" : "text-slate-600"
+                                }`}
+                              >
+                                {stageFeedback.detail}
+                              </div>
+                              {stageFeedback.actionHref && stageFeedback.actionLabel ? (
+                                <div className="mt-3">
+                                  <a
+                                    href={stageFeedback.actionHref}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
+                                      isDark
+                                        ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/15"
+                                        : "border-cyan-200 bg-white text-cyan-700 hover:bg-cyan-50"
+                                    }`}
+                                  >
+                                    {stageFeedback.actionLabel}
+                                    <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                </div>
+                              ) : null}
+                            </div>
+                          </div>
+                        </section>
+                      ) : null}
+
+                      <section
+                        className={`rounded-sm border p-3 ${
+                          isDark
+                            ? "border-white/10 bg-white/[0.02]"
+                            : "border-slate-200 bg-slate-50/85"
+                        }`}
+                      >
+                        <div
+                          className={`font-mono text-[8px] uppercase tracking-[0.24em] ${
+                            isDark ? "text-white/35" : "text-slate-400"
+                          }`}
+                        >
+                          {contextGuide.eyebrow}
+                        </div>
+                        <div
+                          className={`mt-1 text-[11px] font-medium ${
+                            isDark ? "text-white/85" : "text-slate-900"
+                          }`}
+                        >
+                          {contextGuide.title}
+                        </div>
+                        <div
+                          className={`mt-1 text-[10px] leading-5 ${
+                            isDark ? "text-white/55" : "text-slate-600"
+                          }`}
+                        >
+                          {contextGuide.detail}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {contextGuide.actions.map((action) => (
+                            <button
+                              key={action.label}
+                              onClick={() => {
+                                setIsSettingsOpen(false);
+                                handleSend(action.prompt);
+                              }}
+                              className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
+                                isDark
+                                  ? "border-white/10 bg-white/[0.03] text-white/70 hover:border-emerald-400/30 hover:text-white"
+                                  : "border-slate-200 bg-white text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+                              }`}
+                            >
+                              <WandSparkles className="h-3 w-3" />
+                              {action.label}
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+
+                      {handoffUrl ? (
+                        <section
+                          className={`rounded-sm border p-3 ${
+                            isDark
+                              ? "border-white/10 bg-white/[0.02]"
+                              : "border-slate-200 bg-slate-50/85"
+                          }`}
+                        >
+                          <div className={`text-[10px] ${isDark ? "text-white/35" : "text-slate-400"}`}>
+                            交接入口
+                          </div>
+                          <div className="mt-3">
+                            <a
+                              href={handoffUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`pointer-events-auto inline-flex rounded-full border px-3 py-1.5 text-[10px] transition-all ${
+                                isDark
+                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
+                                  : "border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"
+                              }`}
+                            >
+                              查看实验室交接单
+                            </a>
+                          </div>
+                        </section>
+                      ) : null}
+
+                      {showDebug && debugInfo ? (
+                        <section
+                          className={`rounded-sm border p-3 text-[10px] ${
+                            isDark
+                              ? "border-white/10 bg-white/[0.02] text-white/70"
+                              : "border-slate-200 bg-slate-50/85 text-slate-600"
+                          }`}
+                        >
+                          <div
+                            className={`mb-2 font-mono uppercase tracking-[0.18em] ${
+                              isDark ? "text-cyan-300/70" : "text-cyan-700"
+                            }`}
+                          >
+                            intake debug
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                workflow
+                              </div>
+                              <div>{debugInfo.workflow_state}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                skill
+                              </div>
+                              <div>{debugInfo.active_skill}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                memory
+                              </div>
+                              <div>{debugInfo.memory_mode}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                next action
+                              </div>
+                              <div>{debugInfo.next_action}</div>
+                            </div>
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                routing reason
+                              </div>
+                              <div>{debugInfo.routing_reason}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                single focus
+                              </div>
+                              <div>{debugInfo.single_focus ?? "—"}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                unknowns
+                              </div>
+                              <div>{debugInfo.unknowns.length ? debugInfo.unknowns.join(" / ") : "—"}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                risks
+                              </div>
+                              <div>{debugInfo.risks.length ? debugInfo.risks.slice(0, 2).join(" / ") : "—"}</div>
+                            </div>
+                          </div>
+                        </section>
+                      ) : null}
+                    </div>
+                  </motion.div>
+                </>
+              ) : null}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>

@@ -22,6 +22,7 @@ export function parseConversationSignals(message: string): ConversationSignals {
       /(生成|出一版|来一版|搭一版|做一版).*(预览|草案|方案|模型|3d)/i,
       /(看看|看下|想看).*(预览|草案|方案|模型|3d)/i,
       /(直接|现在).*(生成|出).*(预览|草案|方案|模型|3d)/i,
+      /(现在可以了吗|可以生成了吗|能生成了吗|给我生成吧|那就生成吧|直接出吧)/,
     ]),
     wantsHandoff: hasPattern(message, [
       /(交接|交给实验室|整理交接单|提交实验室)/,

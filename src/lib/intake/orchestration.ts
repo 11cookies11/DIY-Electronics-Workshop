@@ -39,6 +39,49 @@ function hasCollectedCore(confirmed: ConfirmedRequirement) {
   );
 }
 
+function hasResolvedFocus(
+  focus: string | undefined,
+  confirmed: ConfirmedRequirement,
+) {
+  if (!focus) return false;
+
+  switch (focus) {
+    case "设备类型":
+      return Boolean(confirmed.device_type);
+    case "使用场景":
+      return Boolean(confirmed.use_case);
+    case "核心功能":
+      return Boolean(confirmed.core_features?.length);
+    case "控制对象":
+      return Boolean(confirmed.target_devices?.length);
+    case "供电方式":
+      return Boolean(confirmed.power?.length);
+    case "主要交互方式":
+    case "按键或触屏交互":
+      return Boolean(confirmed.screen || confirmed.controls?.length || confirmed.ports?.length);
+    case "尺寸与外形":
+      return Boolean(confirmed.size || confirmed.screen_size_preference);
+    case "接口需求":
+      return Boolean(confirmed.ports?.length);
+    case "连接方式":
+      return Boolean(confirmed.connectivity?.length);
+    default:
+      return false;
+  }
+}
+
+function pickSingleFocus(
+  confirmed: ConfirmedRequirement,
+  unknowns: string[],
+  memoryFocus?: string,
+) {
+  if (memoryFocus && !hasResolvedFocus(memoryFocus, confirmed)) {
+    return memoryFocus;
+  }
+
+  return unknowns[0];
+}
+
 export function planReplyOrchestration(args: {
   message: string;
   confirmed: ConfirmedRequirement;
@@ -51,7 +94,11 @@ export function planReplyOrchestration(args: {
   const baseMode = detectConversationBaseMode(args.message);
   const signals = parseConversationSignals(args.message);
   const hasCore = hasCollectedCore(args.confirmed);
-  const focus = args.memory?.focusHint ?? args.unknowns[0];
+  const focus = pickSingleFocus(
+    args.confirmed,
+    args.unknowns,
+    args.memory?.focusHint,
+  );
 
   if (baseMode !== "none" && !hasCore) {
     return {

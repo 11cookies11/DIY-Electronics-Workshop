@@ -27,15 +27,21 @@ export type ConfirmedRequirement = {
   device_type?: string;
   use_case?: string;
   target_users?: string;
+  target_devices?: string[];
   core_features?: string[];
   screen?: string;
+  screen_size_preference?: string;
   controls?: string[];
+  button_preferences?: string[];
+  interaction_layout?: string;
   sensors?: string[];
   audio?: string[];
   connectivity?: string[];
   ports?: string[];
   power?: string[];
   size?: string;
+  placement?: string;
+  portability?: string;
   budget?: string;
   timeline?: string;
   environment?: string;
@@ -67,10 +73,14 @@ export type LabHandoff = {
   project_type: string;
   use_case: string;
   target_users?: string;
+  target_devices?: string[];
   core_features: string[];
   hardware_requirements: {
     screen?: string;
+    screen_size_preference?: string;
     controls?: string[];
+    button_preferences?: string[];
+    interaction_layout?: string;
     sensors?: string[];
     audio?: string[];
     connectivity?: string[];
@@ -79,6 +89,8 @@ export type LabHandoff = {
   };
   constraints: {
     size?: string;
+    placement?: string;
+    portability?: string;
     budget?: string;
     timeline?: string;
     environment?: string;

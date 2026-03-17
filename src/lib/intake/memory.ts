@@ -11,6 +11,7 @@ function extractLatestAssistantQuestion(history: ConversationTurn[] = []) {
 
 function inferFocusHint(question?: string) {
   if (!question) return undefined;
+  if (/(电视|空调|智能灯|控制哪些设备|家电)/.test(question)) return "控制对象";
   if (/(场景|家里|外出|环境)/.test(question)) return "使用场景";
   if (/(供电|电池|充电|续航)/.test(question)) return "供电方式";
   if (/(按键|触屏|触控|交互)/.test(question)) return "主要交互方式";

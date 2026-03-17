@@ -32,6 +32,9 @@ export function analyzeRequirementReasoning(
 
   switch (confirmed.device_type) {
     case "红外遥控器":
+      if (!hasValue(confirmed.target_devices)) {
+        mustConfirm.push("控制对象");
+      }
       if (!hasValue(confirmed.controls)) {
         mustConfirm.push("按键或触屏交互");
       }

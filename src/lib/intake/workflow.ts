@@ -70,9 +70,158 @@ function extractApproxSize(message: string) {
   return `${matched[1]} x ${matched[2]} x ${matched[3]} mm`;
 }
 
+function extractRecentAssistantQuestion(history: ConversationTurn[] = []) {
+  return [...history]
+    .reverse()
+    .find((turn) => turn.role === "assistant" && /[？?]/.test(turn.content))
+    ?.content;
+}
+
+function extractDeviceMentions(text?: string) {
+  if (!text) return [];
+
+  return unique(
+    collectKeywords(text, [
+      [/(电视|tv)/i, "电视"],
+      [/(空调)/, "空调"],
+      [/(智能灯|灯光|灯)/, "智能灯"],
+      [/(投影|投影仪)/, "投影仪"],
+      [/(风扇)/, "风扇"],
+      [/(机顶盒)/, "机顶盒"],
+    ]),
+  );
+}
+
+function extractButtonPreferences(text?: string) {
+  if (!text) return [];
+
+  return unique(
+    collectKeywords(text, [
+      [/(电源|开关机)/, "电源键"],
+      [/(音量)/, "音量键"],
+      [/(切换|模式|频道)/, "切换键"],
+      [/(返回)/, "返回键"],
+      [/(主页|home)/i, "主页键"],
+      [/(确认|ok)/i, "确认键"],
+      [/(方向|上下左右)/, "方向键"],
+    ]),
+  );
+}
+
+function inferUseCaseFromTargetDevices(targetDevices: string[]) {
+  if (!targetDevices.length) return undefined;
+  return `控制${targetDevices.join("、")}等常见家电`;
+}
+
+function inferPortability(message: string) {
+  if (hasPattern(message, [/(放在茶几|放家里|桌上|客厅)/])) return "居家常驻，偶尔手持";
+  if (hasPattern(message, [/(卧室|书房|几个房间|到处拿|随手拿|偶尔拿起来)/])) {
+    return "室内多房间移动使用";
+  }
+  if (hasPattern(message, [/(随身带|揣口袋|便携|出差)/])) return "便携随身";
+  return undefined;
+}
+
+function inferPlacement(message: string) {
+  if (hasPattern(message, [/(茶几)/])) return "茶几";
+  if (hasPattern(message, [/(卧室)/])) return "卧室";
+  if (hasPattern(message, [/(书房)/])) return "书房";
+  if (hasPattern(message, [/(客厅)/])) return "客厅";
+  return undefined;
+}
+
+function inferScreenSizePreference(message: string, recentQuestion?: string) {
+  if (hasPattern(message, [/(比手表大)/])) return "比智能手表更大";
+  if (hasPattern(message, [/(名片|卡片)/])) return "名片大小";
+  if (hasPattern(message, [/(小屏|小一点)/])) return "偏小屏";
+  if (hasPattern(message, [/(大一点|大屏)/])) return "偏大屏";
+  if (
+    recentQuestion &&
+    /(屏幕.*多大|多大.*屏幕|尺寸范围|大概多大)/.test(recentQuestion) &&
+    hasPattern(message, [/(你来决定|你定吧|你帮我定|没有尺寸范围|没有整个尺寸范围|没概念)/])
+  ) {
+    return "由系统按传统遥控器比例默认";
+  }
+  return undefined;
+}
+
+function inferInteractionLayout(message: string) {
+  if (hasPattern(message, [/(放在屏幕旁边|屏幕旁边|并排)/])) return "屏幕与按键并排";
+  if (hasPattern(message, [/(屏幕上方|按键下方|上面是屏幕下面是按键)/])) return "屏幕在上，按键在下";
+  if (hasPattern(message, [/(屏幕下方|按键上方)/])) return "按键在上，屏幕在下";
+  return undefined;
+}
+
+function inferSizePreference(message: string, recentQuestion?: string) {
+  if (hasPattern(message, [/(更小巧|小巧一点|更小一点)/])) return "比传统遥控器更小巧";
+  if (hasPattern(message, [/(比遥控器稍微短一点|比传统遥控器再短一点)/])) {
+    return "比传统遥控器稍短";
+  }
+  if (
+    recentQuestion &&
+    /(多大|尺寸|大小|宽|长条形)/.test(recentQuestion) &&
+    hasPattern(message, [/(你来决定|你定吧|你帮我定|没有尺寸范围|没有整个尺寸范围|没概念)/])
+  ) {
+    return "由系统按传统遥控器默认比例决定";
+  }
+  return undefined;
+}
+
+function mergeContextualAnswer(args: {
+  message: string;
+  current: ConfirmedRequirement;
+  recentQuestion?: string;
+}) {
+  const targetDevicesFromMessage = extractDeviceMentions(args.message);
+  const targetDevicesFromQuestion =
+    hasPattern(args.message, [/(这些都要|都要|都包括|都可以)/]) &&
+    args.recentQuestion &&
+    /(电视|空调|智能灯|投影|风扇|机顶盒)/.test(args.recentQuestion)
+      ? extractDeviceMentions(args.recentQuestion)
+      : [];
+
+  const buttonPreferencesFromMessage = extractButtonPreferences(args.message);
+  const buttonPreferencesFromQuestion =
+    hasPattern(args.message, [/(这些按键|这些案件|保留这些物理按键|保留这些按键|几个功能键|常见几个功能)/]) &&
+    args.recentQuestion
+      ? extractButtonPreferences(args.recentQuestion)
+      : [];
+
+  const useCaseFromDevices = inferUseCaseFromTargetDevices([
+    ...targetDevicesFromMessage,
+    ...targetDevicesFromQuestion,
+  ]);
+
+  const delegatedSizePreference = inferSizePreference(args.message, args.recentQuestion);
+  const delegatedScreenSizePreference = inferScreenSizePreference(
+    args.message,
+    args.recentQuestion,
+  );
+
+  return {
+    target_devices: mergeArrays(
+      args.current.target_devices,
+      unique([...targetDevicesFromMessage, ...targetDevicesFromQuestion]),
+    ),
+    button_preferences: mergeArrays(
+      args.current.button_preferences,
+      unique([...buttonPreferencesFromMessage, ...buttonPreferencesFromQuestion]),
+    ),
+    interaction_layout:
+      args.current.interaction_layout ?? inferInteractionLayout(args.message),
+    placement: args.current.placement ?? inferPlacement(args.message),
+    portability: args.current.portability ?? inferPortability(args.message),
+    use_case: args.current.use_case ?? useCaseFromDevices,
+    size: args.current.size ?? delegatedSizePreference,
+    screen_size_preference:
+      args.current.screen_size_preference ?? delegatedScreenSizePreference,
+  } satisfies Partial<ConfirmedRequirement>;
+}
+
 function deriveConfirmed(
   message: string,
   current: ConfirmedRequirement,
+  history: ConversationTurn[] = [],
 ): ConfirmedRequirement {
   const connectivity = collectKeywords(message, [
     [/蓝牙/i, "蓝牙"],
@@ -114,6 +263,7 @@ function deriveConfirmed(
   ]);
 
   const normalizedMessage = message.replace(/\s+/g, "");
+  const recentQuestion = extractRecentAssistantQuestion(history);
   const useCase =
     current.use_case ??
     message.match(/用于([^，。；]+)/)?.[1]?.trim() ??
@@ -122,11 +272,17 @@ function deriveConfirmed(
     (hasPattern(normalizedMessage, [/(出门用|外出用|随身用|在外面用)/]) ? "外出环境" : undefined) ??
     (hasPattern(normalizedMessage, [/(酒店|宾馆|民宿)/]) ? "酒店环境" : undefined) ??
     (hasPattern(normalizedMessage, [/(办公室|办公桌|工位)/]) ? "办公环境" : undefined);
+  const contextualAnswer = mergeContextualAnswer({
+    message,
+    current,
+    recentQuestion,
+  });
 
   return {
     ...current,
     device_type: current.device_type ?? inferDeviceType(message),
-    use_case: useCase,
+    use_case: contextualAnswer.use_case ?? useCase,
+    target_devices: contextualAnswer.target_devices,
     screen:
       current.screen ??
       (hasPattern(message, [/(屏幕|显示|触控|触摸|触屏)/])
@@ -134,13 +290,18 @@ function deriveConfirmed(
           ? "触控屏"
           : "显示屏"
         : undefined),
+    screen_size_preference: contextualAnswer.screen_size_preference,
     controls: mergeArrays(current.controls, controls),
+    button_preferences: contextualAnswer.button_preferences,
+    interaction_layout: contextualAnswer.interaction_layout,
     sensors: mergeArrays(current.sensors, sensors),
     connectivity: mergeArrays(current.connectivity, connectivity),
     ports: mergeArrays(current.ports, ports),
     power: mergeArrays(current.power, power),
     core_features: mergeArrays(current.core_features, coreFeatures),
-    size: current.size ?? extractApproxSize(message),
+    size: current.size ?? extractApproxSize(message) ?? contextualAnswer.size,
+    placement: contextualAnswer.placement,
+    portability: contextualAnswer.portability,
   };
 }
 
@@ -148,6 +309,9 @@ function computeUnknowns(confirmed: ConfirmedRequirement) {
   const unknowns: string[] = [];
   if (!confirmed.device_type) unknowns.push("设备类型");
   if (!confirmed.use_case) unknowns.push("使用场景");
+  if (confirmed.device_type === "红外遥控器" && !confirmed.target_devices?.length) {
+    unknowns.push("控制对象");
+  }
   if (!confirmed.core_features?.length) unknowns.push("核心功能");
   if (!confirmed.screen && !confirmed.controls?.length && !confirmed.ports?.length) {
     unknowns.push("主要交互方式");
@@ -162,6 +326,9 @@ function buildPreviewReadiness(confirmed: ConfirmedRequirement): PreviewReadines
 
   if (!confirmed.device_type) missing.push("设备类型");
   if (!confirmed.use_case) missing.push("使用场景");
+  if (confirmed.device_type === "红外遥控器" && !confirmed.target_devices?.length) {
+    missing.push("控制对象");
+  }
   if (!confirmed.screen && !confirmed.controls?.length && !confirmed.ports?.length) {
     missing.push("交互方式");
   }
@@ -176,6 +343,12 @@ function buildPreviewReadiness(confirmed: ConfirmedRequirement): PreviewReadines
 
   if (!confirmed.size) {
     assumptions.push("未提供精确尺寸，将使用设备模板默认外形尺寸");
+  }
+  if (!confirmed.screen_size_preference && confirmed.screen) {
+    assumptions.push("未提供屏幕尺寸偏好，将按设备常见比例默认");
+  }
+  if (!confirmed.interaction_layout && confirmed.screen && confirmed.controls?.length) {
+    assumptions.push("未提供屏幕与按键布局，将默认使用屏幕在上、按键在下");
   }
 
   return {
@@ -304,11 +477,14 @@ function mapConfirmedToPreviewDraft(
       grid: { cols: base.cols, rows: base.rows },
     },
     mainScreen: confirmed.screen
-      ? {
+        ? {
           face: "front",
           type: confirmed.screen.includes("触控") ? "touch_display" : "display_panel",
           sizeMm:
-            confirmed.device_type === "红外遥控器"
+            confirmed.device_type === "红外遥控器" &&
+            confirmed.screen_size_preference === "比智能手表更大"
+              ? { width: 30, height: 78, depth: 4 }
+              : confirmed.device_type === "红外遥控器"
               ? { width: 22, height: 68, depth: 4 }
               : confirmed.device_type === "智能手表"
                 ? { width: 30, height: 34, depth: 3 }
@@ -342,12 +518,16 @@ function buildLabHandoff(
     project_type: confirmed.device_type,
     use_case: confirmed.use_case ?? "待补充",
     target_users: confirmed.target_users,
+    target_devices: confirmed.target_devices,
     core_features: confirmed.core_features?.length
       ? confirmed.core_features
       : ["基于当前已确认硬件要素生成初步方案"],
     hardware_requirements: {
       screen: confirmed.screen,
       controls: confirmed.controls,
+      screen_size_preference: confirmed.screen_size_preference,
+      button_preferences: confirmed.button_preferences,
+      interaction_layout: confirmed.interaction_layout,
       sensors: confirmed.sensors,
       audio: confirmed.audio,
       connectivity: confirmed.connectivity,
@@ -356,6 +536,8 @@ function buildLabHandoff(
     },
     constraints: {
       size: confirmed.size,
+      placement: confirmed.placement,
+      portability: confirmed.portability,
       budget: confirmed.budget,
       timeline: confirmed.timeline,
       environment: confirmed.environment,
@@ -374,15 +556,104 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
     confirmed.device_type ? `设备类型：${confirmed.device_type}` : undefined,
     confirmed.use_case ? `场景：${confirmed.use_case}` : undefined,
     confirmed.screen ? `屏幕：${confirmed.screen}` : undefined,
+    confirmed.screen_size_preference ? `屏幕偏好：${confirmed.screen_size_preference}` : undefined,
     confirmed.controls?.length ? `交互：${confirmed.controls.join("、")}` : undefined,
+    confirmed.button_preferences?.length ? `按键：${confirmed.button_preferences.join("、")}` : undefined,
+    confirmed.interaction_layout ? `布局：${confirmed.interaction_layout}` : undefined,
+    confirmed.target_devices?.length ? `控制对象：${confirmed.target_devices.join("、")}` : undefined,
     confirmed.sensors?.length ? `传感器：${confirmed.sensors.join("、")}` : undefined,
     confirmed.connectivity?.length
       ? `连接：${confirmed.connectivity.join("、")}`
       : undefined,
     confirmed.power?.length ? `供电：${confirmed.power.join("、")}` : undefined,
+    confirmed.portability ? `移动方式：${confirmed.portability}` : undefined,
   ]
     .filter(Boolean)
     .join("；");
+}
+
+function buildNextStepQuestion(unknowns: string[] = []) {
+  const focus = unknowns[0];
+
+  switch (focus) {
+    case "控制对象":
+      return "我再补最后一个关键点：它现在最常控制的是电视、空调，还是像灯光这类设备也要一起带上？";
+    case "使用场景":
+      return "我还想确认一下使用场景。它主要是固定放家里用，还是会在几个房间之间经常拿着走？";
+    case "供电方式":
+      return "接下来我只想补一下供电。你更想要内置电池充电，还是更换电池这种更省心的方案？";
+    case "尺寸与外形":
+      return "尺寸这块你如果没有特别限制也没关系，我可以先按常见遥控器比例给你出一版。";
+    default:
+      return undefined;
+  }
+}
+
+function replyStillAsksResolvedFocus(args: {
+  reply: string;
+  focus?: string;
+  confirmed: ConfirmedRequirement;
+}) {
+  const { reply, focus, confirmed } = args;
+  if (!focus) return false;
+
+  switch (focus) {
+    case "使用场景":
+      return Boolean(confirmed.use_case) && /(场景|家里用|外出用|放在家里|随身带)/.test(reply);
+    case "供电方式":
+      return Boolean(confirmed.power?.length) && /(供电|电池|充电|USB-C|type-c)/i.test(reply);
+    case "控制对象":
+      return Boolean(confirmed.target_devices?.length) && /(电视|空调|智能灯|控制哪些设备)/.test(reply);
+    case "按键或触屏交互":
+    case "主要交互方式":
+      return Boolean(confirmed.screen || confirmed.controls?.length) && /(按键|触屏|交互)/.test(reply);
+    case "尺寸与外形":
+      return Boolean(confirmed.size || confirmed.screen_size_preference) && /(尺寸|多大|大一点|小巧|手表大)/.test(reply);
+    default:
+      return false;
+  }
+}
+
+function applyReplyGuard(args: {
+  reply: string;
+  confirmed: ConfirmedRequirement;
+  unknowns: string[];
+  nextAction: IntakeNextAction;
+  previewDraft?: PreviewDraft;
+  focus?: string;
+}) {
+  if (args.nextAction === "generate_preview") {
+    if (/[？?]/.test(args.reply) || /(要不要|是否|可以.*生成|给你看感受|看看感觉)/.test(args.reply)) {
+      return args.previewDraft
+        ? "好呀，我已经按我们刚刚收好的方向把 3D 草案立起来了。你现在可以直接看主舞台里的结构预览，如果想调布局或尺寸，我们再继续改。"
+        : "好呀，我现在就按我们刚刚收好的方向生成 3D 草案。";
+    }
+    return args.reply;
+  }
+
+  if (args.nextAction === "prepare_handoff") {
+    if (/[？?]/.test(args.reply) || /(要不要|是否|可以.*整理|要不要我整理)/.test(args.reply)) {
+      return "我已经把可以交给实验室的内容整理好了。你可以直接看交接单，如果还想补几个细节，我们也可以继续补。";
+    }
+    return args.reply;
+  }
+
+  if (replyStillAsksResolvedFocus({
+    reply: args.reply,
+    focus: args.focus,
+    confirmed: args.confirmed,
+  })) {
+    if (args.previewDraft && args.unknowns.length <= 1) {
+      return "我这边已经把关键方向收得差不多了，可以先给你出一版 3D 草案；如果你愿意，我们也可以在出图前再补最后一个小细节。";
+    }
+
+    return (
+      buildNextStepQuestion(args.unknowns) ??
+      "我先把刚才那条信息记住了，我们继续往下补最后几个关键点。"
+    );
+  }
+
+  return args.reply;
 }
 
 function buildFallbackCustomerReply(args: {
@@ -520,7 +791,7 @@ export async function runIntakeWorkflow(
     history,
   };
 
-  const confirmed = deriveConfirmed(message, state.confirmed);
+  const confirmed = deriveConfirmed(message, state.confirmed, history);
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
   const reminderBundle = buildReminderBundle(confirmed);
@@ -588,7 +859,7 @@ export async function runIntakeWorkflow(
   const exposedPreviewDraft = readiness.exposePreview ? previewDraft : undefined;
   const exposedLabHandoff = readiness.exposeHandoff ? labHandoff : undefined;
 
-  const customerReply =
+  const rawCustomerReply =
     (await buildModelCustomerReply(request, {
       confirmed,
       unknowns,
@@ -609,6 +880,14 @@ export async function runIntakeWorkflow(
       recommendationCards: suggestions,
       orchestration,
     });
+  const customerReply = applyReplyGuard({
+    reply: rawCustomerReply,
+    confirmed,
+    unknowns,
+    nextAction,
+    previewDraft: exposedPreviewDraft ?? previewDraft,
+    focus: orchestration.singleFocus,
+  });
 
   const structuredOutput = buildStructuredIntakeOutput({
     workflowState,
