@@ -115,6 +115,8 @@ export type IntakeAgentOutput = {
   next_action: IntakeNextAction;
 };
 
+export type IntakeStructuredOutput = Omit<IntakeAgentOutput, "customer_reply">;
+
 export type IntakeAgentRequest = {
   session_id: string;
   user_id?: string;

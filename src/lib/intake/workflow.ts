@@ -8,6 +8,7 @@ import { analyzeRequirementReasoning } from "./reasoning";
 import { isSecondMeChatConfigured, requestSecondMeChatReply } from "./secondme-client";
 import { routeIntakeSkills } from "./skills";
 import { buildIntakeSuggestions } from "./suggestions";
+import { buildStructuredIntakeOutput } from "./state-pipeline";
 import {
   createEmptyState,
   type ConversationTurn,
@@ -586,6 +587,51 @@ export async function runIntakeWorkflow(
       recommendationCards: suggestions,
     });
 
+  const structuredOutput = buildStructuredIntakeOutput({
+    workflowState,
+    confirmed,
+    unknowns,
+    risks,
+    suggestions,
+    assumptions: previewDraft?.assumptions ?? [],
+    previewDraft,
+    labHandoff,
+    exposedPreviewDraft,
+    exposedLabHandoff,
+    requirementSummary: requirementSummary || "已记录当前对话，等待进一步补充。",
+    intent: inferIntent(message),
+    nextAction,
+  });
+
+  return {
+    customer_reply: customerReply,
+    ...structuredOutput,
+  };
+
+  /*
+  const structuredOutput = buildStructuredIntakeOutput({
+    workflowState,
+    confirmed,
+    unknowns,
+    risks,
+    suggestions,
+    assumptions: previewDraft?.assumptions ?? [],
+    previewDraft,
+    labHandoff,
+    exposedPreviewDraft,
+    exposedLabHandoff,
+    requirementSummary:
+      requirementSummary || "宸茶褰曞綋鍓嶅璇濓紝绛夊緟杩涗竴姝ヨˉ鍏呫€?,
+    intent: inferIntent(message),
+    nextAction,
+  });
+
+  return {
+    customer_reply: customerReply,
+    ...structuredOutput,
+  };
+
+  /*
   return {
     customer_reply: customerReply,
     state: {
@@ -608,4 +654,5 @@ export async function runIntakeWorkflow(
     lab_handoff: exposedLabHandoff,
     next_action: nextAction,
   };
+  */
 }
