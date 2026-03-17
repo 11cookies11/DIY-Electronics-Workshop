@@ -1,6 +1,8 @@
 import { detectConversationBaseMode } from "./conversation-base";
+import { analyzeConversationMemory } from "./memory";
 import { evaluateIntakeTransitions } from "./transitions";
 import type {
+  ConversationMemory,
   ConversationTurn,
   ConfirmedRequirement,
   IntakeAgentState,
@@ -16,6 +18,7 @@ type SkillContext = {
   unknowns: string[];
   previewDraft?: PreviewDraft;
   history?: ConversationTurn[];
+  memory?: ConversationMemory;
 };
 
 type RuntimeSkill = {
@@ -63,12 +66,12 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "preview-promoter",
     description: "在预览草案已可生成时把对话推进到 preview 阶段",
-    match: ({ message, state, previewDraft }) =>
+    match: ({ message, state, previewDraft, unknowns }) =>
       evaluateIntakeTransitions({
         message,
         state,
         previewDraft,
-        unknowns: [],
+        unknowns,
       }).shouldTriggerPreview,
     useSecondMe: true,
   },
@@ -88,6 +91,13 @@ export function routeIntakeSkills(context: SkillContext): IntakeSkillRoute {
     unknowns: context.unknowns,
   });
   const baseMode = detectConversationBaseMode(context.message);
+  const memory =
+    context.memory ??
+    analyzeConversationMemory({
+      message: context.message,
+      history: context.history,
+      unknowns: context.unknowns,
+    });
   const hasCollectedIntent = Boolean(
     context.confirmed.device_type ||
       context.confirmed.use_case ||
@@ -95,9 +105,6 @@ export function routeIntakeSkills(context: SkillContext): IntakeSkillRoute {
       context.confirmed.controls?.length ||
       context.confirmed.core_features?.length ||
       context.confirmed.power?.length,
-  );
-  const recentAssistantAsked = context.history?.slice(-2).some(
-    (turn) => turn.role === "assistant" && /？|\?/.test(turn.content),
   );
   const matchedSkills = RUNTIME_SKILLS.filter((skill) => skill.match(context));
 
@@ -116,14 +123,15 @@ export function routeIntakeSkills(context: SkillContext): IntakeSkillRoute {
   } else if (baseMode === "lab_intro" && !hasCollectedIntent) {
     activeSkill = RUNTIME_SKILLS.find((skill) => skill.id === "lab-intro") ?? activeSkill;
     reason = "当前更适合先介绍实验室";
-  } else if (
-    baseMode === "none" &&
-    !hasCollectedIntent &&
-    recentAssistantAsked &&
-    transitions.isAffirmative
-  ) {
+  } else if (memory.mode === "correcting") {
     activeSkill = RUNTIME_SKILLS.find((skill) => skill.id === "requirement-clarifier") ?? activeSkill;
-    reason = "用户正在顺着上一轮追问继续确认需求";
+    reason = "用户正在纠正上一轮信息，需要沿原线程更新需求";
+  } else if (memory.mode === "confirming" && !hasCollectedIntent) {
+    activeSkill = RUNTIME_SKILLS.find((skill) => skill.id === "requirement-clarifier") ?? activeSkill;
+    reason = "用户正在顺着上一轮问题做确认，需要继续澄清需求";
+  } else if (memory.mode === "answering_question") {
+    activeSkill = RUNTIME_SKILLS.find((skill) => skill.id === "requirement-clarifier") ?? activeSkill;
+    reason = "用户正在回答上一轮问题，需要延续当前需求线程";
   } else if (baseMode === "none" && hasCollectedIntent) {
     activeSkill = RUNTIME_SKILLS.find((skill) => skill.id === "requirement-clarifier") ?? activeSkill;
     reason = "当前消息已经进入设备需求层，继续做澄清编排";

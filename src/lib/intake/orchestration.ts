@@ -1,4 +1,5 @@
 import { detectConversationBaseMode } from "./conversation-base";
+import type { ConversationMemory } from "./types";
 import { parseConversationSignals } from "./signals";
 import type { ConfirmedRequirement, IntakeNextAction, IntakeSkillRoute, PreviewDraft } from "./types";
 
@@ -45,10 +46,12 @@ export function planReplyOrchestration(args: {
   nextAction: IntakeNextAction;
   route: IntakeSkillRoute;
   previewDraft?: PreviewDraft;
+  memory?: ConversationMemory;
 }) {
   const baseMode = detectConversationBaseMode(args.message);
   const signals = parseConversationSignals(args.message);
   const hasCore = hasCollectedCore(args.confirmed);
+  const focus = args.memory?.focusHint ?? args.unknowns[0];
 
   if (baseMode !== "none" && !hasCore) {
     return {
@@ -95,11 +98,21 @@ export function planReplyOrchestration(args: {
     } satisfies ReplyOrchestration;
   }
 
+  if (args.memory?.mode === "answering_question" || args.memory?.mode === "correcting") {
+    return {
+      baseMode,
+      transitionMode: "soft_clarify",
+      priorities: ["acknowledge", "ask_single_question"],
+      shouldAdvanceRequirement: true,
+      singleFocus: focus,
+    } satisfies ReplyOrchestration;
+  }
+
   return {
     baseMode,
     transitionMode: args.previewDraft ? "preview_ready" : "soft_clarify",
     priorities: ["acknowledge", "offer_suggestion", "ask_single_question"],
     shouldAdvanceRequirement: true,
-    singleFocus: args.unknowns[0],
+    singleFocus: focus,
   } satisfies ReplyOrchestration;
 }

@@ -1,5 +1,6 @@
 import type { PreviewInput } from "@/engine/preview/types";
 import { detectConversationBaseMode } from "./conversation-base";
+import { analyzeConversationMemory } from "./memory";
 import { planReplyOrchestration } from "./orchestration";
 import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
 import { decideReadinessFlow } from "./readiness";
@@ -432,6 +433,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   suggestions: IntakeSuggestion[];
   orchestration: ReturnType<typeof planReplyOrchestration>;
   reminderBundle: ReturnType<typeof buildReminderBundle>;
+  memory: ReturnType<typeof analyzeConversationMemory>;
 }) {
   if (!isSecondMeChatConfigured()) {
     return null;
@@ -444,6 +446,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
     unknowns: draft.unknowns,
     previewDraft: draft.previewDraft,
     history: request.history,
+    memory: draft.memory,
   });
 
   const prompt = [
@@ -463,6 +466,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
         recommendation_cards: draft.suggestions,
         reminders: draft.reminderBundle.reminders,
         risk_alerts: draft.reminderBundle.riskAlerts,
+        conversation_memory: draft.memory,
         reply_priorities: draft.orchestration.priorities,
         transition_mode: draft.orchestration.transitionMode,
         single_focus: draft.orchestration.singleFocus,
@@ -512,6 +516,11 @@ export async function runIntakeWorkflow(
   const reminderBundle = buildReminderBundle(confirmed);
   const unknowns = unique([...computeUnknowns(confirmed), ...reasoning.mustConfirm]);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
+  const memory = analyzeConversationMemory({
+    message,
+    history,
+    unknowns,
+  });
   const route = routeIntakeSkills({
     message,
     state,
@@ -519,6 +528,7 @@ export async function runIntakeWorkflow(
     unknowns,
     previewDraft,
     history,
+    memory,
   });
   const orchestration = planReplyOrchestration({
     message,
@@ -527,6 +537,7 @@ export async function runIntakeWorkflow(
     nextAction: "ask_more",
     route,
     previewDraft,
+    memory,
   });
 
   const risks = unique([
@@ -577,6 +588,7 @@ export async function runIntakeWorkflow(
       suggestions,
       orchestration,
       reminderBundle,
+      memory,
     })) ??
     buildFallbackCustomerReply({
       confirmed,

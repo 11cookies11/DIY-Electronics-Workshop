@@ -132,6 +132,22 @@ export type ConversationTurn = {
   timestamp: number;
 };
 
+export type ConversationMemoryMode =
+  | "new_topic"
+  | "free_chat"
+  | "answering_question"
+  | "confirming"
+  | "correcting"
+  | "rejecting";
+
+export type ConversationMemory = {
+  mode: ConversationMemoryMode;
+  recentAssistantQuestion?: string;
+  pendingUnknown?: string;
+  focusHint?: string;
+  shouldContinueThread: boolean;
+};
+
 export type SecondMeChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
