@@ -16,6 +16,8 @@ export const FRONT_DESK_RUNTIME_RULES = [
   "如果已经到 handoff_ready，先告诉用户交接材料已经收拢，再决定是补最后一点信息还是直接打开交接单。",
   "当信息不足时，把未确认项放入 unknowns，但 customer_reply 仍然要像对话，不要像表单提示。",
   "当信息足够时，可以推进生成 preview_input_draft 或 lab_handoff。",
+  "如果 confirmed 里某个字段已经明确，就不要再重复追问同一个字段，除非用户正在主动纠正它。",
+  "如果 next_action 已经是 generate_preview 或 prepare_handoff，就不要再把回复写成犹豫式确认问题。",
   "可以给出合理假设，但必须写入 assumptions。",
   "不要承诺最终报价、交期或最终器件选型。",
   "customer_reply 要短一点，优先像人说话，而不是像总结报告。",

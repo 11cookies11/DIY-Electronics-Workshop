@@ -25,6 +25,21 @@ function Section({
   );
 }
 
+function Field({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  return (
+    <div>
+      <div className="text-slate-400">{label}</div>
+      <div className="mt-1">{value || "未提供"}</div>
+    </div>
+  );
+}
+
 function List({
   items,
   emptyLabel = "未提供",
@@ -86,14 +101,12 @@ export default async function HandoffPage({ params }: HandoffPageProps) {
           <div className="space-y-6">
             <Section title="Confirmed Requirements">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <div className="text-slate-400">使用场景</div>
-                  <div className="mt-1">{handoff.use_case || "未提供"}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">目标用户</div>
-                  <div className="mt-1">{handoff.target_users || "未提供"}</div>
-                </div>
+                <Field label="使用场景" value={handoff.use_case} />
+                <Field label="目标用户" value={handoff.target_users} />
+              </div>
+              <div className="mt-5">
+                <div className="mb-2 text-slate-400">控制对象</div>
+                <List items={handoff.target_devices} emptyLabel="未指定控制设备" />
               </div>
               <div className="mt-5">
                 <div className="mb-2 text-slate-400">核心功能</div>
@@ -103,21 +116,31 @@ export default async function HandoffPage({ params }: HandoffPageProps) {
 
             <Section title="Hardware Requirements">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <div className="text-slate-400">屏幕</div>
-                  <div className="mt-1">{handoff.hardware_requirements.screen || "未提供"}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">供电</div>
-                  <div className="mt-1">
-                    {handoff.hardware_requirements.power?.join("、") || "未提供"}
-                  </div>
-                </div>
+                <Field label="屏幕" value={handoff.hardware_requirements.screen} />
+                <Field
+                  label="屏幕偏好"
+                  value={handoff.hardware_requirements.screen_size_preference}
+                />
+                <Field
+                  label="布局"
+                  value={handoff.hardware_requirements.interaction_layout}
+                />
+                <Field
+                  label="供电"
+                  value={handoff.hardware_requirements.power?.join("、")}
+                />
               </div>
               <div className="mt-5 grid gap-5 sm:grid-cols-2">
                 <div>
                   <div className="mb-2 text-slate-400">交互</div>
                   <List items={handoff.hardware_requirements.controls} />
+                </div>
+                <div>
+                  <div className="mb-2 text-slate-400">按键偏好</div>
+                  <List
+                    items={handoff.hardware_requirements.button_preferences}
+                    emptyLabel="未指定按键组"
+                  />
                 </div>
                 <div>
                   <div className="mb-2 text-slate-400">传感器</div>
@@ -136,22 +159,12 @@ export default async function HandoffPage({ params }: HandoffPageProps) {
 
             <Section title="Constraints">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <div className="text-slate-400">尺寸</div>
-                  <div className="mt-1">{handoff.constraints.size || "未提供"}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">预算</div>
-                  <div className="mt-1">{handoff.constraints.budget || "未提供"}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">时间</div>
-                  <div className="mt-1">{handoff.constraints.timeline || "未提供"}</div>
-                </div>
-                <div>
-                  <div className="text-slate-400">环境</div>
-                  <div className="mt-1">{handoff.constraints.environment || "未提供"}</div>
-                </div>
+                <Field label="尺寸" value={handoff.constraints.size} />
+                <Field label="摆放位置" value={handoff.constraints.placement} />
+                <Field label="移动方式" value={handoff.constraints.portability} />
+                <Field label="预算" value={handoff.constraints.budget} />
+                <Field label="时间" value={handoff.constraints.timeline} />
+                <Field label="环境" value={handoff.constraints.environment} />
               </div>
             </Section>
           </div>
@@ -170,7 +183,11 @@ export default async function HandoffPage({ params }: HandoffPageProps) {
                   </div>
                   <div>
                     <div className="text-slate-400">Modules</div>
-                    <List items={previewDraft.input.modules.map((item) => typeof item === "string" ? item : item.id)} />
+                    <List
+                      items={previewDraft.input.modules.map((item) =>
+                        typeof item === "string" ? item : item.id,
+                      )}
+                    />
                   </div>
                   <div>
                     <div className="text-slate-400">Assumptions</div>
