@@ -41,7 +41,7 @@ export function detectConversationBaseMode(message: string): ConversationBaseMod
 
   if (
     hasPattern(message, [
-      /(你是谁|你是做什么的|你能做什么|你会什么|介绍一下你自己)/,
+      /(你是谁|你是做什么的|你能做什么|你会什么|你可以干什么|你能帮我做什么|你这边能做什么|你这边能帮我做什么|介绍一下你自己)/,
     ])
   ) {
     return "capability";

@@ -112,6 +112,7 @@ export function ChatInterface({
   const scrollRef = useRef<HTMLDivElement>(null);
   const { mode } = useTheme();
   const isDark = mode === "dark";
+  const showDebug = process.env.NEXT_PUBLIC_INTAKE_DEBUG === "1";
   const visitorName = useMemo(() => {
     const candidate =
       (userInfo?.nickname as string | undefined) ??
@@ -144,7 +145,14 @@ export function ChatInterface({
   }, [activePresetLabel, isConnected, visitorName]);
 
   const contextGuide = useMemo<ContextGuide>(() => {
-    if (!debugInfo || debugInfo.workflow_state === "collecting") {
+    if (
+      !debugInfo ||
+      debugInfo.workflow_state === "collecting" ||
+      debugInfo.active_skill === "capability-intro" ||
+      debugInfo.active_skill === "lab-intro" ||
+      debugInfo.transition_mode === "stay_conversational" ||
+      debugInfo.transition_mode === "answer_then_offer"
+    ) {
       return {
         eyebrow: "front desk",
         title: "先把想法接住",
@@ -450,7 +458,7 @@ export function ChatInterface({
               </div>
             </div>
 
-            {debugInfo ? (
+            {showDebug && debugInfo ? (
               <div
                 className={`border-b px-4 py-3 text-[10px] ${
                   isDark
