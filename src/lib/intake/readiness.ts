@@ -1,4 +1,4 @@
-import { parseConversationSignals } from "./signals";
+import { evaluateIntakeTransitions } from "./transitions";
 import type {
   IntakeAgentState,
   IntakeNextAction,
@@ -21,13 +21,18 @@ export function decideReadinessFlow(args: {
   message: string;
   previewDraft?: PreviewDraft;
   labHandoff?: LabHandoff;
-  previousWorkflowState: IntakeAgentState["workflow_state"];
-  activeSkill: string;
+  state: IntakeAgentState;
   unknowns: string[];
 }) {
-  const signals = parseConversationSignals(args.message);
+  const transitions = evaluateIntakeTransitions({
+    message: args.message,
+    state: args.state,
+    previewDraft: args.previewDraft,
+    labHandoff: args.labHandoff,
+    unknowns: args.unknowns,
+  });
 
-  if (args.activeSkill === "preview-promoter" && args.previewDraft && !signals.isNegative) {
+  if (transitions.shouldTriggerPreview && args.previewDraft) {
     return {
       workflowState: "preview_generated",
       nextAction: "generate_preview",
@@ -36,7 +41,7 @@ export function decideReadinessFlow(args: {
     } satisfies ReadinessDecision;
   }
 
-  if (args.activeSkill === "handoff-promoter" && canPrepareHandoff(args.labHandoff) && !signals.isNegative) {
+  if (transitions.shouldTriggerHandoff && canPrepareHandoff(args.labHandoff)) {
     return {
       workflowState: "handoff_ready",
       nextAction: "prepare_handoff",
@@ -45,7 +50,7 @@ export function decideReadinessFlow(args: {
     } satisfies ReadinessDecision;
   }
 
-  if (args.previousWorkflowState === "preview_generated" && canPrepareHandoff(args.labHandoff) && args.unknowns.length <= 2) {
+  if (args.state.workflow_state === "preview_generated" && canPrepareHandoff(args.labHandoff) && args.unknowns.length <= 2) {
     return {
       workflowState: "handoff_ready",
       nextAction: "ask_more",

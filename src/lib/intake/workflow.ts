@@ -547,9 +547,10 @@ export async function runIntakeWorkflow(
     message,
     previewDraft,
     labHandoff,
-    previousWorkflowState:
-      orchestration.transitionMode === "stay_conversational" ? "collecting" : state.workflow_state,
-    activeSkill: route.active_skill,
+    state:
+      orchestration.transitionMode === "stay_conversational"
+        ? { ...state, workflow_state: "collecting" }
+        : state,
     unknowns,
   });
 

@@ -1,5 +1,5 @@
 import { detectConversationBaseMode } from "./conversation-base";
-import { parseConversationSignals } from "./signals";
+import { evaluateIntakeTransitions } from "./transitions";
 import type {
   ConversationTurn,
   ConfirmedRequirement,
@@ -51,30 +51,25 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     id: "handoff-promoter",
     description: "在交接单可用时把对话推进到 handoff 阶段",
-    match: ({ message, state, previewDraft, unknowns }) => {
-      const signals = parseConversationSignals(message);
-      return (
-        Boolean(previewDraft) &&
-        unknowns.length <= 2 &&
-        !signals.isNegative &&
-        (signals.wantsHandoff ||
-          (state.workflow_state === "handoff_ready" && signals.isAffirmative))
-      );
-    },
+    match: ({ message, state, previewDraft, unknowns }) =>
+      evaluateIntakeTransitions({
+        message,
+        state,
+        previewDraft,
+        unknowns,
+      }).shouldTriggerHandoff,
     useSecondMe: true,
   },
   {
     id: "preview-promoter",
     description: "在预览草案已可生成时把对话推进到 preview 阶段",
-    match: ({ message, state, previewDraft }) => {
-      const signals = parseConversationSignals(message);
-      return (
-        Boolean(previewDraft) &&
-        !signals.isNegative &&
-        (signals.wantsPreview ||
-          (state.workflow_state === "preview_ready" && signals.isAffirmative))
-      );
-    },
+    match: ({ message, state, previewDraft }) =>
+      evaluateIntakeTransitions({
+        message,
+        state,
+        previewDraft,
+        unknowns: [],
+      }).shouldTriggerPreview,
     useSecondMe: true,
   },
   {
@@ -86,7 +81,12 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
 ];
 
 export function routeIntakeSkills(context: SkillContext): IntakeSkillRoute {
-  const signals = parseConversationSignals(context.message);
+  const transitions = evaluateIntakeTransitions({
+    message: context.message,
+    state: context.state,
+    previewDraft: context.previewDraft,
+    unknowns: context.unknowns,
+  });
   const baseMode = detectConversationBaseMode(context.message);
   const hasCollectedIntent = Boolean(
     context.confirmed.device_type ||
@@ -96,29 +96,18 @@ export function routeIntakeSkills(context: SkillContext): IntakeSkillRoute {
       context.confirmed.core_features?.length ||
       context.confirmed.power?.length,
   );
-  const recentAssistantAsked = context.history?.slice(-2).some((turn) =>
-    turn.role === "assistant" && /？|\?/.test(turn.content),
+  const recentAssistantAsked = context.history?.slice(-2).some(
+    (turn) => turn.role === "assistant" && /？|\?/.test(turn.content),
   );
   const matchedSkills = RUNTIME_SKILLS.filter((skill) => skill.match(context));
 
   let activeSkill = matchedSkills[0] ?? RUNTIME_SKILLS[RUNTIME_SKILLS.length - 1];
   let reason = "按默认需求澄清路由";
 
-  if (
-    context.previewDraft &&
-    context.unknowns.length <= 2 &&
-    !signals.isNegative &&
-    (signals.wantsHandoff ||
-      (context.state.workflow_state === "handoff_ready" && signals.isAffirmative))
-  ) {
+  if (transitions.shouldTriggerHandoff) {
     activeSkill = RUNTIME_SKILLS.find((skill) => skill.id === "handoff-promoter") ?? activeSkill;
     reason = "当前已有可交接草案，且用户明确要推进到实验室交接";
-  } else if (
-    context.previewDraft &&
-    !signals.isNegative &&
-    (signals.wantsPreview ||
-      (context.state.workflow_state === "preview_ready" && signals.isAffirmative))
-  ) {
+  } else if (transitions.shouldTriggerPreview) {
     activeSkill = RUNTIME_SKILLS.find((skill) => skill.id === "preview-promoter") ?? activeSkill;
     reason = "当前已有预览草案，且用户明确确认生成预览";
   } else if (baseMode === "capability" && !hasCollectedIntent) {
@@ -131,7 +120,7 @@ export function routeIntakeSkills(context: SkillContext): IntakeSkillRoute {
     baseMode === "none" &&
     !hasCollectedIntent &&
     recentAssistantAsked &&
-    signals.isAffirmative
+    transitions.isAffirmative
   ) {
     activeSkill = RUNTIME_SKILLS.find((skill) => skill.id === "requirement-clarifier") ?? activeSkill;
     reason = "用户正在顺着上一轮追问继续确认需求";
