@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PreviewView } from "@/engine/preview";
-import type { PreviewDraft } from "@/lib/intake/types";
+import type { IntakeDebugInfo, PreviewDraft } from "@/lib/intake/types";
 import { useTheme } from "./theme-context";
 
 type Message = {
@@ -83,6 +83,7 @@ export function ChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<IntakeDebugInfo | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { mode } = useTheme();
   const isDark = mode === "dark";
@@ -113,6 +114,7 @@ export function ChatInterface({
     ]);
     setSessionId(null);
     setHandoffUrl(null);
+    setDebugInfo(null);
   }, [activePresetLabel, isConnected, visitorName]);
 
   const handleSend = async (prompt?: string) => {
@@ -146,10 +148,12 @@ export function ChatInterface({
         customer_reply?: string;
         preview_input_draft?: PreviewDraft;
         handoffUrl?: string | null;
+        debug?: IntakeDebugInfo;
       };
 
       setSessionId(payload.sessionId);
       setHandoffUrl(payload.handoffUrl ?? null);
+      setDebugInfo(payload.debug ?? null);
       if (payload.preview_input_draft) {
         onPreviewDraft?.(payload.preview_input_draft);
       }
@@ -297,6 +301,76 @@ export function ChatInterface({
                 </div>
               </div>
             </div>
+
+            {debugInfo ? (
+              <div
+                className={`border-b px-4 py-3 text-[10px] ${
+                  isDark
+                    ? "border-white/10 bg-white/[0.025] text-white/70"
+                    : "border-slate-200 bg-white/75 text-slate-600"
+                }`}
+              >
+                <div
+                  className={`mb-2 font-mono uppercase tracking-[0.18em] ${
+                    isDark ? "text-cyan-300/70" : "text-cyan-700"
+                  }`}
+                >
+                  intake debug
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                  <div>
+                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                      workflow
+                    </div>
+                    <div>{debugInfo.workflow_state}</div>
+                  </div>
+                  <div>
+                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                      skill
+                    </div>
+                    <div>{debugInfo.active_skill}</div>
+                  </div>
+                  <div>
+                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                      memory
+                    </div>
+                    <div>{debugInfo.memory_mode}</div>
+                  </div>
+                  <div>
+                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                      next action
+                    </div>
+                    <div>{debugInfo.next_action}</div>
+                  </div>
+                </div>
+                <div className="mt-2 space-y-2">
+                  <div>
+                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                      routing reason
+                    </div>
+                    <div>{debugInfo.routing_reason}</div>
+                  </div>
+                  <div>
+                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                      single focus
+                    </div>
+                    <div>{debugInfo.single_focus ?? "—"}</div>
+                  </div>
+                  <div>
+                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                      unknowns
+                    </div>
+                    <div>{debugInfo.unknowns.length ? debugInfo.unknowns.join(" / ") : "—"}</div>
+                  </div>
+                  <div>
+                    <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                      risks
+                    </div>
+                    <div>{debugInfo.risks.length ? debugInfo.risks.slice(0, 2).join(" / ") : "—"}</div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="border-b border-black/5 px-4 py-3 dark:border-white/10">
               <div className="flex flex-wrap gap-2">

@@ -1,5 +1,6 @@
 import type {
   ConfirmedRequirement,
+  IntakeDebugInfo,
   IntakeAgentState,
   IntakeIntent,
   IntakeNextAction,
@@ -23,6 +24,7 @@ export function buildStructuredIntakeOutput(args: {
   requirementSummary: string;
   intent: IntakeIntent;
   nextAction: IntakeNextAction;
+  debug?: IntakeDebugInfo;
 }): IntakeStructuredOutput {
   return {
     state: {
@@ -44,5 +46,6 @@ export function buildStructuredIntakeOutput(args: {
     preview_input_draft: args.exposedPreviewDraft,
     lab_handoff: args.exposedLabHandoff,
     next_action: args.nextAction,
+    debug: args.debug,
   };
 }

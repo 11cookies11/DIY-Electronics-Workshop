@@ -613,6 +613,18 @@ export async function runIntakeWorkflow(
     requirementSummary: requirementSummary || "已记录当前对话，等待进一步补充。",
     intent: inferIntent(message),
     nextAction,
+    debug: {
+      workflow_state: workflowState,
+      active_skill: route.active_skill,
+      matched_skills: route.matched_skills,
+      routing_reason: route.reason,
+      transition_mode: orchestration.transitionMode,
+      single_focus: orchestration.singleFocus,
+      memory_mode: memory.mode,
+      unknowns,
+      risks,
+      next_action: nextAction,
+    },
   });
 
   return {

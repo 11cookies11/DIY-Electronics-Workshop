@@ -101,6 +101,19 @@ export type IntakeAgentState = {
   lab_handoff?: LabHandoff;
 };
 
+export type IntakeDebugInfo = {
+  workflow_state: WorkflowState;
+  active_skill: IntakeSkillId;
+  matched_skills: IntakeSkillId[];
+  routing_reason: string;
+  transition_mode: string;
+  single_focus?: string;
+  memory_mode: ConversationMemoryMode;
+  unknowns: string[];
+  risks: string[];
+  next_action: IntakeNextAction;
+};
+
 export type IntakeAgentOutput = {
   customer_reply: string;
   state: IntakeAgentState;
@@ -113,6 +126,7 @@ export type IntakeAgentOutput = {
   preview_input_draft?: PreviewDraft;
   lab_handoff?: LabHandoff;
   next_action: IntakeNextAction;
+  debug?: IntakeDebugInfo;
 };
 
 export type IntakeStructuredOutput = Omit<IntakeAgentOutput, "customer_reply">;
