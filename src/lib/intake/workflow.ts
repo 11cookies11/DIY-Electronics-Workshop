@@ -3,6 +3,7 @@ import { detectConversationBaseMode } from "./conversation-base";
 import { planReplyOrchestration } from "./orchestration";
 import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
 import { decideReadinessFlow } from "./readiness";
+import { buildReminderBundle } from "./reminders";
 import { analyzeRequirementReasoning } from "./reasoning";
 import { isSecondMeChatConfigured, requestSecondMeChatReply } from "./secondme-client";
 import { routeIntakeSkills } from "./skills";
@@ -429,6 +430,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   reasoning: ReturnType<typeof analyzeRequirementReasoning>;
   suggestions: IntakeSuggestion[];
   orchestration: ReturnType<typeof planReplyOrchestration>;
+  reminderBundle: ReturnType<typeof buildReminderBundle>;
 }) {
   if (!isSecondMeChatConfigured()) {
     return null;
@@ -456,6 +458,8 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
         reasoning_suggestions: draft.reasoning.suggestions,
         reasoning_risks: draft.reasoning.risks,
         recommendation_cards: draft.suggestions,
+        reminders: draft.reminderBundle.reminders,
+        risk_alerts: draft.reminderBundle.riskAlerts,
         reply_priorities: draft.orchestration.priorities,
         transition_mode: draft.orchestration.transitionMode,
         single_focus: draft.orchestration.singleFocus,
@@ -502,6 +506,7 @@ export async function runIntakeWorkflow(
   const confirmed = deriveConfirmed(message, state.confirmed);
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
+  const reminderBundle = buildReminderBundle(confirmed);
   const unknowns = unique([...computeUnknowns(confirmed), ...reasoning.mustConfirm]);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
   const route = routeIntakeSkills({
@@ -523,6 +528,7 @@ export async function runIntakeWorkflow(
   const risks = unique([
     ...state.risks,
     ...reasoning.risks,
+    ...reminderBundle.riskAlerts,
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
@@ -565,6 +571,7 @@ export async function runIntakeWorkflow(
       reasoning,
       suggestions,
       orchestration,
+      reminderBundle,
     })) ??
     buildFallbackCustomerReply({
       confirmed,
