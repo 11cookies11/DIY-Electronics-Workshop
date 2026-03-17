@@ -9,7 +9,6 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { ChatInterface } from "./ChatInterface";
 import { THEME } from "./constants";
 import { useTheme } from "./theme-context";
-import { DeviceViewer } from "@/components/viewer/DeviceViewer";
 import { PREVIEW_DEVICE_PRESETS } from "@/components/viewer/device-presets";
 import { SceneRenderer } from "@/components/viewer/SceneRenderer";
 import {
@@ -204,19 +203,6 @@ export function LabScene({
               <Settings size={16} />
             </button>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-end justify-start gap-4">
-          <DeviceViewer
-            presetId={presetId}
-            view={view}
-            onPresetChange={(nextPresetId) => {
-              setPresetId(nextPresetId);
-              setGeneratedPreview(null);
-              setView("assembled");
-            }}
-            onViewChange={setView}
-          />
         </div>
       </div>
 

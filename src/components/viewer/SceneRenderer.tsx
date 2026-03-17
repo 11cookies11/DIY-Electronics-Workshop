@@ -10,6 +10,7 @@ import { ConnectionMesh } from "./ConnectionMesh";
 import { ModuleMesh } from "./ModuleMesh";
 import { PortMesh } from "./PortMesh";
 import { ScreenMesh } from "./ScreenMesh";
+import { ShellMesh } from "./ShellMesh";
 
 function lerpNumber(from: number, to: number, alpha: number) {
   return from + (to - from) * alpha;
@@ -541,6 +542,9 @@ export function SceneRenderer({
   return (
     <group position={viewTransform.position} scale={viewTransform.scale}>
       <LabelWarmup />
+      {animatedScene.view !== "exploded" ? (
+        <ShellMesh node={animatedScene.shellNode} />
+      ) : null}
       {animatedScene.view === "exploded"
         ? animatedScene.connections.map((connection) => (
             <ConnectionMesh

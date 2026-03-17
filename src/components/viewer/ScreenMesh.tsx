@@ -12,19 +12,29 @@ export function ScreenMesh({ node }: { node: SceneNode }) {
 
   if (type === "touch_display" && isRoundLike) {
     const radius = Math.min(width, height) * 0.48;
+    const frameRadius = radius * 1.02;
 
     return (
       <group position={node.position} rotation={node.rotation}>
-        <Circle args={[radius, 40]}>
-          <meshStandardMaterial color="#9fb7c8" roughness={0.2} metalness={0.18} />
+        <Circle args={[frameRadius, 48]}>
+          <meshStandardMaterial color="#5f7484" roughness={0.22} metalness={0.14} />
         </Circle>
-        <Circle args={[radius * 0.82, 40]} position={[0, 0, thickness * 0.08]}>
+        <Circle args={[radius * 0.86, 48]} position={[0, 0, 0.12]}>
           <meshStandardMaterial
             color="#dcfce7"
             emissive="#86efac"
-            emissiveIntensity={0.85}
+            emissiveIntensity={0.72}
             roughness={0.08}
             metalness={0.12}
+          />
+        </Circle>
+        <Circle args={[radius * 0.84, 48]} position={[0, 0, 0.18]}>
+          <meshStandardMaterial
+            color="#ffffff"
+            transparent
+            opacity={0.08}
+            roughness={0.04}
+            metalness={0.02}
           />
         </Circle>
       </group>

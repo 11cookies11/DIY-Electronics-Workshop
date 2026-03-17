@@ -13,7 +13,7 @@ export const PREVIEW_DEVICE_PRESETS: Array<{
     label: "智能手表",
     description: "小型方形机身，正面小触控屏，侧边保留充电口和按键开孔。",
     input: {
-      shell: "cube",
+      shell: "cuboid",
       shellSize: { width: 48, height: 48, depth: 18 },
       board: {
         placement: "center",
@@ -22,8 +22,8 @@ export const PREVIEW_DEVICE_PRESETS: Array<{
       },
       mainScreen: {
         face: "front",
-        type: "touch_display",
-        sizeMm: { width: 34, height: 34, depth: 4 },
+        type: "display_panel",
+        sizeMm: { width: 30, height: 34, depth: 3 },
       },
       ports: [
         { face: "right", type: "usb_c", sizeMm: { width: 10, height: 6, depth: 6 } },

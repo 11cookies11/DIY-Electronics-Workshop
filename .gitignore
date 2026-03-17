@@ -25,3 +25,7 @@ node_modules/
 
 # Local Second Me platform tokens
 .secondme/
+
+# Local where workspace artifacts
+.where/*.log
+.where/skills/hardware-3d-preview-planner/
