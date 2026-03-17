@@ -3,6 +3,9 @@
 import { AnimatePresence, motion } from "motion/react";
 import {
   Bot,
+  Boxes,
+  ClipboardCheck,
+  ExternalLink,
   Maximize2,
   Minimize2,
   Send,
@@ -11,7 +14,12 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PreviewView } from "@/engine/preview";
-import type { IntakeDebugInfo, PreviewDraft } from "@/lib/intake/types";
+import type {
+  IntakeAgentState,
+  IntakeDebugInfo,
+  IntakeNextAction,
+  PreviewDraft,
+} from "@/lib/intake/types";
 import { useTheme } from "./theme-context";
 
 type Message = {
@@ -28,6 +36,14 @@ type ChatInterfaceProps = {
   activePresetLabel: string;
   activeView: PreviewView;
   onPreviewDraft?: (draft: PreviewDraft) => void;
+};
+
+type StageFeedback = {
+  kind: "preview" | "handoff";
+  title: string;
+  detail: string;
+  actionLabel?: string;
+  actionHref?: string;
 };
 
 const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
@@ -84,6 +100,7 @@ export function ChatInterface({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<IntakeDebugInfo | null>(null);
+  const [stageFeedback, setStageFeedback] = useState<StageFeedback | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const { mode } = useTheme();
   const isDark = mode === "dark";
@@ -115,7 +132,43 @@ export function ChatInterface({
     setSessionId(null);
     setHandoffUrl(null);
     setDebugInfo(null);
+    setStageFeedback(null);
   }, [activePresetLabel, isConnected, visitorName]);
+
+  function buildStageFeedback(args: {
+    nextAction?: IntakeNextAction;
+    state?: IntakeAgentState;
+    previewDraft?: PreviewDraft;
+    handoffUrl?: string | null;
+  }) {
+    if (args.handoffUrl && args.state?.workflow_state === "handoff_ready") {
+      return {
+        kind: "handoff" as const,
+        title: "实验室交接单已整理",
+        detail: "需求摘要、风险和 preview 草案都已经收好，可以直接交给实验室继续评估。",
+        actionLabel: "打开交接单",
+        actionHref: args.handoffUrl,
+      };
+    }
+
+    if (args.previewDraft && args.nextAction === "generate_preview") {
+      return {
+        kind: "preview" as const,
+        title: "3D 草案已生成",
+        detail: "主舞台已经切到 AI 生成方案，你可以直接旋转、拆解查看结构方向。",
+      };
+    }
+
+    if (args.state?.workflow_state === "preview_ready") {
+      return {
+        kind: "preview" as const,
+        title: "已进入预览准备阶段",
+        detail: "当前信息已经足够拼出一版方向，再确认一下就可以生成 3D 草案。",
+      };
+    }
+
+    return null;
+  }
 
   const handleSend = async (prompt?: string) => {
     const nextInput = (prompt ?? input).trim();
@@ -148,12 +201,22 @@ export function ChatInterface({
         customer_reply?: string;
         preview_input_draft?: PreviewDraft;
         handoffUrl?: string | null;
+        next_action?: IntakeNextAction;
+        state?: IntakeAgentState;
         debug?: IntakeDebugInfo;
       };
 
       setSessionId(payload.sessionId);
       setHandoffUrl(payload.handoffUrl ?? null);
       setDebugInfo(payload.debug ?? null);
+      setStageFeedback(
+        buildStageFeedback({
+          nextAction: payload.next_action,
+          state: payload.state,
+          previewDraft: payload.preview_input_draft,
+          handoffUrl: payload.handoffUrl,
+        }),
+      );
       if (payload.preview_input_draft) {
         onPreviewDraft?.(payload.preview_input_draft);
       }
@@ -367,6 +430,69 @@ export function ChatInterface({
                       risks
                     </div>
                     <div>{debugInfo.risks.length ? debugInfo.risks.slice(0, 2).join(" / ") : "—"}</div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {stageFeedback ? (
+              <div
+                className={`border-b px-4 py-3 ${
+                  isDark
+                    ? "border-white/10 bg-white/[0.03]"
+                    : "border-slate-200 bg-emerald-50/70"
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div
+                    className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-full ${
+                      stageFeedback.kind === "handoff"
+                        ? isDark
+                          ? "bg-cyan-400/15 text-cyan-300"
+                          : "bg-cyan-100 text-cyan-700"
+                        : isDark
+                          ? "bg-emerald-400/15 text-emerald-300"
+                          : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {stageFeedback.kind === "handoff" ? (
+                      <ClipboardCheck className="h-4 w-4" />
+                    ) : (
+                      <Boxes className="h-4 w-4" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={`text-[11px] font-medium ${
+                        isDark ? "text-white/88" : "text-slate-900"
+                      }`}
+                    >
+                      {stageFeedback.title}
+                    </div>
+                    <div
+                      className={`mt-1 text-[10px] leading-5 ${
+                        isDark ? "text-white/58" : "text-slate-600"
+                      }`}
+                    >
+                      {stageFeedback.detail}
+                    </div>
+                    {stageFeedback.actionHref && stageFeedback.actionLabel ? (
+                      <div className="mt-3">
+                        <a
+                          href={stageFeedback.actionHref}
+                          target="_blank"
+                          rel="noreferrer"
+                          className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
+                            isDark
+                              ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/15"
+                              : "border-cyan-200 bg-white text-cyan-700 hover:bg-cyan-50"
+                          }`}
+                        >
+                          {stageFeedback.actionLabel}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
