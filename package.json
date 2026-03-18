@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "intake:regression": "node scripts/intake-regression.mjs",
     "poly:fetch": "node scripts/poly-pizza-fetch.mjs"
   },
   "dependencies": {
