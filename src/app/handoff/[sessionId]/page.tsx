@@ -167,6 +167,42 @@ export default async function HandoffPage({ params }: HandoffPageProps) {
                 <Field label="环境" value={handoff.constraints.environment} />
               </div>
             </Section>
+
+            <Section title="Reasoning Trace">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="结构化理解"
+                  value={handoff.reasoning_trace?.enabled ? "已启用" : "未启用"}
+                />
+                <Field
+                  label="置信度"
+                  value={handoff.reasoning_trace?.confidence ?? "未提供"}
+                />
+              </div>
+              <div className="mt-5 grid gap-5 sm:grid-cols-2">
+                <div>
+                  <div className="mb-2 text-slate-400">命中字段</div>
+                  <List
+                    items={handoff.reasoning_trace?.applied_fields}
+                    emptyLabel="本轮没有 reasoning patch 命中字段"
+                  />
+                </div>
+                <div>
+                  <div className="mb-2 text-slate-400">覆盖字段</div>
+                  <List
+                    items={handoff.reasoning_trace?.replaced_fields}
+                    emptyLabel="本轮没有字段覆盖"
+                  />
+                </div>
+              </div>
+              <div className="mt-5">
+                <div className="mb-2 text-slate-400">补充说明</div>
+                <List
+                  items={handoff.reasoning_trace?.notes}
+                  emptyLabel="本轮没有额外说明"
+                />
+              </div>
+            </Section>
           </div>
 
           <div className="space-y-6">

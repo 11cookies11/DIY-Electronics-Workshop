@@ -29,6 +29,7 @@ import {
   type IntakeIntent,
   type IntakeNextAction,
   type IntakeReasoningPatch,
+  type IntakeReasoningTrace,
   type LabHandoff,
   type PreviewDraft,
   type PreviewReadiness,
@@ -205,6 +206,27 @@ function mergeReasoningPatch(
 
 function canUseReasoningModel() {
   return Boolean(process.env.SECONDME_INTAKE_REASONING_MODEL);
+}
+
+function buildReasoningTrace(
+  patch: IntakeReasoningPatch | undefined,
+): IntakeReasoningTrace | undefined {
+  if (!canUseReasoningModel()) {
+    return undefined;
+  }
+
+  const appliedFields = Object.keys(patch?.confirmed_patch ?? {}).filter(
+    isConfirmedRequirementField,
+  );
+  const replacedFields = (patch?.replace_fields ?? []).filter(isConfirmedRequirementField);
+
+  return {
+    enabled: true,
+    confidence: patch?.confidence,
+    applied_fields: appliedFields,
+    replaced_fields: replacedFields,
+    notes: patch?.notes ?? [],
+  };
 }
 
 function hasPattern(message: string, patterns: RegExp[]) {
@@ -805,6 +827,7 @@ function buildLabHandoff(
   requirementSummary: string,
   unknowns: string[],
   risks: string[],
+  reasoningTrace: IntakeReasoningTrace | undefined,
   previewDraft?: PreviewDraft,
 ): LabHandoff | undefined {
   if (!confirmed.device_type || (!confirmed.core_features?.length && !previewDraft)) {
@@ -843,6 +866,7 @@ function buildLabHandoff(
     references: confirmed.references ?? [],
     unknowns,
     risks,
+    reasoning_trace: reasoningTrace,
     recommended_next_step:
       unknowns.length > 0 ? "继续补齐缺失需求后进入实验室评估" : "进入实验室进行技术评估与原型拆解",
     preview_input_draft: previewDraft,
@@ -1125,6 +1149,7 @@ export async function runIntakeWorkflow(
       })
     : undefined;
   const confirmed = mergeReasoningPatch(localConfirmed, modelRequirementPatch);
+  const reasoningTrace = buildReasoningTrace(modelRequirementPatch);
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
   const reminderBundle = buildReminderBundle(confirmed);
@@ -1167,6 +1192,7 @@ export async function runIntakeWorkflow(
     requirementSummary,
     unknowns,
     risks,
+    reasoningTrace,
     previewDraft,
   );
   const readiness = decideReadinessFlow({
@@ -1247,6 +1273,7 @@ export async function runIntakeWorkflow(
       unknowns,
       risks,
       next_action: nextAction,
+      reasoning_trace: reasoningTrace,
     },
   });
 

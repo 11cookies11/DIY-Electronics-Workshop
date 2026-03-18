@@ -847,6 +847,46 @@ export function ChatInterface({
                               </div>
                               <div>{debugInfo.risks.length ? debugInfo.risks.slice(0, 2).join(" / ") : "—"}</div>
                             </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                reasoning
+                              </div>
+                              <div>
+                                {debugInfo.reasoning_trace?.enabled
+                                  ? debugInfo.reasoning_trace.confidence ?? "enabled"
+                                  : "disabled"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                patch fields
+                              </div>
+                              <div>
+                                {debugInfo.reasoning_trace?.applied_fields.length
+                                  ? debugInfo.reasoning_trace.applied_fields.join(" / ")
+                                  : "—"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                replaced fields
+                              </div>
+                              <div>
+                                {debugInfo.reasoning_trace?.replaced_fields.length
+                                  ? debugInfo.reasoning_trace.replaced_fields.join(" / ")
+                                  : "—"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                reasoning notes
+                              </div>
+                              <div>
+                                {debugInfo.reasoning_trace?.notes.length
+                                  ? debugInfo.reasoning_trace.notes.slice(0, 2).join(" / ")
+                                  : "—"}
+                              </div>
+                            </div>
                           </div>
                         </section>
                       ) : null}

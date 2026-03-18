@@ -68,6 +68,14 @@ export type IntakeSuggestion = {
   reason: string;
 };
 
+export type IntakeReasoningTrace = {
+  enabled: boolean;
+  confidence?: "low" | "medium" | "high";
+  applied_fields: Array<keyof ConfirmedRequirement>;
+  replaced_fields: Array<keyof ConfirmedRequirement>;
+  notes: string[];
+};
+
 export type LabHandoff = {
   customer_summary: string;
   project_type: string;
@@ -98,6 +106,7 @@ export type LabHandoff = {
   references: string[];
   unknowns: string[];
   risks: string[];
+  reasoning_trace?: IntakeReasoningTrace;
   recommended_next_step: string;
   preview_input_draft?: PreviewDraft;
 };
@@ -124,6 +133,7 @@ export type IntakeDebugInfo = {
   unknowns: string[];
   risks: string[];
   next_action: IntakeNextAction;
+  reasoning_trace?: IntakeReasoningTrace;
 };
 
 export type IntakeAgentOutput = {
