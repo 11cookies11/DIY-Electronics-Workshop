@@ -27,14 +27,18 @@ export function isSecondMeChatConfigured() {
 }
 
 export async function requestSecondMeStructuredReply(messages: SecondMeChatMessage[]) {
-  return requestSecondMeChatReply(messages, true);
+  return requestSecondMeChatReply(messages, { requireJson: true });
 }
 
 export async function requestSecondMeChatReply(
   messages: SecondMeChatMessage[],
-  requireJson = false,
+  options: {
+    requireJson?: boolean;
+    model?: string;
+    temperature?: number;
+  } = {},
 ) {
-  const model = process.env.SECONDME_CHAT_MODEL;
+  const model = options.model ?? process.env.SECONDME_CHAT_MODEL;
   if (!model) {
     throw new Error("Missing SECONDME_CHAT_MODEL");
   }
@@ -56,9 +60,9 @@ export async function requestSecondMeChatReply(
     },
     body: JSON.stringify({
       model,
-      temperature: 0.2,
+      temperature: options.temperature ?? 0.2,
       messages,
-      ...(requireJson ? { response_format: { type: "json_object" } } : {}),
+      ...(options.requireJson ? { response_format: { type: "json_object" } } : {}),
     }),
     cache: "no-store",
   });

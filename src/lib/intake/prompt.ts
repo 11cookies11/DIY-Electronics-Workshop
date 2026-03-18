@@ -36,3 +36,63 @@ export function buildIntakeUserPrompt(request: IntakeAgentRequest) {
     2,
   );
 }
+
+export function buildIntakeReasoningSystemPrompt() {
+  return [
+    "你是前台 Agent 的结构化理解层。",
+    "你的任务不是直接和用户聊天，而是把最新一轮对话理解成尽量小、尽量准的需求补丁。",
+    "请优先利用最近历史、当前状态和用户刚说的话，识别新增信息、纠错信息和可明确落表的偏好。",
+    "如果用户在纠正旧信息，例如“不是电视，是投影仪”“改成内置电池”，请把对应字段放进 replace_fields。",
+    "如果你不确定，就不要猜，不要输出该字段。",
+    "只输出 JSON，不要输出解释。",
+  ].join("\n");
+}
+
+export function buildIntakeReasoningUserPrompt(request: IntakeAgentRequest) {
+  return JSON.stringify(
+    {
+      locale: request.locale,
+      latest_user_message: request.message,
+      current_confirmed: request.state.confirmed,
+      current_unknowns: request.state.unknowns,
+      recent_history: request.history?.slice(-8) ?? [],
+      output_contract: {
+        confirmed_patch: "Partial<ConfirmedRequirement>",
+        replace_fields: [
+          "device_type",
+          "use_case",
+          "target_users",
+          "target_devices",
+          "core_features",
+          "screen",
+          "screen_size_preference",
+          "controls",
+          "button_preferences",
+          "interaction_layout",
+          "sensors",
+          "audio",
+          "connectivity",
+          "ports",
+          "power",
+          "size",
+          "placement",
+          "portability",
+          "budget",
+          "timeline",
+          "environment",
+          "references",
+        ],
+        confidence: ["low", "medium", "high"],
+      },
+      rules: [
+        "只提取你有把握的信息。",
+        "数组字段只放确认过的条目，不要把模糊候选塞进去。",
+        "如果用户是在回答上一轮问题，可以结合上一轮问题补全语义。",
+        "如果用户说“这些都要”“保留这些按键”“你来决定吧”，请结合上下文理解。",
+        "不要生成 customer_reply，不要复述原文。",
+      ],
+    },
+    null,
+    2,
+  );
+}

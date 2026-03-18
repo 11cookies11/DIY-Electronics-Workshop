@@ -2,11 +2,19 @@ import type { PreviewInput } from "@/engine/preview/types";
 import { detectConversationBaseMode } from "./conversation-base";
 import { analyzeConversationMemory } from "./memory";
 import { planReplyOrchestration } from "./orchestration";
-import { buildIntakeSystemPrompt, buildIntakeUserPrompt } from "./prompt";
+import {
+  buildIntakeReasoningSystemPrompt,
+  buildIntakeReasoningUserPrompt,
+  buildIntakeSystemPrompt,
+  buildIntakeUserPrompt,
+} from "./prompt";
 import { decideReadinessFlow } from "./readiness";
 import { buildReminderBundle } from "./reminders";
 import { analyzeRequirementReasoning } from "./reasoning";
-import { isSecondMeChatConfigured, requestSecondMeChatReply } from "./secondme-client";
+import {
+  isSecondMeChatConfigured,
+  requestSecondMeChatReply,
+} from "./secondme-client";
 import { parseConversationSignals } from "./signals";
 import { routeIntakeSkills } from "./skills";
 import { buildIntakeSuggestions } from "./suggestions";
@@ -20,6 +28,7 @@ import {
   type IntakeAgentState,
   type IntakeIntent,
   type IntakeNextAction,
+  type IntakeReasoningPatch,
   type LabHandoff,
   type PreviewDraft,
   type PreviewReadiness,
@@ -61,6 +70,141 @@ function uniqueModules(modules: PreviewInput["modules"]) {
     seen.add(id);
     return true;
   });
+}
+
+const ARRAY_REQUIREMENT_FIELDS: Array<keyof ConfirmedRequirement> = [
+  "target_devices",
+  "core_features",
+  "controls",
+  "button_preferences",
+  "sensors",
+  "audio",
+  "connectivity",
+  "ports",
+  "power",
+  "references",
+];
+
+const SCALAR_REQUIREMENT_FIELDS: Array<keyof ConfirmedRequirement> = [
+  "device_type",
+  "use_case",
+  "target_users",
+  "screen",
+  "screen_size_preference",
+  "interaction_layout",
+  "size",
+  "placement",
+  "portability",
+  "budget",
+  "timeline",
+  "environment",
+];
+
+function isConfirmedRequirementField(value: string): value is keyof ConfirmedRequirement {
+  return (
+    ARRAY_REQUIREMENT_FIELDS.includes(value as keyof ConfirmedRequirement) ||
+    SCALAR_REQUIREMENT_FIELDS.includes(value as keyof ConfirmedRequirement)
+  );
+}
+
+function normalizeStringArray(value: unknown) {
+  if (!Array.isArray(value)) return undefined;
+  return unique(
+    value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter(Boolean),
+  );
+}
+
+function sanitizeModelRequirementPatch(raw: unknown): IntakeReasoningPatch | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+
+  const source = raw as Record<string, unknown>;
+  const confirmedPatch = {} as Partial<ConfirmedRequirement>;
+  const arrayPatch = confirmedPatch as Record<string, string[] | undefined>;
+  const scalarPatch = confirmedPatch as Record<string, string | undefined>;
+
+  for (const field of ARRAY_REQUIREMENT_FIELDS) {
+    const normalized = normalizeStringArray(source.confirmed_patch && typeof source.confirmed_patch === "object"
+      ? (source.confirmed_patch as Record<string, unknown>)[field]
+      : undefined);
+    if (normalized?.length) {
+      arrayPatch[field] = normalized;
+    }
+  }
+
+  for (const field of SCALAR_REQUIREMENT_FIELDS) {
+    const candidate =
+      source.confirmed_patch && typeof source.confirmed_patch === "object"
+        ? (source.confirmed_patch as Record<string, unknown>)[field]
+        : undefined;
+    if (typeof candidate === "string" && candidate.trim()) {
+      scalarPatch[field] = candidate.trim();
+    }
+  }
+
+  const replaceFields = Array.isArray(source.replace_fields)
+    ? source.replace_fields
+        .filter((field): field is string => typeof field === "string")
+        .map((field) => field.trim())
+        .filter(isConfirmedRequirementField)
+    : [];
+
+  const confidence =
+    source.confidence === "low" || source.confidence === "medium" || source.confidence === "high"
+      ? source.confidence
+      : undefined;
+  const notes = normalizeStringArray(source.notes);
+
+  if (!Object.keys(confirmedPatch).length && !replaceFields.length && !notes?.length) {
+    return undefined;
+  }
+
+  return {
+    confirmed_patch: confirmedPatch,
+    replace_fields: replaceFields,
+    confidence,
+    notes,
+  };
+}
+
+function mergeReasoningPatch(
+  base: ConfirmedRequirement,
+  patch?: IntakeReasoningPatch,
+) {
+  if (!patch?.confirmed_patch) return base;
+
+  const replaceFields = new Set<keyof ConfirmedRequirement>(patch.replace_fields ?? []);
+  const merged = { ...base };
+  const scalarMerged = merged as Record<string, string | undefined>;
+  const arrayMerged = merged as Record<string, string[] | undefined>;
+  const scalarPatch = patch.confirmed_patch as Record<string, string | undefined>;
+  const arrayPatch = patch.confirmed_patch as Record<string, string[] | undefined>;
+
+  for (const field of SCALAR_REQUIREMENT_FIELDS) {
+    const candidate = scalarPatch[field];
+    if (typeof candidate !== "string" || !candidate.trim()) continue;
+    scalarMerged[field] = replaceFields.has(field)
+      ? candidate.trim()
+      : (scalarMerged[field] ?? candidate.trim());
+  }
+
+  for (const field of ARRAY_REQUIREMENT_FIELDS) {
+    const candidate = arrayPatch[field];
+    if (!Array.isArray(candidate) || !candidate.length) continue;
+    arrayMerged[field] = (
+      replaceFields.has(field)
+        ? unique(candidate)
+        : mergeArrays(arrayMerged[field], candidate)
+    );
+  }
+
+  return merged;
+}
+
+function canUseReasoningModel() {
+  return Boolean(process.env.SECONDME_INTAKE_REASONING_MODEL);
 }
 
 function hasPattern(message: string, patterns: RegExp[]) {
@@ -857,6 +1001,31 @@ function buildFallbackCustomerReply(args: {
   return "嗯，我在听。你想到哪儿说到哪儿就好，我来帮你慢慢理。";
 }
 
+async function buildModelRequirementPatch(request: IntakeAgentRequest) {
+  const model = process.env.SECONDME_INTAKE_REASONING_MODEL;
+  if (!model) {
+    return undefined;
+  }
+
+  try {
+    const content = await requestSecondMeChatReply(
+      [
+        { role: "system", content: buildIntakeReasoningSystemPrompt() },
+        { role: "user", content: buildIntakeReasoningUserPrompt(request) },
+      ],
+      {
+        model,
+        requireJson: true,
+        temperature: 0,
+      },
+    );
+
+    return sanitizeModelRequirementPatch(JSON.parse(content) as unknown);
+  } catch {
+    return undefined;
+  }
+}
+
 async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   confirmed: ConfirmedRequirement;
   unknowns: string[];
@@ -945,7 +1114,17 @@ export async function runIntakeWorkflow(
     history,
   };
 
-  const confirmed = deriveConfirmed(message, state.confirmed, history);
+  const localConfirmed = deriveConfirmed(message, state.confirmed, history);
+  const modelRequirementPatch = canUseReasoningModel()
+    ? await buildModelRequirementPatch({
+        ...request,
+        state: {
+          ...request.state,
+          confirmed: localConfirmed,
+        },
+      })
+    : undefined;
+  const confirmed = mergeReasoningPatch(localConfirmed, modelRequirementPatch);
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
   const reminderBundle = buildReminderBundle(confirmed);

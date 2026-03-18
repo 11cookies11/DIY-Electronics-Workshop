@@ -179,6 +179,13 @@ export type SecondMeChatMessage = {
   content: string;
 };
 
+export type IntakeReasoningPatch = {
+  confirmed_patch?: Partial<ConfirmedRequirement>;
+  replace_fields?: Array<keyof ConfirmedRequirement>;
+  confidence?: "low" | "medium" | "high";
+  notes?: string[];
+};
+
 export type IntakeSkillId =
   | "capability-intro"
   | "lab-intro"
