@@ -1533,6 +1533,49 @@ function resolveWorkflowControl(args: {
   };
 }
 
+function buildWorkflowDebugInfo(args: {
+  workflowState: IntakeAgentState["workflow_state"];
+  route: IntakeSkillRoute;
+  orchestration: ReplyOrchestration;
+  memory: ReturnType<typeof analyzeConversationMemory>;
+  unknowns: string[];
+  risks: string[];
+  nextAction: IntakeNextAction;
+  llmNativeDecision?: LlmNativeDecision;
+  previewDraft?: PreviewDraft;
+  labHandoff?: LabHandoff;
+  exposedPreviewDraft?: PreviewDraft;
+  exposedLabHandoff?: LabHandoff;
+  reasoningTrace?: IntakeReasoningTrace;
+}) {
+  return {
+    workflow_state: args.workflowState,
+    active_skill: args.route.active_skill,
+    matched_skills: args.route.matched_skills,
+    routing_reason: args.route.reason,
+    transition_mode: args.orchestration.transitionMode,
+    single_focus: args.orchestration.singleFocus,
+    inferred_archetype: args.orchestration.inferredArchetype,
+    memory_mode: args.memory.mode,
+    unknowns: args.unknowns,
+    risks: args.risks,
+    next_action: args.nextAction,
+    llm_native_stage: args.llmNativeDecision?.agent_stage,
+    llm_native_unknowns: args.llmNativeDecision?.unknowns,
+    llm_native_single_focus: args.llmNativeDecision?.single_focus,
+    llm_native_next_action: args.llmNativeDecision?.next_action,
+    llm_native_preview_ready: args.llmNativeDecision?.preview_candidate_ready,
+    llm_native_handoff_ready: args.llmNativeDecision?.handoff_candidate_ready,
+    has_preview_candidate: Boolean(args.previewDraft),
+    has_handoff_candidate: Boolean(args.labHandoff),
+    offering_preview: args.workflowState === "preview_ready",
+    offering_handoff: args.workflowState === "handoff_ready" && !args.exposedLabHandoff,
+    exposed_preview: Boolean(args.exposedPreviewDraft),
+    exposed_handoff: Boolean(args.exposedLabHandoff),
+    reasoning_trace: args.reasoningTrace,
+  };
+}
+
 async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
   confirmed: ConfirmedRequirement;
   unknowns: string[];
@@ -1824,32 +1867,21 @@ export async function runIntakeWorkflow(
     requirementSummary: requirementSummary || "已记录当前对话，等待进一步补充。",
     intent: inferIntent(message),
     nextAction,
-    debug: {
-      workflow_state: workflowState,
-      active_skill: route.active_skill,
-      matched_skills: route.matched_skills,
-      routing_reason: route.reason,
-      transition_mode: orchestration.transitionMode,
-      single_focus: orchestration.singleFocus,
-      inferred_archetype: orchestration.inferredArchetype,
-      memory_mode: memory.mode,
+    debug: buildWorkflowDebugInfo({
+      workflowState,
+      route,
+      orchestration,
+      memory,
       unknowns,
       risks,
-      next_action: nextAction,
-      llm_native_stage: llmNativeDecision?.agent_stage,
-      llm_native_unknowns: llmNativeDecision?.unknowns,
-      llm_native_single_focus: llmNativeDecision?.single_focus,
-      llm_native_next_action: llmNativeDecision?.next_action,
-      llm_native_preview_ready: llmNativeDecision?.preview_candidate_ready,
-      llm_native_handoff_ready: llmNativeDecision?.handoff_candidate_ready,
-      has_preview_candidate: Boolean(previewDraft),
-      has_handoff_candidate: Boolean(labHandoff),
-      offering_preview: workflowState === "preview_ready",
-      offering_handoff: workflowState === "handoff_ready" && !exposedLabHandoff,
-      exposed_preview: Boolean(exposedPreviewDraft),
-      exposed_handoff: Boolean(exposedLabHandoff),
-      reasoning_trace: reasoningTrace,
-    },
+      nextAction,
+      llmNativeDecision,
+      previewDraft,
+      labHandoff,
+      exposedPreviewDraft,
+      exposedLabHandoff,
+      reasoningTrace,
+    }),
   });
 
   return {
