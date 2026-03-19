@@ -178,6 +178,16 @@ export function LabScene({
           </div>
 
           <div className="pointer-events-auto flex gap-3">
+            <a
+              href="/account"
+              className={`flex h-12 min-w-24 items-center justify-center rounded-sm border px-4 font-mono text-[10px] uppercase tracking-[0.18em] transition-all md:h-14 md:min-w-28 ${
+                isDark
+                  ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                  : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"
+              }`}
+            >
+              account
+            </a>
             <button
               onClick={() =>
                 setView((current) =>
