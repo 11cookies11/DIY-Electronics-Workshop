@@ -134,6 +134,30 @@ const scenarios = [
     ],
   },
   {
+    name: "structured_output_contract_preview_and_handoff",
+    steps: [
+      "\u6211\u60f3\u505a\u4e00\u4e2a\u7ea2\u5916\u4e07\u80fd\u9065\u63a7\u5668",
+      "\u63a7\u5236\u7535\u89c6\u548c\u7a7a\u8c03",
+      "\u7528\u89e6\u5c4f\uff0c\u4fdd\u7559\u6309\u94ae",
+      "\u5185\u7f6e\u7535\u6c60\uff0c\u7528Type-C",
+      "\u5148\u51fa\u4e00\u7248\u9884\u89c8",
+      "\u7ee7\u7eed\u63a8\u8fdb",
+    ],
+    assertions: [
+      {
+        step: 4,
+        state: "preview_generated",
+        nextAction: "generate_preview",
+        requiresPreviewDraft: true,
+      },
+      {
+        step: 5,
+        state: "handoff_ready",
+        requiresLabHandoff: true,
+      },
+    ],
+  },
+  {
     name: "natural_language_infers_device_archetype",
     steps: [
       "我想做一个放客厅茶几上的小东西",
@@ -285,6 +309,24 @@ function assertScenarioTurn(result, assertion, scenarioName) {
         );
       }
     }
+  }
+
+  if (assertion.nextAction && result.next_action !== assertion.nextAction) {
+    throw new Error(
+      `${scenarioName}: expected next_action ${assertion.nextAction} at step ${assertion.step}, got ${result.next_action}`,
+    );
+  }
+
+  if (assertion.requiresPreviewDraft && !result.preview_input_draft) {
+    throw new Error(
+      `${scenarioName}: expected preview_input_draft at step ${assertion.step}, but it is missing`,
+    );
+  }
+
+  if (assertion.requiresLabHandoff && !result.lab_handoff) {
+    throw new Error(
+      `${scenarioName}: expected lab_handoff at step ${assertion.step}, but it is missing`,
+    );
   }
 }
 

@@ -80,7 +80,7 @@ export function decideReadinessFlow(args: {
       workflowState: "handoff_ready",
       nextAction: "ask_more",
       exposePreview: true,
-      exposeHandoff: false,
+      exposeHandoff: true,
     } satisfies ReadinessDecision;
   }
 
@@ -98,7 +98,7 @@ export function decideReadinessFlow(args: {
       workflowState: "handoff_ready",
       nextAction: "ask_more",
       exposePreview: Boolean(args.previewDraft),
-      exposeHandoff: false,
+      exposeHandoff: true,
     } satisfies ReadinessDecision;
   }
 
