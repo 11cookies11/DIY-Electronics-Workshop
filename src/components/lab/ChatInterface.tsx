@@ -43,6 +43,7 @@ type ChatInterfaceProps = {
   activePresetLabel: string;
   activeView: PreviewView;
   onPreviewDraft?: (draft: PreviewDraft) => void;
+  onMinimizedChange?: (isMinimized: boolean) => void;
 };
 
 type StageFeedback = {
@@ -112,6 +113,7 @@ export function ChatInterface({
   activePresetLabel,
   activeView,
   onPreviewDraft,
+  onMinimizedChange,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: buildSeedMessage(isConnected, activePresetLabel) },
@@ -143,6 +145,10 @@ export function ChatInterface({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    onMinimizedChange?.(isMinimized);
+  }, [isMinimized, onMinimizedChange]);
 
   useEffect(() => {
     setMessages([
@@ -505,6 +511,7 @@ export function ChatInterface({
 
   return (
     <div
+      data-chat-interface-root="true"
       className={`pointer-events-none fixed bottom-6 right-6 z-50 transition-all duration-300 ${
         isMinimized ? "h-12 w-12" : "w-80 sm:w-96"
       }`}

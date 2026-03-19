@@ -4,8 +4,8 @@ import { Grid, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
 import { AnimatePresence, motion } from "motion/react";
-import { ChevronDown, Moon, Settings, Sun, X } from "lucide-react";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Moon, Settings, Sun, User, X } from "lucide-react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatInterface } from "./ChatInterface";
 import { THEME } from "./constants";
 import { useTheme } from "./theme-context";
@@ -17,6 +17,12 @@ import {
   type PreviewView,
 } from "@/engine/preview";
 import type { PreviewDraft } from "@/lib/intake/types";
+
+const AUTO_ROTATE_SECONDS_PER_LOOP = 15;
+const AUTO_MODE_IDLE_RESUME_MS = 10_000;
+const AUTO_VIEW_SWITCH_MS = AUTO_ROTATE_SECONDS_PER_LOOP * 1000;
+const AUTO_ROTATE_SPEED = 60 / AUTO_ROTATE_SECONDS_PER_LOOP;
+const DEFAULT_DEMO_BRAND = "SECONDME EMBEDDED DEMO";
 
 type LabSceneProps = {
   isConnected: boolean;
@@ -35,12 +41,15 @@ export function LabScene({
 }: LabSceneProps) {
   const { mode, toggleTheme } = useTheme();
   const [presetId, setPresetId] = useState(PREVIEW_DEVICE_PRESETS[0].id);
-  const [view, setView] = useState<PreviewView>("assembled");
+  const [view, setView] = useState<PreviewView>("exploded");
+  const [isPreviewAutoMode, setIsPreviewAutoMode] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [generatedPreview, setGeneratedPreview] = useState<PreviewDraft | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const idleResumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDark = mode === "dark";
   const bgColor = isDark ? THEME.bg : THEME.bgLight;
   const activePreset =
@@ -53,10 +62,76 @@ export function LabScene({
     () => buildPreviewScene(activePreviewInput, view),
     [activePreviewInput, view],
   );
+  const titleText =
+    process.env.NEXT_PUBLIC_DEMO_TITLE?.trim() || "DIY电子产品工坊";
+  const viewText = view === "exploded" ? "拆解视图" : "装配视图";
+  const previewModeText = isPreviewAutoMode
+    ? `自动预览（${AUTO_ROTATE_SECONDS_PER_LOOP}秒/圈）`
+    : "手动预览";
+  const productionHeroCopy = generatedPreview
+    ? `当前展示「${activePresetLabel}」，可继续在右侧对话中细化需求，系统会同步更新结构预览与交付信息。`
+    : `当前展示「${activePresetLabel}」。前台会在对话中收集需求，系统同步生成 3D 结构预览与协作信息。`;
 
   useEffect(() => {
     setSelectedNodeId(null);
   }, [presetId, view, generatedPreview]);
+
+  const markUserActivity = useCallback(() => {
+    setIsPreviewAutoMode(false);
+    if (idleResumeTimerRef.current) {
+      clearTimeout(idleResumeTimerRef.current);
+    }
+    idleResumeTimerRef.current = setTimeout(() => {
+      setIsPreviewAutoMode(true);
+    }, AUTO_MODE_IDLE_RESUME_MS);
+  }, []);
+
+  const isFromChatInterface = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest('[data-chat-interface-root="true"]'));
+  }, []);
+
+  const markUserActivityFromGlobalEvent = useCallback(
+    (event: Event) => {
+      if (isFromChatInterface(event.target)) {
+        return;
+      }
+      markUserActivity();
+    },
+    [isFromChatInterface, markUserActivity],
+  );
+
+  useEffect(() => {
+    const eventOptions = { passive: true } as const;
+    window.addEventListener("pointerdown", markUserActivityFromGlobalEvent, eventOptions);
+    window.addEventListener("wheel", markUserActivityFromGlobalEvent, eventOptions);
+    window.addEventListener("touchstart", markUserActivityFromGlobalEvent, eventOptions);
+    window.addEventListener("keydown", markUserActivityFromGlobalEvent);
+    return () => {
+      window.removeEventListener("pointerdown", markUserActivityFromGlobalEvent);
+      window.removeEventListener("wheel", markUserActivityFromGlobalEvent);
+      window.removeEventListener("touchstart", markUserActivityFromGlobalEvent);
+      window.removeEventListener("keydown", markUserActivityFromGlobalEvent);
+    };
+  }, [markUserActivityFromGlobalEvent]);
+
+  useEffect(() => {
+    if (!isPreviewAutoMode) return;
+    const timer = setInterval(() => {
+      setView((current) => (current === "assembled" ? "exploded" : "assembled"));
+    }, AUTO_VIEW_SWITCH_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [isPreviewAutoMode]);
+
+  useEffect(() => {
+    return () => {
+      if (idleResumeTimerRef.current) {
+        clearTimeout(idleResumeTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -82,17 +157,20 @@ export function LabScene({
       }`}
     >
       <Canvas shadows dpr={[1, 2]} onPointerMissed={() => setSelectedNodeId(null)}>
-        <PerspectiveCamera makeDefault position={[4.9, 4.1, 6]} fov={38} />
+        <PerspectiveCamera makeDefault position={[4.3, 3.7, 5.2]} fov={34} />
         <OrbitControls
           enableDamping
           dampingFactor={0.05}
           minDistance={2}
           maxDistance={12}
           maxPolarAngle={Math.PI / 1.8}
+          autoRotate={isPreviewAutoMode}
+          autoRotateSpeed={AUTO_ROTATE_SPEED}
+          onStart={markUserActivity}
           target={[0, 0, 0]}
         />
         <color attach="background" args={[bgColor]} />
-        <fog attach="fog" args={[bgColor, 6, 15]} />
+        <fog attach="fog" args={[bgColor, 10, 24]} />
         <ambientLight intensity={isDark ? 0.82 : 0.92} />
         <pointLight position={[10, 10, 10]} intensity={isDark ? 1.35 : 0.55} />
         <pointLight
@@ -164,7 +242,7 @@ export function LabScene({
                   isDark ? "text-white" : "text-slate-900"
                 }`}
               >
-                EMBEDDED_A2A<span className="text-emerald-500">.</span>LAB
+                {titleText}
               </h1>
             </div>
             <p
@@ -174,33 +252,36 @@ export function LabScene({
                   : "border-slate-300 text-slate-500"
               }`}
             >
-              {view === "exploded"
-                ? "preview mode | exploded assembly"
-                : "preview mode | assembled concept"}
+              {`当前模式 | ${viewText} | ${previewModeText}`}
             </p>
             <p
               className={`max-w-2xl text-sm leading-7 ${
                 isDark ? "text-white/70" : "text-slate-700"
               }`}
             >
-              {heroCopy}
+              {productionHeroCopy}
             </p>
             <p
               className={`font-mono text-[10px] uppercase tracking-[0.18em] ${
                 isDark ? "text-cyan-300/70" : "text-cyan-700"
               }`}
             >
-              active preset | {activePresetLabel}
+              当前展示设备 | {activePresetLabel}
             </p>
           </div>
 
-          <div className="pointer-events-auto flex items-center gap-4">
+          <div
+            className={`pointer-events-auto fixed bottom-6 z-[70] ${
+              isChatMinimized ? "right-24" : "right-[22rem] sm:right-[26.5rem]"
+            }`}
+          >
             <button
-              onClick={() =>
+              onClick={() => {
+                markUserActivity();
                 setView((current) =>
                   current === "assembled" ? "exploded" : "assembled",
-                )
-              }
+                );
+              }}
               className={`flex h-12 min-w-24 items-center justify-center rounded-sm border px-4 font-mono text-[10px] uppercase tracking-[0.18em] transition-all md:h-14 md:min-w-28 ${
                 isDark
                   ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
@@ -209,20 +290,28 @@ export function LabScene({
             >
               {view === "exploded" ? "合拢设备" : "拆解设备"}
             </button>
-            <div
-              className={`h-8 w-px ${isDark ? "bg-white/10" : "bg-slate-300"}`}
-              aria-hidden
-            />
+          </div>
+          <div className="pointer-events-auto fixed right-6 top-4 z-[70] sm:right-8 sm:top-6 lg:right-10 lg:top-7">
             <div className="relative" ref={accountMenuRef}>
               <button
                 onClick={() => setIsAccountMenuOpen((current) => !current)}
-                className={`flex h-12 min-w-28 items-center justify-between gap-2 rounded-sm border px-4 font-mono text-[10px] uppercase tracking-[0.18em] transition-all md:h-14 md:min-w-32 ${
+                className={`group flex h-12 items-center gap-2 px-1.5 font-mono text-[10px] uppercase tracking-[0.18em] transition-all md:h-14 ${
                   isDark
-                    ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
-                    : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"
+                    ? "text-white/60 hover:text-white"
+                    : "text-slate-600 hover:text-slate-900"
                 }`}
+                aria-label="账号菜单"
               >
-                account
+                <span
+                  className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                    isDark
+                      ? "bg-white/5 text-white/70 group-hover:bg-white/10 group-hover:text-white"
+                      : "bg-white/70 text-slate-600 group-hover:bg-white group-hover:text-slate-900"
+                  }`}
+                >
+                  <User size={14} />
+                </span>
+                <span className="tracking-[0.16em]">account</span>
                 <ChevronDown
                   size={14}
                   className={`transition-transform ${isAccountMenuOpen ? "rotate-180" : ""}`}
@@ -399,6 +488,7 @@ export function LabScene({
         userInfoError={userInfoError}
         activePresetLabel={activePresetLabel}
         activeView={view}
+        onMinimizedChange={setIsChatMinimized}
         onPreviewDraft={(draft) => {
           setGeneratedPreview(draft);
           setView("assembled");
