@@ -174,6 +174,8 @@ export function buildLlmNativeDecisionUserPrompt(args: {
       rules: [
         "先判断用户这句话是在闲聊、补充、纠正、确认、拒绝、还是推进下一步。",
         "unknowns 要体现语义判断，不要只按字段缺失机械返回。",
+        "slot_assessments 要优先覆盖 baseline_unknowns，至少说明当前关键槽位是 unanswered、broadly_answered、answered 还是 conflicted。",
+        "如果用户已经用上位概念回答了问题，例如“家里常用家电都想带上”，对应槽位可以标为 broadly_answered。",
         "single_focus 只保留当前最值得追问的一个点；如果不该追问，可以留空。",
         "如果 preview_candidate_ready 为 true 且用户在推进方案，可以把 next_action 设为 generate_preview。",
         "如果 handoff_candidate_ready 为 true 且用户在推进交接，可以把 next_action 设为 prepare_handoff。",

@@ -21,7 +21,11 @@ import {
 import { parseConversationSignals } from "./signals";
 import { routeIntakeSkills } from "./skills";
 import { buildIntakeSuggestions } from "./suggestions";
-import { sanitizeLlmNativeDecision } from "./llm-native";
+import {
+  deriveRisksFromSlotAssessments,
+  deriveUnknownsFromSlotAssessments,
+  sanitizeLlmNativeDecision,
+} from "./llm-native";
 import { buildStructuredIntakeOutput } from "./state-pipeline";
 import {
   createEmptyState,
@@ -1540,9 +1544,12 @@ export async function runIntakeWorkflow(
     reasoning,
     risks: baselineRisks,
   });
-  const unknowns = llmNativeDecision?.unknowns.length
-    ? unique(llmNativeDecision.unknowns)
+  const slotAssessmentUnknowns = llmNativeDecision
+    ? deriveUnknownsFromSlotAssessments(baselineUnknowns, llmNativeDecision.slot_assessments)
     : baselineUnknowns;
+  const unknowns = llmNativeDecision?.unknowns.length
+    ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
+    : slotAssessmentUnknowns;
   const memory = analyzeConversationMemory({
     message,
     history,
@@ -1576,6 +1583,8 @@ export async function runIntakeWorkflow(
     ...state.risks,
     ...reasoning.risks,
     ...reminderBundle.riskAlerts,
+    ...(llmNativeDecision ? deriveRisksFromSlotAssessments(llmNativeDecision.slot_assessments) : []),
+    ...(llmNativeDecision?.risks ?? []),
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
