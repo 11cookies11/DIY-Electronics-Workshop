@@ -20,23 +20,14 @@ export async function POST(request: Request) {
     );
 
     if (!messages?.length) {
-      return NextResponse.json(
-        { error: "messages are required" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "messages are required" }, { status: 400 });
     }
 
     const content = await requestLlmChatReply(messages);
-
-    return NextResponse.json({
-      reply: content,
-    });
+    return NextResponse.json({ reply: content });
   } catch (error) {
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "LLM chat request failed",
-      },
+      { error: error instanceof Error ? error.message : "LLM chat request failed" },
       { status: 500 },
     );
   }
