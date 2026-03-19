@@ -224,6 +224,16 @@ function buildDeliveryPreview(output: IntakeAgentOutput) {
   }`;
 }
 
+function shouldAgentSpeakInStage(agent: RoleplayAgentId, stage: CollaborationStage) {
+  if (agent === "front_desk") return true;
+  if (stage === "front_desk_intake") return false;
+  if (stage === "procurement_planning") return agent === "hardware_procurement";
+  if (stage === "software_planning") {
+    return agent === "hardware_procurement" || agent === "software_lead";
+  }
+  return true;
+}
+
 function buildFallbackConversation(output: IntakeAgentOutput, stage: CollaborationStage) {
   const turns: CollaborationConversationTurn[] = [
     {
@@ -231,21 +241,27 @@ function buildFallbackConversation(output: IntakeAgentOutput, stage: Collaborati
       to: ["hardware_procurement", "software_lead", "delivery_lead"],
       message: `我先同步当前方向：${output.requirement_summary}`,
     },
-    {
+  ];
+
+  if (shouldAgentSpeakInStage("hardware_procurement", stage)) {
+    turns.push({
       from: "hardware_procurement",
       to: ["front_desk", "software_lead", "delivery_lead"],
       message: buildProcurementPreview(output),
-    },
-    {
+    });
+  }
+
+  if (shouldAgentSpeakInStage("software_lead", stage)) {
+    turns.push({
       from: "software_lead",
       to: ["front_desk", "hardware_procurement", "delivery_lead"],
       message: buildSoftwareLeadPreview(output),
-    },
-  ];
+    });
+  }
 
   // 交付 Agent 阶段触发：仅在跨团队同步阶段广播，避免每轮重复。
-  if (stage === "cross_agent_sync") {
-    turns.splice(1, 0, {
+  if (shouldAgentSpeakInStage("delivery_lead", stage)) {
+    turns.push({
       from: "delivery_lead",
       to: ["front_desk", "hardware_procurement", "software_lead"],
       message: buildDeliveryPreview(output),
@@ -420,9 +436,7 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
     .filter(Boolean)
     .slice(0, 8) as CollaborationConversationTurn[];
   const stageFilteredConversation =
-    stage === "cross_agent_sync"
-      ? conversation
-      : conversation.filter((turn) => turn.from !== "delivery_lead");
+    conversation.filter((turn) => shouldAgentSpeakInStage(turn.from, stage));
 
   return {
     ...fallback,
