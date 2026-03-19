@@ -1263,13 +1263,13 @@ function applyReplyGuard(args: {
   }
 
   if (args.nextAction === "generate_preview" && args.previewDraft) {
-    if (/[锛?]/.test(args.reply) || /(瑕佷笉瑕亅鏄惁|鍙互.*鐢熸垚|缁欎綘鐪嬫劅鍙梶鐪嬬湅鎰熻)/.test(args.reply)) {
+    if (/[？?]/.test(args.reply) || /(要不要|是否|可以.*生成|给你看感受|看看感觉)/.test(args.reply)) {
       return "好呀，我已经把刚才聊出来的方向先摆成一版 3D 草案了。你现在可以直接看看主舞台里的结构感觉，如果想调布局或尺寸，我们再顺着往下改。";
     }
   }
 
   if (args.nextAction === "prepare_handoff") {
-    if (/[锛?]/.test(args.reply) || /(瑕佷笉瑕亅鏄惁|鍙互.*鏁寸悊|瑕佷笉瑕佹垜鏁寸悊)/.test(args.reply)) {
+    if (/[？?]/.test(args.reply) || /(要不要|是否|可以.*整理|要不要我整理)/.test(args.reply)) {
       return "我已经把这轮能交给实验室的内容先收成一版了。你可以直接看交接单，如果还想补几个细节，我们也能继续往里添。";
     }
   }
@@ -2371,7 +2371,7 @@ export async function runIntakeWorkflow(
     exposedPreviewDraft,
     exposedLabHandoff,
     requirementSummary:
-      requirementSummary || "宸茶褰曞綋鍓嶅璇濓紝绛夊緟杩涗竴姝ヨˉ鍏呫€?,
+      requirementSummary || "已记录当前对话，等待进一步补充。",
     intent: inferIntent(message),
     nextAction,
   });
