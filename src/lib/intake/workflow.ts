@@ -61,10 +61,6 @@ function canonicalizeUnknownField(field: string) {
   return field;
 }
 
-function normalizeUnknownFields(fields: string[]) {
-  return unique(fields.map(canonicalizeUnknownField));
-}
-
 function normalizeUnknownFieldsSafe(fields: string[]) {
   const alias: Record<string, string> = {
     主要交互方式: "主要交互方式",
@@ -2077,23 +2073,34 @@ function buildWorkflowStructuredOutput(args: {
 }
 
 async function deriveRequirementContext(request: IntakeAgentRequest): Promise<RequirementContext> {
-  const localConfirmed = deriveConfirmed(request.message, request.state.confirmed, request.history ?? []);
   const llmFirst = isLlmFirstModeEnabled();
+  let localConfirmedCache: ConfirmedRequirement | undefined;
+  const getLocalConfirmed = () => {
+    if (!localConfirmedCache) {
+      localConfirmedCache = deriveConfirmed(
+        request.message,
+        request.state.confirmed,
+        request.history ?? [],
+      );
+    }
+    return localConfirmedCache;
+  };
 
   const modelRequirementPatch = canUseReasoningModel()
     ? await buildModelRequirementPatch({
         ...request,
         state: {
           ...request.state,
-          confirmed: llmFirst ? request.state.confirmed : localConfirmed,
+          confirmed: llmFirst ? request.state.confirmed : getLocalConfirmed(),
         },
       })
     : undefined;
 
-  const confirmed =
-    llmFirst && modelRequirementPatch
+  const confirmed = llmFirst
+    ? modelRequirementPatch
       ? mergeReasoningPatch(request.state.confirmed, modelRequirementPatch)
-      : mergeReasoningPatch(localConfirmed, modelRequirementPatch);
+      : getLocalConfirmed()
+    : mergeReasoningPatch(getLocalConfirmed(), modelRequirementPatch);
   const reasoningTrace = buildReasoningTrace(modelRequirementPatch);
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
@@ -2319,91 +2326,6 @@ export async function runIntakeWorkflow(
     reasoning,
     reminderBundle,
   });
-  /*
-  const guardrailUnknowns = computeUnknowns(confirmed);
-  const baselineUnknowns = unique([...guardrailUnknowns, ...reasoning.mustConfirm]);
-  const previewDraft = mapConfirmedToPreviewDraft(confirmed);
-  const baselineRisks = unique([
-    ...state.risks,
-    ...reasoning.risks,
-    ...reminderBundle.riskAlerts,
-    ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
-  ]);
-  const baselineRequirementSummary = buildRequirementSummary(confirmed);
-  const baselineLabHandoff = buildLabHandoff(
-    confirmed,
-    baselineRequirementSummary,
-    baselineUnknowns,
-    baselineRisks,
-    reasoningTrace,
-    previewDraft,
-  );
-  const llmNativeDecision = await buildLlmNativeDecision(request, {
-    confirmed,
-    unknowns: baselineUnknowns,
-    previewDraft,
-    handoffCandidate: baselineLabHandoff,
-    reasoning,
-    risks: baselineRisks,
-  });
-  const slotAssessmentUnknowns = llmNativeDecision
-    ? deriveUnknownsFromSlotAssessments(guardrailUnknowns, llmNativeDecision.slot_assessments)
-    : baselineUnknowns;
-  const llmNativeUnknowns = llmNativeDecision?.unknowns.length
-    ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
-    : slotAssessmentUnknowns;
-  const unknowns = filterUnknownsByContext(
-    normalizeUnknownFieldsSafe(
-    llmNativeDecision
-      ? unique([...llmNativeUnknowns, ...guardrailUnknowns])
-      : baselineUnknowns,
-    ),
-    confirmed,
-    message,
-  );
-  const memory = analyzeConversationMemory({
-    message,
-    history,
-    unknowns,
-  });
-  const route: IntakeSkillRoute = buildLlmNativeSkillRoute(llmNativeDecision);
-  const legacyOrchestration = planReplyOrchestration({
-    message,
-    confirmed,
-    unknowns,
-    nextAction: "ask_more",
-    route,
-    previewDraft,
-    memory,
-  });
-  const orchestration = buildOrchestrationFromLlmDecision({
-    decision: llmNativeDecision,
-    message,
-    confirmed,
-    unknowns,
-    previewDraft,
-    fallback: legacyOrchestration,
-  });
-
-  const risks = unique([
-    ...state.risks,
-    ...reasoning.risks,
-    ...reminderBundle.riskAlerts,
-    ...(llmNativeDecision ? deriveRisksFromSlotAssessments(llmNativeDecision.slot_assessments) : []),
-    ...(llmNativeDecision?.risks ?? []),
-    ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
-  ]);
-
-  const requirementSummary = baselineRequirementSummary;
-  const labHandoff = buildLabHandoff(
-    confirmed,
-    requirementSummary,
-    unknowns,
-    risks,
-    reasoningTrace,
-    previewDraft,
-  );
-  */
   const { workflowState, nextAction, exposedPreviewDraft, exposedLabHandoff } =
     resolveWorkflowControl({
       message,
@@ -2433,41 +2355,6 @@ export async function runIntakeWorkflow(
     llmNativeDecision,
   });
 
-  /*
-  const legacyStructuredOutput = buildStructuredIntakeOutput({
-    workflowState,
-    confirmed,
-    unknowns,
-    risks,
-    suggestions,
-    assumptions: previewDraft?.assumptions ?? [],
-    previewCandidate: previewDraft,
-    handoffCandidate: labHandoff,
-    exposedPreviewDraft,
-    exposedLabHandoff,
-    requirementSummary: requirementSummary || "已记录当前对话，等待进一步补充。",
-    intent: inferIntent(message),
-    nextAction,
-    debug: buildWorkflowDebugInfo({
-      workflowState,
-      route,
-      orchestration,
-      memory,
-      unknowns,
-      risks,
-      nextAction,
-      llmNativeDecision,
-      previewDraft,
-      labHandoff,
-      exposedPreviewDraft,
-      exposedLabHandoff,
-      reasoningTrace,
-    }),
-  });
-
-  });
-  */
-
   const structuredOutput = buildWorkflowStructuredOutput({
     message,
     workflowState,
@@ -2488,57 +2375,8 @@ export async function runIntakeWorkflow(
     reasoningTrace,
   });
 
-
   return {
     customer_reply: customerReply,
     ...structuredOutput,
   };
-
-  /*
-  const structuredOutput = buildStructuredIntakeOutput({
-    workflowState,
-    confirmed,
-    unknowns,
-    risks,
-    suggestions,
-    assumptions: previewDraft?.assumptions ?? [],
-    previewDraft,
-    labHandoff,
-    exposedPreviewDraft,
-    exposedLabHandoff,
-    requirementSummary:
-      requirementSummary || "已记录当前对话，等待进一步补充。",
-    intent: inferIntent(message),
-    nextAction,
-  });
-
-  return {
-    customer_reply: customerReply,
-    ...structuredOutput,
-  };
-
-  /*
-  return {
-    customer_reply: customerReply,
-    state: {
-      workflow_state: workflowState,
-      confirmed,
-      unknowns,
-      risks,
-      suggestions,
-      assumptions: previewDraft?.assumptions ?? [],
-      preview_input_draft: previewDraft,
-      lab_handoff: labHandoff,
-    },
-    intent: inferIntent(message),
-    requirement_summary: requirementSummary || "已记录当前对话，等待进一步补充。",
-    confirmed,
-    unknowns,
-    risks,
-    suggestions,
-    preview_input_draft: exposedPreviewDraft,
-    lab_handoff: exposedLabHandoff,
-    next_action: nextAction,
-  };
-  */
 }
