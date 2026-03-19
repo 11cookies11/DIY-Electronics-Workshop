@@ -16,6 +16,7 @@ build/
 out/
 .next/
 node_modules/
+tsconfig.tsbuildinfo
 
 # Local env
 .env
@@ -29,3 +30,4 @@ node_modules/
 # Local where workspace artifacts
 .where/*.log
 .where/skills/hardware-3d-preview-planner/
+.where/intake-probe-runtime/
