@@ -576,8 +576,7 @@ export function updateProjectCollaborationRecord(args: {
   for (const event of nextEvents) {
     const shouldSkipDelivery =
       event.from === "delivery_lead" &&
-      previous?.stage === args.panel.stage &&
-      args.panel.stage !== "cross_agent_sync";
+      previous?.stage === args.panel.stage;
     if (shouldSkipDelivery) continue;
 
     const duplicated = history.some(
