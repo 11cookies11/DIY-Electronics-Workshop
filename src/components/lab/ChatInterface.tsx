@@ -1075,6 +1075,18 @@ export function ChatInterface({
                               </div>
                               <div>{debugInfo.next_action}</div>
                             </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                llm stage
+                              </div>
+                              <div>{debugInfo.llm_native_stage ?? "n/a"}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                llm next
+                              </div>
+                              <div>{debugInfo.llm_native_next_action ?? "n/a"}</div>
+                            </div>
                           </div>
                           <div className="mt-2 space-y-2">
                             <div>
@@ -1110,6 +1122,21 @@ export function ChatInterface({
                                 routing reason
                               </div>
                               <div>{debugInfo.routing_reason}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                llm ready
+                              </div>
+                              <div>
+                                {debugInfo.llm_native_preview_ready || debugInfo.llm_native_handoff_ready
+                                  ? [
+                                      debugInfo.llm_native_preview_ready ? "preview" : null,
+                                      debugInfo.llm_native_handoff_ready ? "handoff" : null,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" / ")
+                                  : "n/a"}
+                              </div>
                             </div>
                             <div>
                               <div className={isDark ? "text-white/35" : "text-slate-400"}>
