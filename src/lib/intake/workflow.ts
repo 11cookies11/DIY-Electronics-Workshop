@@ -1695,21 +1695,8 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   }
 }
 
-export async function runIntakeWorkflow(
-  sessionId: string,
-  message: string,
-  state: IntakeAgentState = createEmptyState(),
-  history: ConversationTurn[] = [],
-): Promise<IntakeAgentOutput> {
-  const request: IntakeAgentRequest = {
-    session_id: sessionId,
-    locale: "zh-CN",
-    message,
-    state,
-    history,
-  };
-
-  const localConfirmed = deriveConfirmed(message, state.confirmed, history);
+async function deriveRequirementContext(request: IntakeAgentRequest) {
+  const localConfirmed = deriveConfirmed(request.message, request.state.confirmed, request.history ?? []);
   const modelRequirementPatch = canUseReasoningModel()
     ? await buildModelRequirementPatch({
         ...request,
@@ -1724,6 +1711,32 @@ export async function runIntakeWorkflow(
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
   const reminderBundle = buildReminderBundle(confirmed);
+
+  return {
+    confirmed,
+    reasoningTrace,
+    reasoning,
+    suggestions,
+    reminderBundle,
+  };
+}
+
+export async function runIntakeWorkflow(
+  sessionId: string,
+  message: string,
+  state: IntakeAgentState = createEmptyState(),
+  history: ConversationTurn[] = [],
+): Promise<IntakeAgentOutput> {
+  const request: IntakeAgentRequest = {
+    session_id: sessionId,
+    locale: "zh-CN",
+    message,
+    state,
+    history,
+  };
+
+  const { confirmed, reasoningTrace, reasoning, suggestions, reminderBundle } =
+    await deriveRequirementContext(request);
   const guardrailUnknowns = computeUnknowns(confirmed);
   const baselineUnknowns = unique([...guardrailUnknowns, ...reasoning.mustConfirm]);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
