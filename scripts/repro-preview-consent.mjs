@@ -63,6 +63,11 @@ async function transpileFile(entry) {
 async function prepareRuntime() {
   await rm(runtimeRoot, { recursive: true, force: true });
   await mkdir(runtimeRoot, { recursive: true });
+  await writeFile(
+    path.join(runtimeRoot, "package.json"),
+    JSON.stringify({ type: "module" }, null, 2),
+    "utf8",
+  );
   await Promise.all(sourceFiles.map(transpileFile));
   await writeFile(
     path.join(runtimeRoot, "lib", "secondme.js"),
