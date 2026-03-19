@@ -118,8 +118,8 @@ export type IntakeAgentState = {
   risks: string[];
   suggestions: IntakeSuggestion[];
   assumptions: string[];
-  preview_input_draft?: PreviewDraft;
-  lab_handoff?: LabHandoff;
+  preview_candidate?: PreviewDraft;
+  handoff_candidate?: LabHandoff;
 };
 
 export type IntakeDebugInfo = {
@@ -133,6 +133,10 @@ export type IntakeDebugInfo = {
   unknowns: string[];
   risks: string[];
   next_action: IntakeNextAction;
+  has_preview_candidate?: boolean;
+  has_handoff_candidate?: boolean;
+  exposed_preview?: boolean;
+  exposed_handoff?: boolean;
   reasoning_trace?: IntakeReasoningTrace;
 };
 
@@ -171,6 +175,7 @@ export type ConversationTurn = {
 export type ConversationMemoryMode =
   | "new_topic"
   | "free_chat"
+  | "gratitude"
   | "answering_question"
   | "confirming"
   | "correcting"

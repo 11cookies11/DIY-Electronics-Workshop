@@ -79,6 +79,25 @@ function pickSingleFocus(
     return memoryFocus;
   }
 
+  const preferredOrderByDeviceType: Partial<Record<string, string[]>> = {
+    红外遥控器: ["控制对象", "主要交互方式", "按键或触屏交互", "供电方式", "使用场景"],
+    手持设备: ["使用场景", "供电方式", "主要交互方式", "核心功能", "尺寸与外形"],
+    桌面设备: ["核心功能", "接口需求", "供电方式", "使用场景", "连接方式"],
+    智能手表: ["使用场景", "供电方式", "主要交互方式", "连接方式", "核心功能"],
+    蓝牙音箱: ["核心功能", "连接方式", "供电方式", "主要交互方式", "使用场景"],
+  };
+
+  const preferredOrder = confirmed.device_type
+    ? preferredOrderByDeviceType[confirmed.device_type]
+    : undefined;
+
+  if (preferredOrder?.length) {
+    const preferredFocus = preferredOrder.find((item) => unknowns.includes(item));
+    if (preferredFocus) {
+      return preferredFocus;
+    }
+  }
+
   return unknowns[0];
 }
 
@@ -99,6 +118,7 @@ export function planReplyOrchestration(args: {
     args.unknowns,
     args.memory?.focusHint,
   );
+  const focusResolved = hasResolvedFocus(focus, args.confirmed);
 
   if (baseMode !== "none" && !hasCore) {
     return {
@@ -106,6 +126,16 @@ export function planReplyOrchestration(args: {
       transitionMode: "stay_conversational",
       priorities: ["connect", "answer_directly", "invite_next_step"],
       shouldAdvanceRequirement: false,
+    } satisfies ReplyOrchestration;
+  }
+
+  if (args.memory?.mode === "gratitude") {
+    return {
+      baseMode,
+      transitionMode: "answer_then_offer",
+      priorities: ["acknowledge", "invite_next_step"],
+      shouldAdvanceRequirement: false,
+      singleFocus: focus,
     } satisfies ReplyOrchestration;
   }
 
@@ -142,6 +172,22 @@ export function planReplyOrchestration(args: {
       transitionMode: "stay_conversational",
       priorities: ["acknowledge", "offer_suggestion"],
       shouldAdvanceRequirement: false,
+    } satisfies ReplyOrchestration;
+  }
+
+  if (
+    (args.memory?.mode === "answering_question" ||
+      args.memory?.mode === "correcting" ||
+      args.memory?.mode === "confirming") &&
+    focusResolved &&
+    args.previewDraft
+  ) {
+    return {
+      baseMode,
+      transitionMode: "preview_ready",
+      priorities: ["acknowledge", "offer_suggestion", "invite_next_step"],
+      shouldAdvanceRequirement: true,
+      singleFocus: focus,
     } satisfies ReplyOrchestration;
   }
 

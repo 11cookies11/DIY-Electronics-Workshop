@@ -51,6 +51,16 @@ export function analyzeConversationMemory(args: {
     };
   }
 
+  if (baseMode === "gratitude") {
+    return {
+      mode: "gratitude",
+      recentAssistantQuestion,
+      pendingUnknown: args.unknowns[0],
+      focusHint,
+      shouldContinueThread: false,
+    };
+  }
+
   if (signals.isAffirmative && recentAssistantQuestion) {
     return {
       mode: "confirming",

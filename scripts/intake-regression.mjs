@@ -113,4 +113,44 @@ await runScenario(
   },
 );
 
+await runScenario(
+  "answered_focus_moves_forward",
+  [
+    "我想做一个红外万能遥控器",
+    "控制电视和空调",
+    "用触屏，保留按钮",
+    "内置电池，用Type-C",
+  ],
+  (payload) => {
+    assert(
+      Array.isArray(payload.confirmed.power) && payload.confirmed.power.length > 0,
+      "answered_focus_moves_forward: power should be captured after direct answer",
+    );
+    assert(
+      payload.debug?.single_focus !== "供电方式",
+      "answered_focus_moves_forward: focus should move away after power is answered",
+    );
+  },
+);
+
+await runScenario(
+  "gratitude_stays_natural",
+  [
+    "我想做一个手持设备",
+    "主要放家里用",
+    "内置电池，用Type-C",
+    "谢谢你",
+  ],
+  (payload) => {
+    assert(
+      payload.debug?.transition_mode === "answer_then_offer",
+      "gratitude_stays_natural: gratitude should not force a hard clarification turn",
+    );
+    assert(
+      payload.next_action === "ask_more",
+      "gratitude_stays_natural: gratitude should keep the conversation open",
+    );
+  },
+);
+
 console.log("All intake regression scenarios passed.");

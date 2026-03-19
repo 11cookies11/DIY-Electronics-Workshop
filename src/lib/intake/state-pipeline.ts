@@ -17,8 +17,8 @@ export function buildStructuredIntakeOutput(args: {
   risks: string[];
   suggestions: IntakeSuggestion[];
   assumptions: string[];
-  previewDraft?: PreviewDraft;
-  labHandoff?: LabHandoff;
+  previewCandidate?: PreviewDraft;
+  handoffCandidate?: LabHandoff;
   exposedPreviewDraft?: PreviewDraft;
   exposedLabHandoff?: LabHandoff;
   requirementSummary: string;
@@ -34,8 +34,8 @@ export function buildStructuredIntakeOutput(args: {
       risks: args.risks,
       suggestions: args.suggestions,
       assumptions: args.assumptions,
-      preview_input_draft: args.previewDraft,
-      lab_handoff: args.labHandoff,
+      preview_candidate: args.previewCandidate,
+      handoff_candidate: args.handoffCandidate,
     },
     intent: args.intent,
     requirement_summary: args.requirementSummary,

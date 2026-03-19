@@ -57,38 +57,45 @@ type ContextGuide = {
 };
 
 const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
-  { label: "介绍实验室", prompt: "介绍一下实验室" },
-  { label: "看看当前方案", prompt: "介绍一下当前方案" },
+  { label: "实验室能做什么", prompt: "介绍一下你们实验室能做什么" },
+  { label: "看看主舞台方案", prompt: "介绍一下当前方案" },
   { label: "我想做手持设备", prompt: "我想做一个手持设备" },
-  { label: "我想做桌面设备", prompt: "我想做一个桌面设备" },
+  { label: "我想做遥控器", prompt: "我想做一个红外万能遥控器" },
 ];
 
 function buildSeedMessage(isConnected: boolean, activePresetLabel: string) {
   return isConnected
-    ? `你好呀，实验室平台已经接入 Second Me 了。当前主舞台展示的是“${activePresetLabel}”。你可以先随便和我聊聊想法，我会慢慢帮你把方案理出来。`
-    : `你好呀，我是实验室前台接待助手 Twin-AI。当前主舞台展示的是“${activePresetLabel}”。你可以先跟我聊聊想法，我会一边听一边帮你把需求整理出来。`;
+    ? `你好呀，实验室平台已经接入 Second Me 了。主舞台上现在摆着的是“${activePresetLabel}”。你先随便说想法就行，我会一边接话，一边帮你把方向慢慢收出来。`
+    : `你好呀，我是实验室前台接待助手 Twin-AI。主舞台上现在摆着的是“${activePresetLabel}”。你可以先随便聊聊想做什么，我会边听边帮你把需求收成一版像样的方案。`;
 }
 
 function buildFallbackReply(input: string, activePresetLabel: string) {
   const normalized = input.toLowerCase();
 
-  if (normalized.includes("介绍") && normalized.includes("实验室")) {
-    return "我们这边主要做嵌入式产品的前期接待、方案梳理和 3D 结构预览。你可以先把想法告诉我，我会慢慢帮你理顺。";
+  if (
+    (normalized.includes("介绍") && normalized.includes("实验室")) ||
+    (normalized.includes("实验室") && normalized.includes("能做"))
+  ) {
+    return "我们这边主要是先把嵌入式产品的想法接住，再往下帮你梳理需求、出 3D 结构草案，最后整理成实验室能继续接手的交接内容。你现在如果只有一个模糊方向，也完全可以直接跟我聊。";
   }
 
   if (normalized.includes("当前") || normalized.includes("方案")) {
-    return `当前主舞台展示的是“${activePresetLabel}”。如果你愿意，我可以继续和你介绍它的结构特点，或者我们也可以直接聊你的新想法。`;
+    return `主舞台上现在展示的是“${activePresetLabel}”。如果你愿意，我可以顺手给你讲讲它的结构感觉；当然，我们也可以直接切到你的新想法。`;
   }
 
   if (normalized.includes("手持")) {
-    return "手持设备通常会更关注尺寸、电池、屏幕和侧边交互。你如果已经有方向了，可以直接往下说，我来帮你慢慢整理。";
+    return "手持设备一般会更早卡在尺寸、电池、屏幕和握持感这几个点上。你要是已经有点方向了，就直接往下说，我帮你一点点收。";
+  }
+
+  if (normalized.includes("遥控")) {
+    return "遥控器这类设备我通常会先帮你收控制对象、交互方式和供电方向。你先说个大概就行，我来顺着往下理。";
   }
 
   if (normalized.includes("桌面")) {
-    return "桌面设备通常空间会更宽裕一些，适合放更大的屏幕、更完整的接口和更多模块。你想偏展示型，还是偏工具型呀？";
+    return "桌面设备通常空间会更宽裕一些，适合放更大的屏幕、更完整的接口和更多模块。你想做得更像展示终端，还是更像顺手用的小工具呀？";
   }
 
-  return "收到啦。你继续说就好，我会顺着你的思路慢慢帮你整理。";
+  return "收到呀。你继续往下说就好，我会顺着你的思路慢慢帮你整理。";
 }
 
 export function ChatInterface({
@@ -136,8 +143,8 @@ export function ChatInterface({
         role: "assistant",
         content: visitorName
           ? isConnected
-            ? `你好呀，${visitorName}。实验室平台已经接入 Second Me 了。你可以先跟我随便聊聊，我会在合适的时候帮你慢慢推进成方案。`
-            : `你好呀，${visitorName}。当前主舞台展示的是“${activePresetLabel}”。你想到哪儿都可以直接说，我来帮你慢慢收。`
+            ? `你好呀，${visitorName}。实验室平台已经接入 Second Me 了。你先随便聊聊就好，我会在合适的时候替你把方案一点点收起来。`
+            : `你好呀，${visitorName}。主舞台上现在摆着的是“${activePresetLabel}”。你想到哪儿都可以直接说，我来帮你慢慢收。`
           : buildSeedMessage(isConnected, activePresetLabel),
       },
     ]);
@@ -159,9 +166,9 @@ export function ChatInterface({
     ) {
       return {
         eyebrow: "front desk",
-        title: "先把想法接住",
-        detail: "你可以先随便聊设备方向、使用场景，或者先让我介绍实验室能力。",
-        placeholder: "先随便聊聊想法，或者直接告诉我你想做什么设备...",
+        title: "先把想法放过来",
+        detail: "你可以先聊设备方向、使用场景，或者让我先介绍实验室这边能帮你做到哪一步。",
+        placeholder: "比如说说你想做什么设备，或者你脑子里现在最清楚的那一部分...",
         actions: QUICK_ACTIONS,
       };
     }
@@ -170,8 +177,8 @@ export function ChatInterface({
       const focus = debugInfo.single_focus ?? debugInfo.unknowns[0] ?? "关键需求";
       return {
         eyebrow: "clarifying",
-        title: `先补齐 ${focus}`,
-        detail: "我会优先收一个最关键的信息点，避免把对话聊成问卷。",
+        title: `先把 ${focus} 收准`,
+        detail: "我先只盯一个最关键的信息点，不把这段对话聊成盘问。",
         placeholder: `补充一下${focus}，比如场景、交互、供电或核心功能...`,
         actions: [
           { label: `补充${focus}`, prompt: `我来补充一下${focus}` },
@@ -184,9 +191,9 @@ export function ChatInterface({
     if (debugInfo.workflow_state === "preview_ready") {
       return {
         eyebrow: "preview ready",
-        title: "已经可以出一版草案",
-        detail: "信息基本够了，现在更适合确认是否生成 3D preview，而不是继续分散追问。",
-        placeholder: "如果你想继续，就直接说“可以生成预览”...",
+        title: "已经能拼出一版草案",
+        detail: "关键信息基本够了，现在更适合直接出个 3D 方向看看，而不是继续把问题越聊越散。",
+        placeholder: "如果你想继续，就直接说“可以生成预览”或者“先出一版”...",
         actions: [
           { label: "生成预览", prompt: "可以，生成预览吧" },
           { label: "先讲讲方向", prompt: "先讲讲你现在理解的方案方向" },
@@ -198,9 +205,9 @@ export function ChatInterface({
     if (debugInfo.workflow_state === "preview_generated") {
       return {
         eyebrow: "preview active",
-        title: "草案已经在主舞台里",
-        detail: "现在适合看结构方向、提修改意见，或者直接推进实验室交接。",
-        placeholder: "你可以让我调整方案，或者直接说整理交接单...",
+        title: "草案已经摆到主舞台了",
+        detail: "现在最适合看结构方向顺不顺眼，提修改意见，或者干脆继续往实验室交接推进。",
+        placeholder: "你可以让我调整方案，也可以直接说整理交接单...",
         actions: [
           { label: "整理交接单", prompt: "那就整理交接单吧" },
           { label: "调整方案", prompt: "我想再调整一下方案" },
@@ -212,8 +219,8 @@ export function ChatInterface({
     if (debugInfo.workflow_state === "handoff_ready") {
       return {
         eyebrow: "handoff ready",
-        title: "已经进入实验室交接阶段",
-        detail: "核心内容已经收好，现在更适合确认交接范围或补最后几个小缺口。",
+        title: "已经收进交接阶段了",
+        detail: "核心内容我已经替你拢好了，现在更适合确认交接范围，或者补最后几个小缺口。",
         placeholder: "可以继续补充细节，或者直接打开交接单查看...",
         actions: [
           { label: "打开交接单", prompt: "我先看一下交接单" },
@@ -226,7 +233,7 @@ export function ChatInterface({
     return {
       eyebrow: "front desk",
       title: "继续往下推进",
-      detail: "你可以继续补充需求，或者让我先帮你总结当前方向。",
+      detail: "你可以继续补充需求，或者让我先替你收一下当前方向。",
       placeholder: "继续补充你的想法，或者让我先总结当前方向...",
       actions: QUICK_ACTIONS,
     };
@@ -242,7 +249,7 @@ export function ChatInterface({
       return {
         kind: "handoff" as const,
         title: "实验室交接单已整理",
-        detail: "需求摘要、风险和 preview 草案都已经收好，可以直接交给实验室继续评估。",
+        detail: "需求摘要、风险和 preview 草案我都已经替你收好了，现在可以直接交给实验室继续评估。",
         actionLabel: "打开交接单",
         actionHref: args.handoffUrl,
       };
@@ -252,7 +259,7 @@ export function ChatInterface({
       return {
         kind: "preview" as const,
         title: "3D 草案已生成",
-        detail: "主舞台已经切到 AI 生成方案，你可以直接旋转、拆解查看结构方向。",
+        detail: "主舞台已经切到 AI 生成方案，你现在可以直接旋转、拆解，看结构方向顺不顺眼。",
       };
     }
 
@@ -260,7 +267,7 @@ export function ChatInterface({
       return {
         kind: "preview" as const,
         title: "已进入预览准备阶段",
-        detail: "当前信息已经足够拼出一版方向，再确认一下就可以生成 3D 草案。",
+        detail: "现在这批信息已经够拼出一版方向了，你点头的话我就可以把 3D 草案起出来。",
       };
     }
 
@@ -353,6 +360,7 @@ export function ChatInterface({
       : "前台接待模式";
 
   const viewLabel = activeView === "exploded" ? "完整拆解" : "装配预览";
+  const showMainGuide = messages.length <= 2 || Boolean(stageFeedback);
 
   return (
     <div
@@ -438,7 +446,132 @@ export function ChatInterface({
               </div>
             </div>
 
-            <div ref={scrollRef} className="flex-1 space-y-6 overflow-y-auto p-5">
+            <div ref={scrollRef} className="flex-1 space-y-5 overflow-y-auto p-5">
+              <div
+                className={`rounded-sm border p-4 ${
+                  isDark
+                    ? "border-white/10 bg-white/[0.03]"
+                    : "border-slate-200 bg-white/80"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div
+                      className={`font-mono text-[8px] uppercase tracking-[0.24em] ${
+                        isDark ? "text-white/35" : "text-slate-400"
+                      }`}
+                    >
+                      front desk status
+                    </div>
+                    <div
+                      className={`mt-2 text-[12px] font-medium ${
+                        isDark ? "text-white/88" : "text-slate-900"
+                      }`}
+                    >
+                      {contextGuide.title}
+                    </div>
+                    <div
+                      className={`mt-1 text-[10px] leading-5 ${
+                        isDark ? "text-white/58" : "text-slate-600"
+                      }`}
+                    >
+                      {contextGuide.detail}
+                    </div>
+                  </div>
+                  <div
+                    className={`rounded-full px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.22em] ${
+                      isDark
+                        ? "bg-emerald-400/10 text-emerald-300"
+                        : "bg-emerald-50 text-emerald-700"
+                    }`}
+                  >
+                    {viewLabel}
+                  </div>
+                </div>
+
+                {showMainGuide ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {contextGuide.actions.map((action) => (
+                      <button
+                        key={action.label}
+                        onClick={() => handleSend(action.prompt)}
+                        className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
+                          isDark
+                            ? "border-white/10 bg-white/[0.03] text-white/72 hover:border-emerald-400/35 hover:text-white"
+                            : "border-slate-200 bg-slate-50 text-slate-700 hover:border-emerald-300 hover:bg-white hover:text-emerald-700"
+                        }`}
+                      >
+                        <WandSparkles className="h-3 w-3" />
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              {stageFeedback ? (
+                <div
+                  className={`rounded-sm border p-4 ${
+                    isDark
+                      ? "border-white/10 bg-white/[0.03]"
+                      : "border-slate-200 bg-white/85"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-full ${
+                        stageFeedback.kind === "handoff"
+                          ? isDark
+                            ? "bg-cyan-400/15 text-cyan-300"
+                            : "bg-cyan-100 text-cyan-700"
+                          : isDark
+                            ? "bg-emerald-400/15 text-emerald-300"
+                            : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {stageFeedback.kind === "handoff" ? (
+                        <ClipboardCheck className="h-4 w-4" />
+                      ) : (
+                        <Boxes className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className={`text-[11px] font-medium ${
+                          isDark ? "text-white/88" : "text-slate-900"
+                        }`}
+                      >
+                        {stageFeedback.title}
+                      </div>
+                      <div
+                        className={`mt-1 text-[10px] leading-5 ${
+                          isDark ? "text-white/58" : "text-slate-600"
+                        }`}
+                      >
+                        {stageFeedback.detail}
+                      </div>
+                      {stageFeedback.actionHref && stageFeedback.actionLabel ? (
+                        <div className="mt-3">
+                          <a
+                            href={stageFeedback.actionHref}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={`pointer-events-auto inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-[10px] transition-all ${
+                              isDark
+                                ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200 hover:bg-cyan-400/15"
+                                : "border-cyan-200 bg-white text-cyan-700 hover:bg-cyan-50"
+                            }`}
+                          >
+                            {stageFeedback.actionLabel}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {messages.map((msg, index) => (
                 <div
                   key={index}
@@ -538,7 +671,16 @@ export function ChatInterface({
                   <Send className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <div className="mt-2 text-center">
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span
+                  className={`text-[10px] ${
+                    isDark ? "text-white/28" : "text-slate-400"
+                  }`}
+                >
+                  {contextGuide.eyebrow === "front desk"
+                    ? "先随便说想法也没关系"
+                    : `现在先收一下：${contextGuide.title}`}
+                </span>
                 <span
                   className={`font-mono text-[7px] uppercase tracking-[0.3em] ${
                     isDark ? "text-white/10" : "text-slate-300"

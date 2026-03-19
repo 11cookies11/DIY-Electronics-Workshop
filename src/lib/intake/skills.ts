@@ -35,7 +35,7 @@ const RUNTIME_SKILLS: RuntimeSkill[] = [
   {
     config: RUNTIME_SKILL_CONFIGS.find((skill) => skill.id === "capability-intro")!,
     match: ({ message }) =>
-      hasPattern(message, [/(你是谁|你是做什么的|你能做什么|你会什么|你可以干什么|你能帮我做什么|你这边能做什么|你这边能帮我做什么|介绍一下你自己)/]),
+      hasPattern(message, [/(你是谁|你是做什么的|你能做什么|你会什么|你可以干什么|你能帮我做什么|你这边能做什么|你这边能帮我做什么|你们这边能帮我做什么|主要能帮我做什么|介绍一下你自己)/]),
   },
   {
     config: RUNTIME_SKILL_CONFIGS.find((skill) => skill.id === "lab-intro")!,

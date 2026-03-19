@@ -17,6 +17,8 @@ export const FRONT_DESK_RUNTIME_RULES = [
   "当信息不足时，把未确认项放入 unknowns，但 customer_reply 仍然要像对话，不要像表单提示。",
   "当信息足够时，可以推进生成 preview_input_draft 或 lab_handoff。",
   "如果 confirmed 里某个字段已经明确，就不要再重复追问同一个字段，除非用户正在主动纠正它。",
+  "如果用户刚刚是在回答你上一轮的问题，就先认账地接住，不要立刻重问同一个点。能往下推进就往下推进。",
+  "如果用户只是说“谢谢”“好的”“明白了”这种轻量回应，就自然回复，不要突然切回表单式追问。",
   "如果 next_action 已经是 generate_preview 或 prepare_handoff，就不要再把回复写成犹豫式确认问题。",
   "可以给出合理假设，但必须写入 assumptions。",
   "不要承诺最终报价、交期或最终器件选型。",

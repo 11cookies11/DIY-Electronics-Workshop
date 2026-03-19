@@ -894,21 +894,69 @@ function buildRequirementSummary(confirmed: ConfirmedRequirement) {
     .join("；");
 }
 
-function buildNextStepQuestion(unknowns: string[] = []) {
-  const focus = unknowns[0];
+function buildNextStepQuestion(unknowns: string[] = [], preferredFocus?: string) {
+  const focus = preferredFocus ?? unknowns[0];
 
   switch (focus) {
+    case "核心功能":
+      return "我想先把它最核心的那一两件事收准。你更希望它偏控制、显示状态，还是采集数据这类功能？";
     case "控制对象":
       return "我再补最后一个关键点：它现在最常控制的是电视、空调，还是像灯光这类设备也要一起带上？";
     case "使用场景":
       return "我还想确认一下使用场景。它主要是固定放家里用，还是会在几个房间之间经常拿着走？";
+    case "主要交互方式":
+    case "按键或触屏交互":
+      return "我想先把交互定准一点。你更希望它主要靠触屏，还是保留一组顺手的物理按键？";
     case "供电方式":
       return "接下来我只想补一下供电。你更想要内置电池充电，还是更换电池这种更省心的方案？";
+    case "连接方式":
+      return "连接这块我也想先收一下。你更偏向蓝牙、Wi-Fi，还是先不急着上无线？";
+    case "接口需求":
+      return "接口这块我想先问准一点。你是只要一个 USB-C 就够，还是还想留音频口、扩展口这类接口？";
     case "尺寸与外形":
       return "尺寸这块你如果没有特别限制也没关系，我可以先按常见遥控器比例给你出一版。";
     default:
       return undefined;
   }
+}
+
+function buildPendingDetailAnswer(unknowns: string[] = []) {
+  const focus = unknowns[0];
+
+  switch (focus) {
+    case "按键或触屏交互":
+    case "主要交互方式":
+      return "现在还差的这个小细节，主要是想帮你把交互定死一点。比如这块屏幕是只显示状态，还是也想顺手做成可触控；旁边那几个按键又更偏向电源、音量、切换这类常用键。";
+    case "控制对象":
+      return "现在差的这个小细节，是想把控制对象再收准一点。比如除了空调、电视，是不是还想顺手带上灯光、投影仪或者别的家电。";
+    case "尺寸与外形":
+      return "现在差的这个小细节，是想把尺寸和外形收得更稳一点。比如做成更像传统遥控器，还是更短更宽、偏触屏设备的手感。";
+    case "供电方式":
+      return "现在差的这个小细节，是想把供电方式定下来。比如是内置电池加 USB-C 充电，还是更换电池那种更省心的方向。";
+    default:
+      return "现在还差的是最后一个很小的落地细节，我是想帮你把方案收得更稳一点，再出图会更像你真正想要的样子。";
+  }
+}
+
+function isLightAcknowledgementMessage(message: string) {
+  return /^(谢谢(你|啦)?|多谢(你)?|明白了|好的(呀|哦)?|好呀|好哦|嗯|嗯嗯|收到|知道了)[！!。.]?$/i.test(
+    message.trim(),
+  );
+}
+
+function buildLightAcknowledgementReply(args: {
+  previewDraft?: PreviewDraft;
+  unknowns: string[];
+}) {
+  if (args.previewDraft && args.unknowns.length <= 1) {
+    return "好呀，那我这边就顺着这个方向继续收着。现在其实已经很接近可以出预览了，你想看的话我就直接给你起一版。";
+  }
+
+  if (args.unknowns.length) {
+    return `好呀，我先替你把这条记住。后面我们就顺着把${args.unknowns[0]}补一下，整个方案会更稳。`;
+  }
+
+  return "好呀，我先接住这条。你想继续往下补细节，或者让我先帮你收一收当前方向，都可以。";
 }
 
 function replyStillAsksResolvedFocus(args: {
@@ -937,6 +985,7 @@ function replyStillAsksResolvedFocus(args: {
 }
 
 function applyReplyGuard(args: {
+  message: string;
   reply: string;
   confirmed: ConfirmedRequirement;
   unknowns: string[];
@@ -944,6 +993,17 @@ function applyReplyGuard(args: {
   previewDraft?: PreviewDraft;
   focus?: string;
 }) {
+  if (isLightAcknowledgementMessage(args.message)) {
+    return buildLightAcknowledgementReply({
+      previewDraft: args.previewDraft,
+      unknowns: args.unknowns,
+    });
+  }
+
+  if (/(什么细节|哪个细节|补什么|还差什么|差什么|细节是什么)/.test(args.message)) {
+    return buildPendingDetailAnswer(args.unknowns);
+  }
+
   if (args.nextAction === "generate_preview") {
     if (/[？?]/.test(args.reply) || /(要不要|是否|可以.*生成|给你看感受|看看感觉)/.test(args.reply)) {
       return args.previewDraft
@@ -970,7 +1030,7 @@ function applyReplyGuard(args: {
     }
 
     return (
-      buildNextStepQuestion(args.unknowns) ??
+      buildNextStepQuestion(args.unknowns, args.focus) ??
       "我先把刚才那条信息记住了，我们继续往下补最后几个关键点。"
     );
   }
@@ -979,6 +1039,7 @@ function applyReplyGuard(args: {
 }
 
 function buildFallbackCustomerReply(args: {
+  message?: string;
   confirmed: ConfirmedRequirement;
   nextAction: IntakeNextAction;
   previewDraft?: PreviewDraft;
@@ -989,6 +1050,26 @@ function buildFallbackCustomerReply(args: {
 }) {
   const summary = buildRequirementSummary(args.confirmed);
   const focus = args.orchestration?.singleFocus ?? args.unknowns?.[0];
+  const baseMode = args.message ? detectConversationBaseMode(args.message) : "none";
+
+  if (args.message && isLightAcknowledgementMessage(args.message)) {
+    return buildLightAcknowledgementReply({
+      previewDraft: args.previewDraft,
+      unknowns: args.unknowns ?? [],
+    });
+  }
+
+  if (baseMode === "capability") {
+    return "我们这边主要是先把你的设备想法接住，再往下梳理需求、出 3D 结构草案，最后整理成交接给实验室的内容。你如果已经有方向了，也可以直接告诉我想做什么。";
+  }
+
+  if (baseMode === "lab_intro") {
+    return "实验室这边更像一个前期接待和方案整理入口，会先陪你把设备方向聊清楚，再决定什么时候出预览、什么时候推进交接。你现在如果只有一个模糊想法，也可以直接往下说。";
+  }
+
+  if (baseMode === "greeting" || baseMode === "smalltalk") {
+    return "你好呀，我在听。你可以先随便聊聊想法，或者直接告诉我你想做什么设备。";
+  }
 
   if (args.nextAction === "generate_preview" && args.previewDraft) {
     return summary
@@ -1002,16 +1083,21 @@ function buildFallbackCustomerReply(args: {
       : "我先把要交给实验室的内容整理好了，你可以直接打开交接单看看。";
   }
 
+  if (args.previewDraft && !(args.unknowns?.length)) {
+    return "我这边已经把一版结构方向收出来了。你要是愿意，我现在就可以直接给你起一个 3D 预览。";
+  }
+
+  if (focus) {
+    const nextStepQuestion = buildNextStepQuestion(args.unknowns, focus);
+    if (nextStepQuestion) {
+      return summary
+        ? `我先把你刚才给的信息接住了。${nextStepQuestion}`
+        : nextStepQuestion;
+    }
+  }
+
   if (args.previewDraft && args.unknowns?.length) {
     return `我已经能先拼出一版方向了。现在最想再确认一下${focus ?? args.unknowns.slice(0, 2).join("、")}，这样后面的预览会更稳一点。`;
-  }
-
-  if (args.recommendationCards?.length) {
-    return `我先帮你收一个方向：${args.recommendationCards[0]?.detail}`;
-  }
-
-  if (args.suggestions?.length) {
-    return `我先给你一个小建议：${args.suggestions[0]}`;
   }
 
   if (summary && focus) {
@@ -1020,6 +1106,14 @@ function buildFallbackCustomerReply(args: {
 
   if (summary) {
     return "我先听明白一个大概方向了。你继续往下说就好，我会边听边帮你收。";
+  }
+
+  if (args.recommendationCards?.length) {
+    return `我先帮你收一个方向：${args.recommendationCards[0]?.detail}`;
+  }
+
+  if (args.suggestions?.length) {
+    return `我先给你一个小建议：${args.suggestions[0]}`;
   }
 
   return "嗯，我在听。你想到哪儿说到哪儿就好，我来帮你慢慢理。";
@@ -1107,6 +1201,8 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
       "不要复述结构化字段名。",
       "不要把自己说得像表单机器人。",
       "如果只是闲聊或寒暄，就先接住话，不要急着办事。",
+      "如果用户只是说“谢谢”“好的”“明白了”这种轻量回应，就自然接住并给一个很轻的下一步入口，不要突然转成追问。",
+      "如果用户刚刚回答了你上一轮的问题，不要重复追问同一个点；这个点已经补齐时，就往下推进或顺手帮他收一收方向。",
       "如果需要追问，通常只问一个最关键的问题。",
       "如果已经可以 preview 或 handoff，先给用户一个被接住、被整理好的感觉，再邀请他进入下一步。",
       "尽量少用生硬的状态播报句式，比如“当前已进入”“现已生成”。",
@@ -1231,6 +1327,7 @@ export async function runIntakeWorkflow(
       memory,
     })) ??
     buildFallbackCustomerReply({
+      message,
       confirmed,
       nextAction,
       previewDraft: exposedPreviewDraft ?? previewDraft,
@@ -1240,6 +1337,7 @@ export async function runIntakeWorkflow(
       orchestration,
     });
   const customerReply = applyReplyGuard({
+    message,
     reply: rawCustomerReply,
     confirmed,
     unknowns,
@@ -1255,8 +1353,8 @@ export async function runIntakeWorkflow(
     risks,
     suggestions,
     assumptions: previewDraft?.assumptions ?? [],
-    previewDraft,
-    labHandoff,
+    previewCandidate: previewDraft,
+    handoffCandidate: labHandoff,
     exposedPreviewDraft,
     exposedLabHandoff,
     requirementSummary: requirementSummary || "已记录当前对话，等待进一步补充。",
@@ -1273,6 +1371,10 @@ export async function runIntakeWorkflow(
       unknowns,
       risks,
       next_action: nextAction,
+      has_preview_candidate: Boolean(previewDraft),
+      has_handoff_candidate: Boolean(labHandoff),
+      exposed_preview: Boolean(exposedPreviewDraft),
+      exposed_handoff: Boolean(exposedLabHandoff),
       reasoning_trace: reasoningTrace,
     },
   });
