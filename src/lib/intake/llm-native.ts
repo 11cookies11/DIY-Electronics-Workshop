@@ -6,29 +6,29 @@ import type {
 } from "./types";
 
 const SLOT_LABEL_ALIASES: Record<string, string> = {
-  device_type: "\u8bbe\u5907\u7c7b\u578b",
-  "\u8bbe\u5907\u7c7b\u578b": "\u8bbe\u5907\u7c7b\u578b",
-  use_case: "\u4f7f\u7528\u573a\u666f",
-  "\u4f7f\u7528\u573a\u666f": "\u4f7f\u7528\u573a\u666f",
-  target_devices: "\u63a7\u5236\u5bf9\u8c61",
-  "\u63a7\u5236\u5bf9\u8c61": "\u63a7\u5236\u5bf9\u8c61",
-  core_features: "\u6838\u5fc3\u529f\u80fd",
-  "\u6838\u5fc3\u529f\u80fd": "\u6838\u5fc3\u529f\u80fd",
-  power: "\u4f9b\u7535\u65b9\u5f0f",
-  "\u4f9b\u7535\u65b9\u5f0f": "\u4f9b\u7535\u65b9\u5f0f",
-  controls: "\u4e3b\u8981\u4ea4\u4e92\u65b9\u5f0f",
-  screen: "\u4e3b\u8981\u4ea4\u4e92\u65b9\u5f0f",
-  ports: "\u63a5\u53e3\u9700\u6c42",
-  connectivity: "\u8fde\u63a5\u65b9\u5f0f",
-  button_preferences: "\u6309\u952e\u6216\u89e6\u5c4f\u4ea4\u4e92",
-  interaction_layout: "\u4e3b\u8981\u4ea4\u4e92\u65b9\u5f0f",
-  size: "\u5c3a\u5bf8\u4e0e\u5916\u5f62",
-  screen_size_preference: "\u5c3a\u5bf8\u4e0e\u5916\u5f62",
-  "\u4e3b\u8981\u4ea4\u4e92\u65b9\u5f0f": "\u4e3b\u8981\u4ea4\u4e92\u65b9\u5f0f",
-  "\u6309\u952e\u6216\u89e6\u5c4f\u4ea4\u4e92": "\u6309\u952e\u6216\u89e6\u5c4f\u4ea4\u4e92",
-  "\u63a5\u53e3\u9700\u6c42": "\u63a5\u53e3\u9700\u6c42",
-  "\u8fde\u63a5\u65b9\u5f0f": "\u8fde\u63a5\u65b9\u5f0f",
-  "\u5c3a\u5bf8\u4e0e\u5916\u5f62": "\u5c3a\u5bf8\u4e0e\u5916\u5f62",
+  device_type: "设备类型",
+  设备类型: "设备类型",
+  use_case: "使用场景",
+  使用场景: "使用场景",
+  target_devices: "控制对象",
+  控制对象: "控制对象",
+  core_features: "核心功能",
+  核心功能: "核心功能",
+  power: "供电方式",
+  供电方式: "供电方式",
+  controls: "主要交互方式",
+  screen: "主要交互方式",
+  ports: "接口需求",
+  connectivity: "连接方式",
+  button_preferences: "按键或触屏交互",
+  interaction_layout: "主要交互方式",
+  size: "尺寸与外形",
+  screen_size_preference: "尺寸与外形",
+  主要交互方式: "主要交互方式",
+  按键或触屏交互: "按键或触屏交互",
+  接口需求: "接口需求",
+  连接方式: "连接方式",
+  尺寸与外形: "尺寸与外形",
 };
 
 function normalizeSlotLabel(slot: string) {
@@ -150,7 +150,7 @@ export function deriveRisksFromSlotAssessments(slotAssessments: LlmNativeSlotAss
     .map((assessment) => {
       const normalized = normalizeSlotLabel(assessment.slot);
       return assessment.evidence
-        ? `\u300c${normalized}\u300d\u5b58\u5728\u51b2\u7a81\uff1a${assessment.evidence}`
-        : `\u300c${normalized}\u300d\u5b58\u5728\u5f85\u6f84\u6e05\u51b2\u7a81`;
+        ? `「${normalized}」存在冲突：${assessment.evidence}`
+        : `「${normalized}」存在待澄清冲突`;
     });
 }
