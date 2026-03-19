@@ -31,3 +31,8 @@ tsconfig.tsbuildinfo
 .where/*.log
 .where/skills/hardware-3d-preview-planner/
 .where/intake-probe-runtime/
+.where/diy-agent-e2e-runtime/
+.where/repro-preview-runtime/
+
+# Local test reports
+docs/test-reports/
