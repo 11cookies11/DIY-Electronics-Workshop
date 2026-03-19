@@ -4,8 +4,8 @@ import { Grid, OrbitControls, PerspectiveCamera } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Bloom, EffectComposer, Vignette } from "@react-three/postprocessing";
 import { AnimatePresence, motion } from "motion/react";
-import { Moon, Settings, Sun, X } from "lucide-react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { ChevronDown, Moon, Settings, Sun, X } from "lucide-react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ChatInterface } from "./ChatInterface";
 import { THEME } from "./constants";
 import { useTheme } from "./theme-context";
@@ -37,8 +37,10 @@ export function LabScene({
   const [presetId, setPresetId] = useState(PREVIEW_DEVICE_PRESETS[0].id);
   const [view, setView] = useState<PreviewView>("assembled");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [generatedPreview, setGeneratedPreview] = useState<PreviewDraft | null>(null);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const isDark = mode === "dark";
   const bgColor = isDark ? THEME.bg : THEME.bgLight;
   const activePreset =
@@ -55,6 +57,21 @@ export function LabScene({
   useEffect(() => {
     setSelectedNodeId(null);
   }, [presetId, view, generatedPreview]);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (!accountMenuRef.current) return;
+      const target = event.target;
+      if (target instanceof Node && !accountMenuRef.current.contains(target)) {
+        setIsAccountMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, []);
   const heroCopy =
     "这是新的嵌入式产品 3D 预览系统。现在主舞台和左下控制面板都由同一套预览引擎驱动，可以直接切换设备方案、装配图和拆解图。";
 
@@ -177,17 +194,7 @@ export function LabScene({
             </p>
           </div>
 
-          <div className="pointer-events-auto flex gap-3">
-            <a
-              href="/account"
-              className={`flex h-12 min-w-24 items-center justify-center rounded-sm border px-4 font-mono text-[10px] uppercase tracking-[0.18em] transition-all md:h-14 md:min-w-28 ${
-                isDark
-                  ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
-                  : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"
-              }`}
-            >
-              account
-            </a>
+          <div className="pointer-events-auto flex items-center gap-4">
             <button
               onClick={() =>
                 setView((current) =>
@@ -202,16 +209,65 @@ export function LabScene({
             >
               {view === "exploded" ? "合拢设备" : "拆解设备"}
             </button>
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className={`flex h-12 w-12 items-center justify-center rounded-sm border transition-all md:h-14 md:w-14 ${
-                isDark
-                  ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                  : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"
-              }`}
-            >
-              <Settings size={16} />
-            </button>
+            <div
+              className={`h-8 w-px ${isDark ? "bg-white/10" : "bg-slate-300"}`}
+              aria-hidden
+            />
+            <div className="relative" ref={accountMenuRef}>
+              <button
+                onClick={() => setIsAccountMenuOpen((current) => !current)}
+                className={`flex h-12 min-w-28 items-center justify-between gap-2 rounded-sm border px-4 font-mono text-[10px] uppercase tracking-[0.18em] transition-all md:h-14 md:min-w-32 ${
+                  isDark
+                    ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                    : "border-slate-300 bg-white/75 text-slate-600 hover:bg-white"
+                }`}
+              >
+                account
+                <ChevronDown
+                  size={14}
+                  className={`transition-transform ${isAccountMenuOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+              <AnimatePresence>
+                {isAccountMenuOpen ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className={`absolute right-0 top-[calc(100%+8px)] z-40 w-44 rounded-sm border p-1 shadow-xl ${
+                      isDark
+                        ? "border-white/10 bg-[#0b0b0b]"
+                        : "border-slate-300 bg-white"
+                    }`}
+                  >
+                    <a
+                      href="/account"
+                      onClick={() => setIsAccountMenuOpen(false)}
+                      className={`flex h-9 items-center rounded-sm px-3 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
+                        isDark
+                          ? "text-white/70 hover:bg-white/10 hover:text-white"
+                          : "text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      账号中心
+                    </a>
+                    <button
+                      onClick={() => {
+                        setIsAccountMenuOpen(false);
+                        setIsSettingsOpen(true);
+                      }}
+                      className={`flex h-9 w-full items-center rounded-sm px-3 font-mono text-[10px] uppercase tracking-[0.16em] transition-colors ${
+                        isDark
+                          ? "text-white/70 hover:bg-white/10 hover:text-white"
+                          : "text-slate-700 hover:bg-slate-100"
+                      }`}
+                    >
+                      系统设置
+                    </button>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
