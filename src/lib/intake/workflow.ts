@@ -20,9 +20,9 @@ import {
   resolveReasoningModel,
 } from "./llm-config";
 import {
-  isSecondMeChatConfigured,
-  requestSecondMeChatReply,
-} from "./secondme-client";
+  isLlmChatConfigured,
+  requestLlmChatReply,
+} from "./llm-client";
 import { parseConversationSignals } from "./signals";
 import { buildIntakeSuggestions } from "./suggestions";
 import {
@@ -1412,7 +1412,7 @@ async function buildModelRequirementPatch(request: IntakeAgentRequest) {
   }
 
   try {
-    const content = await requestSecondMeChatReply(
+    const content = await requestLlmChatReply(
       [
         { role: "system", content: buildIntakeReasoningSystemPrompt() },
         { role: "user", content: buildIntakeReasoningUserPrompt(request) },
@@ -1668,7 +1668,7 @@ async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
   }
 
   try {
-    const content = await requestSecondMeChatReply(
+    const content = await requestLlmChatReply(
       [
         { role: "system", content: buildLlmNativeDecisionSystemPrompt() },
         {
@@ -1709,7 +1709,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   memory: ReturnType<typeof analyzeConversationMemory>;
   route: IntakeSkillRoute;
 }) {
-  if (!isSecondMeChatConfigured()) {
+  if (!isLlmChatConfigured()) {
     return null;
   }
 
@@ -1756,7 +1756,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
     ].join("\n\n");
 
     try {
-      return await requestSecondMeChatReply([
+      return await requestLlmChatReply([
         { role: "system", content: buildIntakeSystemPrompt() },
         { role: "user", content: prompt },
       ]);
@@ -1808,7 +1808,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   ].join("\n\n");
 
   try {
-    return await requestSecondMeChatReply([
+    return await requestLlmChatReply([
       { role: "system", content: buildIntakeSystemPrompt() },
       { role: "user", content: prompt },
     ]);

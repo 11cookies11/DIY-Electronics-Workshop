@@ -15,6 +15,7 @@ const sourceFiles = [
     "knowledge-config.ts",
     "knowledge.ts",
     "llm-config.ts",
+    "llm-client.ts",
     "llm-native.ts",
     "memory.ts",
     "orchestration.ts",

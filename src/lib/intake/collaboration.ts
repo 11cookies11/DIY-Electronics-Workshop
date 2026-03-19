@@ -1,4 +1,4 @@
-import { isSecondMeChatConfigured, requestSecondMeStructuredReply } from "./secondme-client";
+import { isLlmChatConfigured, requestLlmStructuredReply } from "./llm-client";
 import type { IntakeAgentOutput } from "./types";
 
 export type RoleplayAgentId =
@@ -434,12 +434,12 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
 
 export async function buildCollaborationPanel(output: IntakeAgentOutput): Promise<CollaborationPanel> {
   const fallback = buildFallbackPanel(output);
-  if (!isSecondMeChatConfigured()) {
+  if (!isLlmChatConfigured()) {
     return fallback;
   }
 
   try {
-    const content = await requestSecondMeStructuredReply([
+    const content = await requestLlmStructuredReply([
       { role: "system", content: buildCollabSystemPrompt() },
       { role: "user", content: buildCollabUserPrompt(output) },
     ]);
