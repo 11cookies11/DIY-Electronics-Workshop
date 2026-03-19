@@ -76,7 +76,7 @@ const FRONT_DESK_PROFILE: RoleplayAgentProfile = {
   capabilities: [
     "理解用户自然表达并提炼需求",
     "组织 preview 与 handoff 节点",
-    "给采购与研发团队分发同一份上下文",
+    "给采购、研发、交付三方同步同一份上下文",
   ],
   boundaries: ["不直接执行采购下单", "不直接替代研发负责人做技术决策"],
 };
@@ -188,9 +188,12 @@ function buildProcurementPreview(output: IntakeAgentOutput) {
   ]
     .filter(Boolean)
     .join("；");
-  return known
-    ? `先基于已知约束建立采购优先级。${known}${unknowns ? `；待补充：${unknowns}` : ""}`
-    : "先收集预算、供电与目标器件清单，再输出首版模块化 BOM 采购建议。";
+
+  if (known) {
+    return `先基于已知约束建立采购优先级。${known}${unknowns ? `；待补充：${unknowns}` : ""}`;
+  }
+
+  return "先收集预算、供电与目标器件清单，再输出首版模块化 BOM 采购建议。";
 }
 
 function buildSoftwareLeadPreview(output: IntakeAgentOutput) {
@@ -205,34 +208,26 @@ function buildSoftwareLeadPreview(output: IntakeAgentOutput) {
   ]
     .filter(Boolean)
     .join("；");
-  return known
-    ? `可先按模块拆研发计划。${known}${unknowns ? `；待补充：${unknowns}` : ""}`
-    : "先沉淀功能与交互边界，再拆分软件模块、接口清单与迭代里程碑。";
+
+  if (known) {
+    return `可先按模块拆研发计划。${known}${unknowns ? `；待补充：${unknowns}` : ""}`;
+  }
+
+  return "先沉淀功能与交互边界，再拆分软件模块、接口清单与迭代里程碑。";
 }
 
 function buildDeliveryPreview(output: IntakeAgentOutput) {
-  const timeline = output.confirmed.timeline;
+  const timeline = output.confirmed.timeline || "T+14天（两周后）";
   const unknowns = output.unknowns.slice(0, 2).join("、");
-  const hasPreview = output.state.workflow_state === "preview_generated";
-
-  if (timeline) {
-    return `先按「${timeline}」做里程碑倒排，并同步采购与软件联调窗口。${
-      unknowns ? `待补充：${unknowns}` : ""
-    }`;
-  }
-
-  if (hasPreview) {
-    return `预览方向已确认，可先定义 P0 演示里程碑，再拆采购与开发并行节奏。${
-      unknowns ? `待补充：${unknowns}` : ""
-    }`;
-  }
-
-  return "先定义演示目标日期与验收标准，再把采购、开发、联调整合到同一交付节奏。";
+  return `我先按「${timeline}」作为假定交付日期倒排计划。请补一个联系方式（微信或邮箱），后续我会按里程碑实时同步项目进度。${
+    unknowns ? `当前仍待补充：${unknowns}` : ""
+  }`;
 }
 
 function buildFallbackPanel(output: IntakeAgentOutput): CollaborationPanel {
   const status = deriveFallbackStatus(output);
   const stage = deriveFallbackStage(output);
+
   return {
     version: "v1-roleplay",
     coordinator: "front_desk",
@@ -274,6 +269,11 @@ function buildFallbackPanel(output: IntakeAgentOutput): CollaborationPanel {
         message: `我先同步当前方向：${output.requirement_summary}`,
       },
       {
+        from: "delivery_lead",
+        to: ["front_desk", "hardware_procurement", "software_lead"],
+        message: buildDeliveryPreview(output),
+      },
+      {
         from: "hardware_procurement",
         to: ["front_desk", "software_lead", "delivery_lead"],
         message: buildProcurementPreview(output),
@@ -283,11 +283,6 @@ function buildFallbackPanel(output: IntakeAgentOutput): CollaborationPanel {
         to: ["front_desk", "hardware_procurement", "delivery_lead"],
         message: buildSoftwareLeadPreview(output),
       },
-      {
-        from: "delivery_lead",
-        to: ["front_desk", "hardware_procurement", "software_lead"],
-        message: buildDeliveryPreview(output),
-      },
     ],
   };
 }
@@ -296,9 +291,10 @@ function buildCollabSystemPrompt() {
   return [
     "你是一个多 Agent 协作导演，负责为 Demo 生成“像真人一样”的跨角色沟通记录。",
     "输出必须是 JSON，不要额外解释。",
-    "目标不是模板化流程，而是表达真实协作：前台、采购、软件负责人、交付负责人互相传达上下文、提问、补充、确认。",
+    "角色包括：前台、采购、软件负责人、交付 Agent。",
+    "讨论时先给一个假定交付日期（如果没有明确日期），再向用户索要联系方式，最后明确后续会实时同步项目进度。",
     "注意边界：当前硬件方案是模块化拼装，不涉及自研硬件开发。",
-    "请生成自然口语化的中文，不要写成系统日志口吻。",
+    "请生成自然口语化中文，不要写成系统日志口吻。",
   ].join("\n");
 }
 
@@ -338,7 +334,7 @@ function buildCollabUserPrompt(output: IntakeAgentOutput) {
       rules: [
         "conversation 给 2-5 条即可，像团队内部短沟通，不要死板。",
         "handoff_preview 用自然短句，不是字段罗列。",
-        "如果信息不全，可以在 message 里体现“建议先补什么”。",
+        "交付 Agent 至少要体现三点：假定交付日期、索要联系方式、后续实时进度通知。",
       ],
     },
     null,
