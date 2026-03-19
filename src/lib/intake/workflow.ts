@@ -1830,13 +1830,25 @@ async function deriveRequirementContext(request: IntakeAgentRequest) {
   };
 }
 
+type IntakeRuntimeContext = {
+  previewDraft?: PreviewDraft;
+  llmNativeDecision?: LlmNativeDecision;
+  unknowns: string[];
+  memory: ReturnType<typeof analyzeConversationMemory>;
+  route: IntakeSkillRoute;
+  orchestration: ReplyOrchestration;
+  risks: string[];
+  requirementSummary: string;
+  labHandoff?: LabHandoff;
+};
+
 async function deriveRuntimeContext(args: {
   request: IntakeAgentRequest;
   confirmed: ConfirmedRequirement;
   reasoningTrace: IntakeReasoningTrace;
   reasoning: ReturnType<typeof analyzeRequirementReasoning>;
   reminderBundle: ReturnType<typeof buildReminderBundle>;
-}) {
+}): Promise<IntakeRuntimeContext> {
   const { request, confirmed, reasoningTrace, reasoning, reminderBundle } = args;
   const { message, history = [], state } = request;
   const guardrailUnknowns = computeUnknowns(confirmed);
