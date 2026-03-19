@@ -1146,6 +1146,22 @@ export function ChatInterface({
                             </div>
                             <div>
                               <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                llm focus
+                              </div>
+                              <div>{debugInfo.llm_native_single_focus ?? "n/a"}</div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                llm unknowns
+                              </div>
+                              <div>
+                                {debugInfo.llm_native_unknowns?.length
+                                  ? debugInfo.llm_native_unknowns.join(" / ")
+                                  : "n/a"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
                                 unknowns
                               </div>
                               <div>{debugInfo.unknowns.length ? debugInfo.unknowns.join(" / ") : "—"}</div>
