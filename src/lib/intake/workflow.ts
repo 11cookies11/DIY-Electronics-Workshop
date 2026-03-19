@@ -1813,6 +1813,7 @@ export async function runIntakeWorkflow(
       llmNativeDecision,
       orchestration,
     });
+  const replyPreviewDraft = exposedPreviewDraft ?? previewDraft;
 
   const rawCustomerReply =
     llmNativeDecision?.customer_reply ??
@@ -1820,7 +1821,7 @@ export async function runIntakeWorkflow(
       confirmed,
       unknowns,
       nextAction,
-      previewDraft: exposedPreviewDraft ?? previewDraft,
+      previewDraft: replyPreviewDraft,
       reasoning,
       suggestions,
       orchestration,
@@ -1833,7 +1834,7 @@ export async function runIntakeWorkflow(
       confirmed,
       workflowState,
       nextAction,
-      previewDraft: exposedPreviewDraft ?? previewDraft,
+      previewDraft: replyPreviewDraft,
       handoffCandidate: labHandoff,
       unknowns,
       suggestions: reasoning.suggestions,
@@ -1846,7 +1847,7 @@ export async function runIntakeWorkflow(
     confirmed,
     unknowns,
     nextAction,
-    previewDraft: exposedPreviewDraft ?? previewDraft,
+    previewDraft: replyPreviewDraft,
     workflowState,
     handoffCandidate: labHandoff,
     focus: orchestration.singleFocus,
