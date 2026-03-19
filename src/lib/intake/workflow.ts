@@ -2,7 +2,7 @@ import type { PreviewInput } from "@/engine/preview/types";
 import { inferDeviceTypeFromArchetype } from "./archetypes";
 import { detectConversationBaseMode } from "./conversation-base";
 import { analyzeConversationMemory } from "./memory";
-import { planReplyOrchestration } from "./orchestration";
+import { planReplyOrchestration, type ReplyOrchestration } from "./orchestration";
 import {
   buildIntakeReasoningSystemPrompt,
   buildIntakeReasoningUserPrompt,
@@ -38,6 +38,7 @@ import {
   type IntakeNextAction,
   type IntakeReasoningPatch,
   type IntakeReasoningTrace,
+  type IntakeSkillRoute,
   type LabHandoff,
   type LlmNativeDecision,
   type PreviewDraft,
@@ -1228,7 +1229,7 @@ function buildFallbackCustomerReply(args: {
   unknowns?: string[];
   suggestions?: string[];
   recommendationCards?: IntakeSuggestion[];
-  orchestration?: ReturnType<typeof planReplyOrchestration>;
+  orchestration?: ReplyOrchestration;
 }) {
   const summary = buildRequirementSummary(args.confirmed);
   const focus = args.orchestration?.singleFocus ?? args.unknowns?.[0];
@@ -1364,6 +1365,118 @@ function validateLlmNextAction(args: {
   }
 }
 
+function buildLlmNativeSkillRoute(decision?: LlmNativeDecision): IntakeSkillRoute {
+  if (!decision) {
+    return {
+      active_skill: "requirement-clarifier",
+      matched_skills: ["requirement-clarifier"],
+      use_secondme: true,
+      reason: "LLM-native decision unavailable, fallback to legacy clarification route",
+    };
+  }
+
+  if (
+    decision.agent_stage === "handoff_offer" ||
+    decision.agent_stage === "handoff_commit" ||
+    decision.next_action === "prepare_handoff" ||
+    decision.next_action === "handoff_to_lab"
+  ) {
+    return {
+      active_skill: "handoff-promoter",
+      matched_skills: ["handoff-promoter", "requirement-clarifier"],
+      use_secondme: true,
+      reason: "LLM-native decision requests handoff-stage progression",
+    };
+  }
+
+  if (
+    decision.agent_stage === "preview_offer" ||
+    decision.agent_stage === "preview_commit" ||
+    decision.next_action === "generate_preview"
+  ) {
+    return {
+      active_skill: "preview-promoter",
+      matched_skills: ["preview-promoter", "requirement-clarifier"],
+      use_secondme: true,
+      reason: "LLM-native decision requests preview-stage progression",
+    };
+  }
+
+  return {
+    active_skill: "requirement-clarifier",
+    matched_skills: ["requirement-clarifier"],
+    use_secondme: true,
+    reason: "LLM-native decision keeps the conversation in clarification mode",
+  };
+}
+
+function buildOrchestrationFromLlmDecision(args: {
+  decision?: LlmNativeDecision;
+  message: string;
+  confirmed: ConfirmedRequirement;
+  unknowns: string[];
+  previewDraft?: PreviewDraft;
+  fallback: ReplyOrchestration;
+}): ReplyOrchestration {
+  if (!args.decision) {
+    return args.fallback;
+  }
+
+  const baseMode = detectConversationBaseMode(args.message);
+  const inferredArchetype = args.fallback.inferredArchetype;
+
+  switch (args.decision.agent_stage) {
+    case "free_chat":
+      return {
+        baseMode,
+        transitionMode: "stay_conversational",
+        priorities: ["connect", "answer_directly", "invite_next_step"],
+        shouldAdvanceRequirement: false,
+        inferredArchetype,
+      };
+    case "preview_offer":
+    case "preview_commit":
+      return {
+        baseMode,
+        transitionMode: "preview_ready",
+        priorities: ["acknowledge", "confirm_preview", "invite_next_step"],
+        shouldAdvanceRequirement: true,
+        singleFocus: args.decision.single_focus,
+        inferredArchetype,
+      };
+    case "handoff_offer":
+    case "handoff_commit":
+      return {
+        baseMode,
+        transitionMode: "handoff_ready",
+        priorities: ["acknowledge", "confirm_handoff", "invite_next_step"],
+        shouldAdvanceRequirement: true,
+        singleFocus: args.decision.single_focus,
+        inferredArchetype,
+      };
+    case "blocked":
+      return {
+        baseMode,
+        transitionMode: "answer_then_offer",
+        priorities: ["acknowledge", "offer_suggestion"],
+        shouldAdvanceRequirement: false,
+        singleFocus: args.decision.single_focus,
+        inferredArchetype,
+      };
+    case "intake":
+    case "clarify":
+    default:
+      return {
+        baseMode,
+        transitionMode: "soft_clarify",
+        priorities: ["acknowledge", "ask_single_question"],
+        shouldAdvanceRequirement: true,
+        singleFocus: args.decision.single_focus ?? args.unknowns[0],
+        inferredArchetype,
+      };
+  }
+}
+
 async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
   confirmed: ConfirmedRequirement;
   unknowns: string[];
@@ -1417,7 +1530,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   previewDraft?: PreviewDraft;
   reasoning: ReturnType<typeof analyzeRequirementReasoning>;
   suggestions: IntakeSuggestion[];
-  orchestration: ReturnType<typeof planReplyOrchestration>;
+  orchestration: ReplyOrchestration;
   reminderBundle: ReturnType<typeof buildReminderBundle>;
   memory: ReturnType<typeof analyzeConversationMemory>;
 }) {
@@ -1555,7 +1668,7 @@ export async function runIntakeWorkflow(
     history,
     unknowns,
   });
-  const route = routeIntakeSkills({
+  const legacyRoute = routeIntakeSkills({
     message,
     state,
     confirmed,
@@ -1564,20 +1677,24 @@ export async function runIntakeWorkflow(
     history,
     memory,
   });
-  const baseOrchestration = planReplyOrchestration({
+  const route = llmNativeDecision ? buildLlmNativeSkillRoute(llmNativeDecision) : legacyRoute;
+  const legacyOrchestration = planReplyOrchestration({
     message,
     confirmed,
     unknowns,
     nextAction: "ask_more",
-    route,
+    route: legacyRoute,
     previewDraft,
     memory,
   });
-  const orchestration: ReturnType<typeof planReplyOrchestration> = llmNativeDecision?.single_focus
-    ? ({ ...baseOrchestration, singleFocus: llmNativeDecision.single_focus } as ReturnType<
-        typeof planReplyOrchestration
-      >)
-    : baseOrchestration;
+  const orchestration = buildOrchestrationFromLlmDecision({
+    decision: llmNativeDecision,
+    message,
+    confirmed,
+    unknowns,
+    previewDraft,
+    fallback: legacyOrchestration,
+  });
 
   const risks = unique([
     ...state.risks,
