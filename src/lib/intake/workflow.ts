@@ -1487,6 +1487,52 @@ function buildOrchestrationFromLlmDecision(args: {
   }
 }
 
+function resolveWorkflowControl(args: {
+  message: string;
+  state: IntakeAgentState;
+  previewDraft?: PreviewDraft;
+  labHandoff?: LabHandoff;
+  unknowns: string[];
+  llmNativeDecision?: LlmNativeDecision;
+  orchestration: ReplyOrchestration;
+}) {
+  const forcedConversational = args.orchestration.transitionMode === "stay_conversational";
+  const readiness = decideReadinessFlow({
+    message: args.message,
+    previewDraft: args.previewDraft,
+    labHandoff: args.labHandoff,
+    state: forcedConversational ? { ...args.state, workflow_state: "collecting" } : args.state,
+    unknowns: args.unknowns,
+    llmDecision: args.llmNativeDecision
+      ? {
+          agent_stage: args.llmNativeDecision.agent_stage,
+          preview_candidate_ready: args.llmNativeDecision.preview_candidate_ready,
+          handoff_candidate_ready: args.llmNativeDecision.handoff_candidate_ready,
+          next_action: args.llmNativeDecision.next_action,
+        }
+      : undefined,
+  });
+
+  const workflowState: IntakeAgentState["workflow_state"] = forcedConversational
+    ? "collecting"
+    : readiness.workflowState;
+  const nextAction = validateLlmNextAction({
+    requested: forcedConversational ? "ask_more" : args.llmNativeDecision?.next_action,
+    previewDraft: args.previewDraft,
+    handoffCandidate: args.labHandoff,
+    fallback: forcedConversational ? "ask_more" : readiness.nextAction,
+  });
+  const exposedPreviewDraft = readiness.exposePreview ? args.previewDraft : undefined;
+  const exposedLabHandoff = readiness.exposeHandoff ? args.labHandoff : undefined;
+
+  return {
+    workflowState,
+    nextAction,
+    exposedPreviewDraft,
+    exposedLabHandoff,
+  };
+}
+
 async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
   confirmed: ConfirmedRequirement;
   unknowns: string[];
@@ -1714,44 +1760,16 @@ export async function runIntakeWorkflow(
     reasoningTrace,
     previewDraft,
   );
-  const readiness = decideReadinessFlow({
-    message,
-    previewDraft,
-    labHandoff,
-    state:
-      orchestration.transitionMode === "stay_conversational"
-        ? { ...state, workflow_state: "collecting" }
-        : state,
-    unknowns,
-    llmDecision: llmNativeDecision
-      ? {
-          agent_stage: llmNativeDecision.agent_stage,
-          preview_candidate_ready: llmNativeDecision.preview_candidate_ready,
-          handoff_candidate_ready: llmNativeDecision.handoff_candidate_ready,
-          next_action: llmNativeDecision.next_action,
-        }
-      : undefined,
-  });
-
-  const workflowState: IntakeAgentState["workflow_state"] =
-    orchestration.transitionMode === "stay_conversational"
-      ? "collecting"
-      : readiness.workflowState;
-  const nextAction: IntakeNextAction = validateLlmNextAction({
-    requested:
-      orchestration.transitionMode === "stay_conversational"
-        ? "ask_more"
-        : llmNativeDecision?.next_action,
-    previewDraft,
-    handoffCandidate: labHandoff,
-    fallback:
-      orchestration.transitionMode === "stay_conversational"
-        ? "ask_more"
-        : readiness.nextAction,
-  });
-
-  const exposedPreviewDraft = readiness.exposePreview ? previewDraft : undefined;
-  const exposedLabHandoff = readiness.exposeHandoff ? labHandoff : undefined;
+  const { workflowState, nextAction, exposedPreviewDraft, exposedLabHandoff } =
+    resolveWorkflowControl({
+      message,
+      state,
+      previewDraft,
+      labHandoff,
+      unknowns,
+      llmNativeDecision,
+      orchestration,
+    });
 
   const rawCustomerReply =
     llmNativeDecision?.customer_reply ??
