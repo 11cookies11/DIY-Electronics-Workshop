@@ -48,6 +48,19 @@ export type ConfirmedRequirement = {
   references?: string[];
 };
 
+export type DynamicDeviceTypeTag = {
+  key: string;
+  display_name: string;
+  parent_type?: string;
+  confidence: "low" | "medium" | "high";
+  source: "llm_candidate";
+  reason?: string;
+  hits: number;
+  promoted?: boolean;
+  created_at: number;
+  updated_at: number;
+};
+
 export type PreviewReadiness = {
   ready: boolean;
   missing: string[];
@@ -120,6 +133,7 @@ export type IntakeAgentState = {
   assumptions: string[];
   preview_candidate?: PreviewDraft;
   handoff_candidate?: LabHandoff;
+  dynamic_device_types?: DynamicDeviceTypeTag[];
 };
 
 export type IntakeDebugInfo = {
@@ -246,6 +260,13 @@ export type LlmNativeDecision = {
   reasoning_summary?: string;
   assumptions?: string[];
   risks?: string[];
+  device_type_candidate?: {
+    key?: string;
+    display_name?: string;
+    parent_type?: string;
+    confidence?: "low" | "medium" | "high";
+    reason?: string;
+  };
 };
 
 export type IntakeSkillId =
@@ -271,5 +292,6 @@ export function createEmptyState(): IntakeAgentState {
     risks: [],
     suggestions: [],
     assumptions: [],
+    dynamic_device_types: [],
   };
 }

@@ -156,6 +156,13 @@ export function buildLlmNativeDecisionUserPrompt(args: {
     reasoning_summary: "string",
     assumptions: ["string"],
     risks: ["string"],
+    device_type_candidate: {
+      key: "string",
+      display_name: "string",
+      parent_type: "string",
+      confidence: ["low", "medium", "high"],
+      reason: "string",
+    },
   };
 
   return JSON.stringify(

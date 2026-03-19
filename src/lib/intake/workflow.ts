@@ -26,6 +26,7 @@ import {
 import { parseConversationSignals } from "./signals";
 import { buildIntakeSuggestions } from "./suggestions";
 import {
+  buildDynamicDeviceTypeTag,
   deriveRisksFromSlotAssessments,
   deriveUnknownsFromSlotAssessments,
   sanitizeLlmNativeDecision,
@@ -35,6 +36,7 @@ import {
   createEmptyState,
   type ConversationTurn,
   type ConfirmedRequirement,
+  type DynamicDeviceTypeTag,
   type IntakeAgentOutput,
   type IntakeAgentRequest,
   type IntakeAgentState,
@@ -52,6 +54,98 @@ import {
 
 function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+const CANONICAL_DEVICE_TYPES = new Set([
+  "红外遥控器",
+  "智能手表",
+  "桌面设备",
+  "蓝牙音箱",
+  "手持设备",
+  "喂食器控制终端",
+  "桌面监测设备",
+]);
+
+function isKnownDeviceType(value?: string) {
+  return Boolean(value && CANONICAL_DEVICE_TYPES.has(value));
+}
+
+function normalizeDynamicDeviceTags(tags?: DynamicDeviceTypeTag[]) {
+  if (!tags?.length) return [];
+  const deduped = new Map<string, DynamicDeviceTypeTag>();
+  for (const tag of tags) {
+    if (!tag?.key) continue;
+    deduped.set(tag.key, tag);
+  }
+  return Array.from(deduped.values());
+}
+
+function shouldAcceptDynamicDeviceTag(tag: DynamicDeviceTypeTag) {
+  if (tag.display_name.length < 2) return false;
+  if (tag.display_name.length > 32) return false;
+  if (tag.confidence === "low") return false;
+  return true;
+}
+
+function mergeDynamicDeviceTags(args: {
+  existing: DynamicDeviceTypeTag[];
+  incoming?: DynamicDeviceTypeTag;
+  promoteHitThreshold?: number;
+}) {
+  const promoteThreshold = args.promoteHitThreshold ?? 3;
+  const map = new Map(args.existing.map((item) => [item.key, item]));
+  const incoming = args.incoming;
+  if (!incoming || !shouldAcceptDynamicDeviceTag(incoming)) {
+    return Array.from(map.values());
+  }
+
+  const current = map.get(incoming.key);
+  if (!current) {
+    map.set(incoming.key, {
+      ...incoming,
+      promoted: incoming.hits >= promoteThreshold,
+    });
+    return Array.from(map.values());
+  }
+
+  const hits = Math.max(current.hits + 1, incoming.hits);
+  map.set(incoming.key, {
+    ...current,
+    display_name: incoming.display_name || current.display_name,
+    parent_type: incoming.parent_type || current.parent_type,
+    confidence:
+      incoming.confidence === "high" || current.confidence !== "high"
+        ? incoming.confidence
+        : current.confidence,
+    reason: incoming.reason || current.reason,
+    hits,
+    promoted: current.promoted || hits >= promoteThreshold,
+    updated_at: incoming.updated_at,
+  });
+  return Array.from(map.values());
+}
+
+function resolveDeviceTypeWithDynamicRegistry(args: {
+  current?: string;
+  llmPatchType?: string;
+  decisionTypeCandidate?: DynamicDeviceTypeTag;
+  dynamicRegistry: DynamicDeviceTypeTag[];
+}) {
+  const patchType = args.llmPatchType?.trim();
+  if (isKnownDeviceType(patchType)) return patchType;
+
+  if (patchType) {
+    const hit = args.dynamicRegistry.find(
+      (item) => item.display_name === patchType || item.key === patchType,
+    );
+    if (hit) return hit.display_name;
+  }
+
+  if (args.decisionTypeCandidate?.display_name) {
+    return args.decisionTypeCandidate.display_name;
+  }
+
+  return args.current;
 }
 
 const WORKFLOW_FALLBACK_STRATEGY = {
@@ -2090,6 +2184,7 @@ function buildWorkflowStructuredOutput(args: {
   unknowns: string[];
   risks: string[];
   suggestions: IntakeSuggestion[];
+  dynamicDeviceTypes?: DynamicDeviceTypeTag[];
   previewDraft?: PreviewDraft;
   labHandoff?: LabHandoff;
   exposedPreviewDraft?: PreviewDraft;
@@ -2109,6 +2204,7 @@ function buildWorkflowStructuredOutput(args: {
     risks: args.risks,
     suggestions: args.suggestions,
     assumptions: args.previewDraft?.assumptions ?? [],
+    dynamicDeviceTypes: args.dynamicDeviceTypes,
     previewCandidate: args.previewDraft,
     handoffCandidate: args.labHandoff,
     exposedPreviewDraft: args.exposedPreviewDraft,
@@ -2191,6 +2287,7 @@ type IntakeRuntimeContext = {
   risks: string[];
   requirementSummary: string;
   labHandoff?: LabHandoff;
+  dynamicDeviceTypes: DynamicDeviceTypeTag[];
 };
 
 async function deriveRuntimeContext(args: {
@@ -2202,6 +2299,7 @@ async function deriveRuntimeContext(args: {
 }): Promise<IntakeRuntimeContext> {
   const { request, confirmed, reasoningTrace, reasoning, reminderBundle } = args;
   const { message, history = [], state } = request;
+  const existingDynamicTypes = normalizeDynamicDeviceTags(state.dynamic_device_types);
   const guardrailUnknowns = computeUnknowns(confirmed);
   const baselineUnknowns = unique([...guardrailUnknowns, ...reasoning.mustConfirm]);
   const strictPreviewDraft = mapConfirmedToPreviewDraft(confirmed);
@@ -2237,6 +2335,17 @@ async function deriveRuntimeContext(args: {
     reasoning,
     risks: baselineRisks,
   });
+  const dynamicTypeCandidate =
+    llmNativeDecision?.device_type_candidate
+      ? buildDynamicDeviceTypeTag({
+          candidate: llmNativeDecision.device_type_candidate,
+          now: Date.now(),
+        })
+      : undefined;
+  const dynamicDeviceTypes = mergeDynamicDeviceTags({
+    existing: existingDynamicTypes,
+    incoming: dynamicTypeCandidate,
+  });
   const shouldPersistLlmDecisionPatch = Boolean(
     llmNativeDecision?.confirmed_patch &&
       (llmNativeDecision.should_store_patch || isLlmFirstModeEnabled()),
@@ -2249,9 +2358,20 @@ async function deriveRuntimeContext(args: {
           confidence: "medium",
         })
       : undefined;
-  const resolvedConfirmed = llmDecisionPatch
+  const patchDeviceType = llmDecisionPatch?.confirmed_patch?.device_type;
+  const mergedConfirmed = llmDecisionPatch
     ? mergeReasoningPatch(confirmed, llmDecisionPatch)
     : confirmed;
+  const resolvedDeviceType = resolveDeviceTypeWithDynamicRegistry({
+    current: mergedConfirmed.device_type,
+    llmPatchType: patchDeviceType,
+    decisionTypeCandidate: dynamicTypeCandidate,
+    dynamicRegistry: dynamicDeviceTypes,
+  });
+  const resolvedConfirmed: ConfirmedRequirement = {
+    ...mergedConfirmed,
+    device_type: resolvedDeviceType ?? mergedConfirmed.device_type,
+  };
   const resolvedReasoning = llmDecisionPatch
     ? analyzeRequirementReasoning(resolvedConfirmed)
     : reasoning;
@@ -2363,6 +2483,7 @@ async function deriveRuntimeContext(args: {
     risks,
     requirementSummary,
     labHandoff,
+    dynamicDeviceTypes,
   };
 }
 
@@ -2396,6 +2517,7 @@ export async function runIntakeWorkflow(
     risks,
     requirementSummary,
     labHandoff,
+    dynamicDeviceTypes,
   } = await deriveRuntimeContext({
     request,
     confirmed,
@@ -2439,6 +2561,7 @@ export async function runIntakeWorkflow(
     unknowns,
     risks,
     suggestions: runtimeSuggestions,
+    dynamicDeviceTypes,
     previewDraft,
     labHandoff,
     exposedPreviewDraft,

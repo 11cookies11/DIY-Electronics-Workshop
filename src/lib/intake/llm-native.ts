@@ -1,5 +1,6 @@
 import type {
   ConfirmedRequirement,
+  DynamicDeviceTypeTag,
   IntakeNextAction,
   LlmNativeDecision,
   LlmNativeSlotAssessment,
@@ -7,28 +8,28 @@ import type {
 
 const SLOT_LABEL_ALIASES: Record<string, string> = {
   device_type: "设备类型",
-  设备类型: "设备类型",
+  "设备类型": "设备类型",
   use_case: "使用场景",
-  使用场景: "使用场景",
+  "使用场景": "使用场景",
   target_devices: "控制对象",
-  控制对象: "控制对象",
+  "控制对象": "控制对象",
   core_features: "核心功能",
-  核心功能: "核心功能",
+  "核心功能": "核心功能",
   power: "供电方式",
-  供电方式: "供电方式",
+  "供电方式": "供电方式",
   controls: "主要交互方式",
   screen: "主要交互方式",
   ports: "接口需求",
+  "接口需求": "接口需求",
   connectivity: "连接方式",
-  button_preferences: "按键或触屏交互",
+  "连接方式": "连接方式",
+  button_preferences: "按键或触屏偏好",
+  "按键或触屏偏好": "按键或触屏偏好",
   interaction_layout: "主要交互方式",
   size: "尺寸与外形",
   screen_size_preference: "尺寸与外形",
-  主要交互方式: "主要交互方式",
-  按键或触屏交互: "按键或触屏交互",
-  接口需求: "接口需求",
-  连接方式: "连接方式",
-  尺寸与外形: "尺寸与外形",
+  "主要交互方式": "主要交互方式",
+  "尺寸与外形": "尺寸与外形",
 };
 
 function normalizeSlotLabel(slot: string) {
@@ -79,10 +80,23 @@ function asNextAction(value: unknown): IntakeNextAction {
     : "ask_more";
 }
 
+function normalizeTypeKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 64);
+}
+
 export function sanitizeLlmNativeDecision(payload: unknown): LlmNativeDecision | undefined {
   if (!isObject(payload) || typeof payload.customer_reply !== "string") {
     return undefined;
   }
+
+  const rawCandidate = isObject(payload.device_type_candidate)
+    ? payload.device_type_candidate
+    : undefined;
 
   return {
     customer_reply: payload.customer_reply,
@@ -118,6 +132,32 @@ export function sanitizeLlmNativeDecision(payload: unknown): LlmNativeDecision |
       typeof payload.reasoning_summary === "string" ? payload.reasoning_summary : undefined,
     assumptions: asStringArray(payload.assumptions),
     risks: asStringArray(payload.risks),
+    device_type_candidate: rawCandidate
+      ? {
+          key:
+            typeof rawCandidate.key === "string" && rawCandidate.key.trim()
+              ? normalizeTypeKey(rawCandidate.key)
+              : undefined,
+          display_name:
+            typeof rawCandidate.display_name === "string" && rawCandidate.display_name.trim()
+              ? rawCandidate.display_name.trim().slice(0, 64)
+              : undefined,
+          parent_type:
+            typeof rawCandidate.parent_type === "string" && rawCandidate.parent_type.trim()
+              ? rawCandidate.parent_type.trim().slice(0, 64)
+              : undefined,
+          confidence:
+            rawCandidate.confidence === "low" ||
+            rawCandidate.confidence === "medium" ||
+            rawCandidate.confidence === "high"
+              ? rawCandidate.confidence
+              : undefined,
+          reason:
+            typeof rawCandidate.reason === "string" && rawCandidate.reason.trim()
+              ? rawCandidate.reason.trim().slice(0, 160)
+              : undefined,
+        }
+      : undefined,
   };
 }
 
@@ -153,4 +193,31 @@ export function deriveRisksFromSlotAssessments(slotAssessments: LlmNativeSlotAss
         ? `「${normalized}」存在冲突：${assessment.evidence}`
         : `「${normalized}」存在待澄清冲突`;
     });
+}
+
+export function buildDynamicDeviceTypeTag(args: {
+  candidate: NonNullable<LlmNativeDecision["device_type_candidate"]>;
+  now: number;
+}): DynamicDeviceTypeTag | undefined {
+  const displayName = args.candidate.display_name?.trim();
+  if (!displayName) return undefined;
+
+  const key =
+    args.candidate.key && args.candidate.key.trim()
+      ? normalizeTypeKey(args.candidate.key)
+      : normalizeTypeKey(displayName);
+  if (!key) return undefined;
+
+  return {
+    key,
+    display_name: displayName.slice(0, 64),
+    parent_type: args.candidate.parent_type?.trim() || undefined,
+    confidence: args.candidate.confidence ?? "medium",
+    source: "llm_candidate",
+    reason: args.candidate.reason?.trim() || undefined,
+    hits: 1,
+    promoted: false,
+    created_at: args.now,
+    updated_at: args.now,
+  };
 }

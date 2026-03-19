@@ -1,5 +1,6 @@
 import type {
   ConfirmedRequirement,
+  DynamicDeviceTypeTag,
   IntakeDebugInfo,
   IntakeAgentState,
   IntakeIntent,
@@ -17,6 +18,7 @@ export function buildStructuredIntakeOutput(args: {
   risks: string[];
   suggestions: IntakeSuggestion[];
   assumptions: string[];
+  dynamicDeviceTypes?: DynamicDeviceTypeTag[];
   previewCandidate?: PreviewDraft;
   handoffCandidate?: LabHandoff;
   exposedPreviewDraft?: PreviewDraft;
@@ -34,6 +36,7 @@ export function buildStructuredIntakeOutput(args: {
       risks: args.risks,
       suggestions: args.suggestions,
       assumptions: args.assumptions,
+      dynamic_device_types: args.dynamicDeviceTypes ?? [],
       preview_candidate: args.previewCandidate,
       handoff_candidate: args.handoffCandidate,
     },
