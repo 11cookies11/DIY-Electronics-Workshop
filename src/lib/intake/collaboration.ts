@@ -155,6 +155,25 @@ function asStage(value: unknown): CollaborationStage {
   return "front_desk_intake";
 }
 
+function stageRank(stage: CollaborationStage) {
+  switch (stage) {
+    case "front_desk_intake":
+      return 0;
+    case "procurement_planning":
+      return 1;
+    case "software_planning":
+      return 2;
+    case "cross_agent_sync":
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+function stabilizeStage(llmStage: CollaborationStage, fallbackStage: CollaborationStage) {
+  return stageRank(llmStage) >= stageRank(fallbackStage) ? llmStage : fallbackStage;
+}
+
 function asStatus(value: unknown): RoleplayAgentStatus {
   if (value === "ready" || value === "drafting" || value === "listening") {
     return value;
@@ -390,7 +409,7 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
     return fallback;
   }
 
-  const stage = asStage(payload.stage);
+  const stage = stabilizeStage(asStage(payload.stage), fallback.stage);
   const llmAgents = Array.isArray(payload.agents) ? payload.agents.filter(isObject) : [];
   const byId = new Map(
     llmAgents
