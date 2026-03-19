@@ -18,6 +18,63 @@ function canPrepareHandoff(labHandoff?: LabHandoff) {
   return Boolean(labHandoff);
 }
 
+function isLlmFirstEnabled() {
+  const flag = process.env.INTAKE_LLM_FIRST_MODE ?? "true";
+  return flag !== "false";
+}
+
+function resolveByLlmFirst(args: {
+  llmDecision?: Pick<
+    LlmNativeDecision,
+    "agent_stage" | "preview_candidate_ready" | "handoff_candidate_ready" | "next_action"
+  >;
+  previewDraft?: PreviewDraft;
+  labHandoff?: LabHandoff;
+}) {
+  const stage = args.llmDecision?.agent_stage;
+  const next = args.llmDecision?.next_action;
+  const canPreview = Boolean(args.previewDraft);
+  const canHandoff = canPrepareHandoff(args.labHandoff);
+
+  if (canPreview && (stage === "preview_commit" || next === "generate_preview")) {
+    return {
+      workflowState: "preview_generated",
+      nextAction: "generate_preview",
+      exposePreview: true,
+      exposeHandoff: false,
+    } satisfies ReadinessDecision;
+  }
+
+  if (canHandoff && (stage === "handoff_commit" || next === "handoff_to_lab" || next === "prepare_handoff")) {
+    return {
+      workflowState: "handoff_ready",
+      nextAction: "prepare_handoff",
+      exposePreview: true,
+      exposeHandoff: true,
+    } satisfies ReadinessDecision;
+  }
+
+  if (canPreview && (stage === "preview_offer" || args.llmDecision?.preview_candidate_ready)) {
+    return {
+      workflowState: "preview_ready",
+      nextAction: "ask_more",
+      exposePreview: false,
+      exposeHandoff: false,
+    } satisfies ReadinessDecision;
+  }
+
+  if (canHandoff && (stage === "handoff_offer" || args.llmDecision?.handoff_candidate_ready)) {
+    return {
+      workflowState: "handoff_ready",
+      nextAction: "ask_more",
+      exposePreview: canPreview,
+      exposeHandoff: true,
+    } satisfies ReadinessDecision;
+  }
+
+  return undefined;
+}
+
 export function decideReadinessFlow(args: {
   message: string;
   previewDraft?: PreviewDraft;
@@ -29,6 +86,13 @@ export function decideReadinessFlow(args: {
     "agent_stage" | "preview_candidate_ready" | "handoff_candidate_ready" | "next_action"
   >;
 }) {
+  if (isLlmFirstEnabled() && args.llmDecision) {
+    const llmFirst = resolveByLlmFirst(args);
+    if (llmFirst) {
+      return llmFirst;
+    }
+  }
+
   const transitions = evaluateIntakeTransitions({
     message: args.message,
     state: args.state,

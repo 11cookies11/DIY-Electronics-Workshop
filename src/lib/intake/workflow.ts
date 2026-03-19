@@ -232,6 +232,11 @@ function canUseReasoningModel() {
   );
 }
 
+function isLlmFirstModeEnabled() {
+  const flag = process.env.INTAKE_LLM_FIRST_MODE ?? "true";
+  return flag !== "false";
+}
+
 function buildReasoningTrace(
   patch: IntakeReasoningPatch | undefined,
 ): IntakeReasoningTrace | undefined {
@@ -1973,7 +1978,9 @@ async function deriveRuntimeContext(args: {
     : slotAssessmentUnknowns;
   const unknowns = normalizeUnknownFields(
     llmNativeDecision
-      ? unique([...llmNativeUnknowns, ...guardrailUnknowns])
+      ? isLlmFirstModeEnabled()
+        ? (llmNativeUnknowns.length ? llmNativeUnknowns : guardrailUnknowns)
+        : unique([...llmNativeUnknowns, ...guardrailUnknowns])
       : baselineUnknowns,
   );
   const memory = analyzeConversationMemory({
