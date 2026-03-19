@@ -225,7 +225,11 @@ function mergeReasoningPatch(
 }
 
 function canUseReasoningModel() {
-  return Boolean(process.env.SECONDME_INTAKE_REASONING_MODEL);
+  return Boolean(
+    process.env.DEEPSEEK_INTAKE_REASONING_MODEL ||
+      process.env.LLM_INTAKE_REASONING_MODEL ||
+      process.env.SECONDME_INTAKE_REASONING_MODEL,
+  );
 }
 
 function buildReasoningTrace(
@@ -1391,7 +1395,10 @@ function buildFallbackCustomerReply(args: {
 }
 
 async function buildModelRequirementPatch(request: IntakeAgentRequest) {
-  const model = process.env.SECONDME_INTAKE_REASONING_MODEL;
+  const model =
+    process.env.DEEPSEEK_INTAKE_REASONING_MODEL ??
+    process.env.LLM_INTAKE_REASONING_MODEL ??
+    process.env.SECONDME_INTAKE_REASONING_MODEL;
   if (!model) {
     return undefined;
   }
@@ -1645,6 +1652,10 @@ async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
   risks: string[];
 }) {
   const model =
+    process.env.DEEPSEEK_INTAKE_REASONING_MODEL ??
+    process.env.LLM_INTAKE_REASONING_MODEL ??
+    process.env.DEEPSEEK_INTAKE_CHAT_MODEL ??
+    process.env.LLM_INTAKE_CHAT_MODEL ??
     process.env.SECONDME_INTAKE_REASONING_MODEL ??
     process.env.SECONDME_INTAKE_CHAT_MODEL;
 

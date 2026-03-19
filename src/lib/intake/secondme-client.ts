@@ -10,20 +10,51 @@ type OpenAIChatCompletionResponse = {
 };
 
 function getChatEndpoint() {
-  const override = process.env.SECONDME_CHAT_COMPLETIONS_URL;
+  const override = process.env.LLM_CHAT_COMPLETIONS_URL ?? process.env.SECONDME_CHAT_COMPLETIONS_URL;
   if (override) {
     return override;
   }
 
   const base =
+    process.env.DEEPSEEK_BASE_URL ??
+    process.env.LLM_BASE_URL ??
     process.env.SECONDME_OPENAI_BASE_URL ??
     process.env.SECONDME_API_BASE_URL ??
     getSecondMeConfig().apiBaseUrl;
-  return `${base.replace(/\/$/, "")}/v1/chat/completions`;
+  return `${base.replace(/\/$/, "")}/chat/completions`;
 }
 
+function resolveModel(optionsModel?: string) {
+  return (
+    optionsModel ??
+    process.env.DEEPSEEK_CHAT_MODEL ??
+    process.env.LLM_CHAT_MODEL ??
+    process.env.SECONDME_CHAT_MODEL ??
+    "deepseek-chat"
+  );
+}
+
+async function resolveApiKey() {
+  const accessToken = await getAccessToken();
+  return (
+    process.env.DEEPSEEK_API_KEY ??
+    process.env.LLM_API_KEY ??
+    process.env.SECONDME_CHAT_API_KEY ??
+    accessToken ??
+    null
+  );
+}
+
+// 保留旧名字，避免现有调用方大面积改动；实际已是通用 LLM 配置检测。
 export function isSecondMeChatConfigured() {
-  return Boolean(process.env.SECONDME_CHAT_MODEL);
+  return Boolean(
+    process.env.DEEPSEEK_CHAT_MODEL ||
+      process.env.LLM_CHAT_MODEL ||
+      process.env.SECONDME_CHAT_MODEL ||
+      process.env.DEEPSEEK_API_KEY ||
+      process.env.LLM_API_KEY ||
+      process.env.SECONDME_CHAT_API_KEY,
+  );
 }
 
 export async function requestSecondMeStructuredReply(messages: SecondMeChatMessage[]) {
@@ -38,18 +69,11 @@ export async function requestSecondMeChatReply(
     temperature?: number;
   } = {},
 ) {
-  const model = options.model ?? process.env.SECONDME_CHAT_MODEL;
-  if (!model) {
-    throw new Error("Missing SECONDME_CHAT_MODEL");
-  }
-
-  const accessToken = await getAccessToken();
-  const apiKey = process.env.SECONDME_CHAT_API_KEY ?? accessToken;
+  const model = resolveModel(options.model);
+  const apiKey = await resolveApiKey();
 
   if (!apiKey) {
-    throw new Error(
-      "Missing Second Me chat credentials: connect OAuth or set SECONDME_CHAT_API_KEY",
-    );
+    throw new Error("Missing LLM API key: set DEEPSEEK_API_KEY (or LLM_API_KEY)");
   }
 
   const response = await fetch(getChatEndpoint(), {
@@ -68,14 +92,14 @@ export async function requestSecondMeChatReply(
   });
 
   if (!response.ok) {
-    throw new Error(`Second Me chat request failed with status ${response.status}`);
+    throw new Error(`LLM chat request failed with status ${response.status}`);
   }
 
   const data = (await response.json()) as OpenAIChatCompletionResponse;
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
-    throw new Error("Second Me chat returned empty content");
+    throw new Error("LLM chat returned empty content");
   }
 
   return content;
