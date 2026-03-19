@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { runIntakeWorkflow } from "@/lib/intake/workflow";
 import { buildCollaborationPanel } from "@/lib/intake/collaboration";
 import { getSessionRecord, getSessionState, saveSessionOutput } from "@/lib/intake/store";
+import { fetchSecondMe } from "@/lib/secondme";
+import { deriveSecondMeUserId, getAccountProfile } from "@/lib/account-profile";
+import { saveIntakeInteraction } from "@/lib/user-data-db";
 
 type RequestBody = {
   sessionId?: string;
@@ -25,6 +28,15 @@ export async function POST(request: Request) {
     }
 
     const sessionId = body.sessionId?.trim() || createSessionId();
+    let resolvedUserId: string | undefined;
+    try {
+      const userInfo = await fetchSecondMe<Record<string, unknown>>("/api/secondme/user/info");
+      await getAccountProfile(userInfo);
+      resolvedUserId = deriveSecondMeUserId(userInfo);
+    } catch {
+      resolvedUserId = undefined;
+    }
+
     const record = getSessionRecord(sessionId);
     const currentState = getSessionState(sessionId);
     const result = await runIntakeWorkflow(
@@ -36,6 +48,14 @@ export async function POST(request: Request) {
     const collaborationPanel = await buildCollaborationPanel(result);
     saveSessionOutput(sessionId, message, result, collaborationPanel);
     const savedRecord = getSessionRecord(sessionId);
+    saveIntakeInteraction({
+      sessionId,
+      userId: resolvedUserId,
+      userMessage: message,
+      output: result,
+      collaborationPanel,
+      projectRecord: savedRecord?.projectRecord,
+    });
 
     return NextResponse.json({
       sessionId,

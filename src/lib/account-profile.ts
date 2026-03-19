@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { getStoredUserProfile, upsertUserProfile } from "./user-data-db";
 
 type JsonObject = Record<string, unknown>;
 
@@ -12,18 +11,6 @@ export type AccountProfile = {
   timezone: string;
   notes: string;
 };
-
-type ProfileStore = Record<
-  string,
-  {
-    updated_at: number;
-    profile: AccountProfile;
-  }
->;
-
-const PROFILE_STORE_PATH =
-  process.env.SECONDME_PROFILE_STORE_PATH ??
-  path.join(process.cwd(), ".secondme", "account-profiles.json");
 
 const EMPTY_PROFILE: AccountProfile = {
   display_name: "",
@@ -94,63 +81,55 @@ function buildDefaultProfile(userInfo: JsonObject): AccountProfile {
   };
 }
 
-async function ensureStoreDir() {
-  await mkdir(path.dirname(PROFILE_STORE_PATH), { recursive: true });
-}
-
-async function readStore(): Promise<ProfileStore> {
-  try {
-    const raw = await readFile(PROFILE_STORE_PATH, "utf8");
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return {};
-    }
-    return parsed as ProfileStore;
-  } catch (error) {
-    if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
-      return {};
-    }
-    throw error;
-  }
-}
-
-async function writeStore(store: ProfileStore) {
-  await ensureStoreDir();
-  await writeFile(PROFILE_STORE_PATH, JSON.stringify(store, null, 2), "utf8");
-}
-
 export async function getAccountProfile(userInfo: JsonObject) {
   const userId = deriveSecondMeUserId(userInfo);
-  const store = await readStore();
-  const stored = store[userId];
+  const stored = getStoredUserProfile(userId);
   const defaults = buildDefaultProfile(userInfo);
+  const profile: AccountProfile = stored
+    ? {
+        ...defaults,
+        display_name: stored.display_name || defaults.display_name,
+        email: stored.email || defaults.email,
+        phone: stored.phone || defaults.phone,
+        company: stored.company || defaults.company,
+        role_title: stored.role_title || defaults.role_title,
+        timezone: stored.timezone || defaults.timezone,
+        notes: stored.notes || defaults.notes,
+      }
+    : defaults;
+
+  upsertUserProfile({
+    userId,
+    profile,
+    rawUserInfo: userInfo,
+  });
 
   return {
     user_id: userId,
     source_user: userInfo,
-    profile: stored ? { ...defaults, ...stored.profile } : defaults,
+    profile,
     updated_at: stored?.updated_at ?? null,
   };
 }
 
 export async function saveAccountProfile(userInfo: JsonObject, patch: Partial<AccountProfile>) {
   const userId = deriveSecondMeUserId(userInfo);
-  const store = await readStore();
   const current = await getAccountProfile(userInfo);
   const merged: AccountProfile = {
     ...current.profile,
     ...normalizeProfilePatch(patch),
   };
 
-  store[userId] = {
-    updated_at: Date.now(),
+  upsertUserProfile({
+    userId,
     profile: merged,
-  };
-  await writeStore(store);
+    rawUserInfo: userInfo,
+  });
 
+  const stored = getStoredUserProfile(userId);
   return {
     user_id: userId,
     profile: merged,
-    updated_at: store[userId].updated_at,
+    updated_at: stored?.updated_at ?? Date.now(),
   };
 }
