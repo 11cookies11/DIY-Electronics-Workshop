@@ -85,6 +85,27 @@ function normalizeUnknownFieldsSafe(fields: string[]) {
   );
 }
 
+function filterUnknownsByContext(
+  fields: string[],
+  confirmed: ConfirmedRequirement,
+  message: string,
+) {
+  const controlContext =
+    confirmed.device_type === "红外遥控器" ||
+    Boolean(confirmed.target_devices?.length) ||
+    /(控制|遥控|家电|空调|电视|投影|机顶盒|风扇|开关|调节)/.test(message);
+
+  return fields.filter((field) => {
+    if (field === "设备类型" && confirmed.device_type) return false;
+    if (field === "使用场景" && confirmed.use_case) return false;
+    if (field === "核心功能" && confirmed.core_features?.length) return false;
+    if (field === "主要交互方式" && (confirmed.controls?.length || confirmed.screen)) return false;
+    if (field === "供电方式" && confirmed.power?.length) return false;
+    if (field === "控制对象" && !controlContext) return false;
+    return true;
+  });
+}
+
 function mergeArrays(left?: string[], right?: string[]) {
   return unique([...(left ?? []), ...(right ?? [])]);
 }
@@ -291,10 +312,46 @@ function inferIntent(message: string): IntakeIntent {
 function inferDeviceType(message: string) {
   if (hasPattern(message, [/(手表|穿戴)/])) return "智能手表";
   if (hasPattern(message, [/(遥控器|红外)/])) return "红外遥控器";
+  if (hasPattern(message, [/(喂食器|喂宠|宠物喂食)/])) return "喂食器控制终端";
+  if (hasPattern(message, [/(空气质量|监测仪|检测仪)/])) return "桌面监测设备";
   if (hasPattern(message, [/(桌面|桌宠|桌上)/])) return "桌面设备";
   if (hasPattern(message, [/(音箱|音响|speaker)/i])) return "蓝牙音箱";
   if (hasPattern(message, [/(手持|便携)/])) return "手持设备";
   return undefined;
+}
+
+function reconcileDeviceTypeByContext(
+  deviceType: string | undefined,
+  context: {
+    message: string;
+    coreFeatures?: string[];
+    targetDevices?: string[];
+  },
+) {
+  if (!deviceType) return deviceType;
+
+  const hasAirMonitorCue =
+    /(空气质量|监测仪|检测仪|pm2\.?5|co2|温湿度)/i.test(context.message) ||
+    Boolean(context.coreFeatures?.includes("空气监测"));
+  if (deviceType === "红外遥控器" && hasAirMonitorCue) {
+    return "桌面监测设备";
+  }
+
+  const hasPetFeederCue =
+    /(喂食器|喂宠|宠物喂食)/.test(context.message) ||
+    Boolean(context.coreFeatures?.includes("定时喂食"));
+  if (deviceType === "红外遥控器" && hasPetFeederCue) {
+    return "喂食器控制终端";
+  }
+
+  const hasRemoteCue =
+    /(遥控器|红外|控制空调|控制电视|控制投影|控制灯|控制风扇)/.test(context.message) ||
+    Boolean(context.targetDevices?.length);
+  if (!hasRemoteCue && deviceType === "红外遥控器") {
+    return undefined;
+  }
+
+  return deviceType;
 }
 
 function collectKeywords(message: string, patterns: Array<[RegExp, string]>) {
@@ -341,6 +398,9 @@ function extractCorrectionReplacementText(message: string) {
 
 function extractDeviceMentions(text?: string) {
   if (!text) return [];
+  // 仅在“控制设备”语境下提取目标设备，避免把“灯光提示”误判为控制对象。
+  const controlContext = /(控制|遥控|开关|调节|联动|家电)/.test(text);
+  if (!controlContext) return [];
 
   return unique(
     collectKeywords(text, [
@@ -598,6 +658,10 @@ function deriveConfirmed(
     [/(显示|屏幕)/, "显示"],
     [/(遥控|红外)/, "红外控制"],
     [/(监测|检测|采集)/, "数据采集"],
+    [/(心率|血氧|睡眠|活动提醒|健康)/, "健康监测"],
+    [/(pm2\.?5|co2|温湿度|空气质量)/i, "空气监测"],
+    [/(定时喂食|喂食|出粮)/, "定时喂食"],
+    [/(远程|app|手机查看|状态查看)/i, "远程状态查看"],
     [/(联网|连接|同步手机)/, "无线连接"],
     [/(播放|音频|音响)/, "音频播放"],
     [/(运动|记录运动数据)/, "运动记录"],
@@ -609,6 +673,9 @@ function deriveConfirmed(
     current.use_case ??
     extractionText.match(/用于([^，。；]+)/)?.[1]?.trim() ??
     extractionText.match(/给([^，。；]+)用/)?.[1]?.trim() ??
+    extractionText.match(/放在([^，。；]+)/)?.[1]?.trim() ??
+    extractionText.match(/放([^，。；]+)/)?.[1]?.trim() ??
+    extractionText.match(/放([^，。；]+)(?:里|中|上)/)?.[1]?.trim() ??
     (hasPattern(normalizedMessage, [/(家里用|家用|家庭用)/]) ? "家庭环境" : undefined) ??
     (hasPattern(normalizedMessage, [/(出门用|外出用|随身用|在外面用)/]) ? "外出环境" : undefined) ??
     (hasPattern(normalizedMessage, [/(酒店|宾馆|民宿)/]) ? "酒店环境" : undefined) ??
@@ -675,13 +742,22 @@ function deriveConfirmed(
       ]),
   );
 
-  return {
-    ...provisionalRequirement,
-    device_type: signals.isCorrection
+  const resolvedDeviceType = reconcileDeviceTypeByContext(
+    signals.isCorrection
       ? inferredDeviceType ?? current.device_type
       : explicitDeviceType ??
-        (hasFreshArchetypeEvidence ? inferredDeviceType : current.device_type) ??
-        inferredDeviceType,
+          (hasFreshArchetypeEvidence ? inferredDeviceType : current.device_type) ??
+          inferredDeviceType,
+    {
+      message: extractionText,
+      coreFeatures: provisionalRequirement.core_features,
+      targetDevices: provisionalRequirement.target_devices,
+    },
+  );
+
+  return {
+    ...provisionalRequirement,
+    device_type: resolvedDeviceType ?? current.device_type,
   };
 }
 
@@ -2091,12 +2167,16 @@ async function deriveRuntimeContext(args: {
   const llmNativeUnknowns = llmNativeDecision?.unknowns.length
     ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
     : slotAssessmentUnknowns;
-  const unknowns = normalizeUnknownFieldsSafe(
+  const unknowns = filterUnknownsByContext(
+    normalizeUnknownFieldsSafe(
     llmNativeDecision
       ? isLlmFirstModeEnabled()
         ? (llmNativeUnknowns.length ? llmNativeUnknowns : guardrailUnknowns)
         : unique([...llmNativeUnknowns, ...guardrailUnknowns])
       : baselineUnknowns,
+    ),
+    confirmed,
+    message,
   );
   const memory = analyzeConversationMemory({
     message,
@@ -2220,10 +2300,14 @@ export async function runIntakeWorkflow(
   const llmNativeUnknowns = llmNativeDecision?.unknowns.length
     ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
     : slotAssessmentUnknowns;
-  const unknowns = normalizeUnknownFields(
+  const unknowns = filterUnknownsByContext(
+    normalizeUnknownFieldsSafe(
     llmNativeDecision
       ? unique([...llmNativeUnknowns, ...guardrailUnknowns])
       : baselineUnknowns,
+    ),
+    confirmed,
+    message,
   );
   const memory = analyzeConversationMemory({
     message,
