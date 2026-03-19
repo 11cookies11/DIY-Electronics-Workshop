@@ -1879,16 +1879,22 @@ function buildWorkflowStructuredOutput(args: {
 
 async function deriveRequirementContext(request: IntakeAgentRequest): Promise<RequirementContext> {
   const localConfirmed = deriveConfirmed(request.message, request.state.confirmed, request.history ?? []);
+  const llmFirst = isLlmFirstModeEnabled();
+
   const modelRequirementPatch = canUseReasoningModel()
     ? await buildModelRequirementPatch({
         ...request,
         state: {
           ...request.state,
-          confirmed: localConfirmed,
+          confirmed: llmFirst ? request.state.confirmed : localConfirmed,
         },
       })
     : undefined;
-  const confirmed = mergeReasoningPatch(localConfirmed, modelRequirementPatch);
+
+  const confirmed =
+    llmFirst && modelRequirementPatch
+      ? mergeReasoningPatch(request.state.confirmed, modelRequirementPatch)
+      : mergeReasoningPatch(localConfirmed, modelRequirementPatch);
   const reasoningTrace = buildReasoningTrace(modelRequirementPatch);
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
