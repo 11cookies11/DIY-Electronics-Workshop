@@ -916,6 +916,57 @@ function mapConfirmedToPreviewDraft(
   };
 }
 
+function canForcePreviewWithAssumptions(args: {
+  message: string;
+  confirmed: ConfirmedRequirement;
+  unknowns: string[];
+}) {
+  const signals = parseConversationSignals(args.message);
+  if (!signals.wantsPreview) return false;
+  if (!args.confirmed.device_type) return false;
+  return args.unknowns.length <= 2;
+}
+
+function buildForcedPreviewDraftWithAssumptions(
+  confirmed: ConfirmedRequirement,
+  unknowns: string[],
+): PreviewDraft | undefined {
+  if (!confirmed.device_type) return undefined;
+
+  const base = defaultShellForDevice(confirmed.device_type);
+  const assumptions = [
+    "用户明确要求先看预览，当前草案按缺失信息采用默认假设。",
+    ...unknowns.map((item) => `待确认：${item}`),
+  ];
+
+  const input: PreviewInput = {
+    shell: base.shell,
+    shellSize: { ...base.shellSize },
+    board: {
+      placement: "center",
+      grid: { cols: base.cols, rows: base.rows },
+    },
+    mainScreen: confirmed.screen
+      ? {
+          face: "front",
+          type: confirmed.screen.includes("触") ? "touch_display" : "display_panel",
+          sizeMm: { width: 28, height: 58, depth: 4 },
+        }
+      : undefined,
+    modules: uniqueModules(["esp32"]),
+  };
+
+  return {
+    readiness: {
+      ready: true,
+      missing: unknowns,
+      assumptions,
+    },
+    assumptions,
+    input,
+  };
+}
+
 function buildLabHandoff(
   confirmed: ConfirmedRequirement,
   requirementSummary: string,
@@ -1133,6 +1184,15 @@ function applyReplyGuard(args: {
   transitionMode?: string;
 }) {
   const summary = buildRequirementSummary(args.confirmed);
+
+  if (
+    args.transitionMode === "answer_then_offer" &&
+    args.nextAction === "ask_more" &&
+    args.unknowns.length > 0
+  ) {
+    const focus = args.focus ?? args.unknowns[0];
+    return `我先总结一下当前方向：${summary || "已记录你的方案轮廓"}。为避免重复追问，我们先补一个关键点「${focus}」即可。你可以直接回：1) 用你的默认推荐 2) 我给一句偏好 3) 先按当前信息继续。`;
+  }
 
   if (isLightAcknowledgementMessage(args.message)) {
     return buildLightAcknowledgementReply({
@@ -1861,7 +1921,16 @@ async function deriveRuntimeContext(args: {
   const { message, history = [], state } = request;
   const guardrailUnknowns = computeUnknowns(confirmed);
   const baselineUnknowns = unique([...guardrailUnknowns, ...reasoning.mustConfirm]);
-  const previewDraft = mapConfirmedToPreviewDraft(confirmed);
+  const strictPreviewDraft = mapConfirmedToPreviewDraft(confirmed);
+  const previewDraft =
+    strictPreviewDraft ??
+    (canForcePreviewWithAssumptions({
+      message,
+      confirmed,
+      unknowns: baselineUnknowns,
+    })
+      ? buildForcedPreviewDraftWithAssumptions(confirmed, baselineUnknowns)
+      : undefined);
   const baselineRisks = unique([
     ...state.risks,
     ...reasoning.risks,

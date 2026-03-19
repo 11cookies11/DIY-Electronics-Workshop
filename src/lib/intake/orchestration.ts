@@ -4,8 +4,8 @@ import {
   type DeviceArchetype,
 } from "./archetypes";
 import { detectConversationBaseMode } from "./conversation-base";
-import type { ConversationMemory } from "./types";
 import { parseConversationSignals } from "./signals";
+import type { ConversationMemory } from "./types";
 import type { ConfirmedRequirement, IntakeNextAction, IntakeSkillRoute, PreviewDraft } from "./types";
 
 export type ReplyPriority =
@@ -45,10 +45,7 @@ function hasCollectedCore(confirmed: ConfirmedRequirement) {
   );
 }
 
-function hasResolvedFocus(
-  focus: string | undefined,
-  confirmed: ConfirmedRequirement,
-) {
+function hasResolvedFocus(focus: string | undefined, confirmed: ConfirmedRequirement) {
   if (!focus) return false;
 
   switch (focus) {
@@ -103,9 +100,7 @@ function pickSingleFocus(
 
   if (preferredOrder?.length) {
     const preferredFocus = preferredOrder.find((item) => unknowns.includes(item));
-    if (preferredFocus) {
-      return preferredFocus;
-    }
+    if (preferredFocus) return preferredFocus;
   }
 
   return unknowns[0];
@@ -128,6 +123,18 @@ export function planReplyOrchestration(args: {
   );
   const focus = pickSingleFocus(args.message, args.confirmed, args.unknowns, args.memory?.focusHint);
   const focusResolved = hasResolvedFocus(focus, args.confirmed);
+
+  // 重复追问抑制：同一焦点连续追问超过 2 轮时，转为“总结 + 选项式补全”。
+  if ((args.memory?.repeatedFocusCount ?? 0) >= 2) {
+    return {
+      baseMode,
+      transitionMode: "answer_then_offer",
+      priorities: ["acknowledge", "offer_suggestion", "invite_next_step"],
+      shouldAdvanceRequirement: true,
+      singleFocus: focus,
+      inferredArchetype,
+    } satisfies ReplyOrchestration;
+  }
 
   if (baseMode !== "none" && !hasCore) {
     return {
@@ -170,7 +177,11 @@ export function planReplyOrchestration(args: {
     } satisfies ReplyOrchestration;
   }
 
-  if (args.route.active_skill === "capability-intro" || args.route.active_skill === "lab-intro" || args.route.active_skill === "solution-intro") {
+  if (
+    args.route.active_skill === "capability-intro" ||
+    args.route.active_skill === "lab-intro" ||
+    args.route.active_skill === "solution-intro"
+  ) {
     return {
       baseMode,
       transitionMode: "answer_then_offer",

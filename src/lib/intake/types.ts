@@ -195,6 +195,7 @@ export type ConversationMemory = {
   recentAssistantQuestion?: string;
   pendingUnknown?: string;
   focusHint?: string;
+  repeatedFocusCount?: number;
   shouldContinueThread: boolean;
 };
 

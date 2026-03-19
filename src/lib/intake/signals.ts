@@ -11,44 +11,87 @@ function hasPattern(message: string, patterns: RegExp[]) {
 }
 
 function normalizeMessage(message: string) {
-  return message.trim().replace(/[，。！？、\s]+/g, "").toLowerCase();
+  return message
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, "");
+}
+
+function containsAny(message: string, keywords: string[]) {
+  return keywords.some((keyword) => message.includes(keyword));
 }
 
 export function parseConversationSignals(message: string): ConversationSignals {
   const normalized = normalizeMessage(message);
+  const lowered = message.trim().toLowerCase();
+
+  const wantsPreviewByKeyword = containsAny(normalized, [
+    "预览",
+    "出图",
+    "生成",
+    "3d",
+    "草案",
+    "方案",
+    "模型",
+  ]);
+  const wantsHandoffByKeyword = containsAny(normalized, [
+    "交接",
+    "handoff",
+    "移交",
+    "提交实验室",
+    "继续推进",
+  ]);
+  const affirmativeByKeyword = containsAny(normalized, [
+    "我愿意",
+    "愿意",
+    "可以",
+    "好",
+    "好的",
+    "行",
+    "开始吧",
+    "继续",
+    "就这样",
+    "没问题",
+  ]);
+  const negativeByKeyword = containsAny(normalized, [
+    "不要",
+    "先不要",
+    "先不",
+    "不做",
+    "不生成",
+    "等等",
+    "等一下",
+    "稍后",
+  ]);
+  const correctionByKeyword = containsAny(normalized, [
+    "不是",
+    "不对",
+    "纠正",
+    "改成",
+    "应该是",
+    "我说的是",
+  ]);
 
   return {
-    wantsPreview: hasPattern(message, [
-      /(生成|出一版|来一版|搭一版|做一版).*(预览|草案|方案|模型|3d)/i,
-      /(出|做|来).*(3d|草案|预览)/i,
-      /(看看|看下|想看).*(预览|草案|方案|模型|3d)/i,
-      /(直接|现在).*(生成|出).*(预览|草案|方案|模型|3d)/i,
-      /(现在可以了吗|可以生成了吗|能生成了吗|给我生成吧|那就生成吧|直接出吧|出3d草案吧|出草案吧)/i,
-      /(先出一版|先给我看一版|先给我看个大概|出个大概)/i,
-    ]),
-    wantsHandoff: hasPattern(message, [
-      /(交接|交给实验室|整理交接单|提交实验室)/,
-      /(继续推进|往下走|开始评估).*(实验室|交接)/,
-      /(出个交接单|出一份交接单|先整理一下交接单|给实验室看看)/,
-    ]),
-    isAffirmative:
-      hasPattern(normalized, [
-        /^(可以|好|好的|好呀|好啊|行|行啊|来吧|开始吧|继续吧|就这样吧|没问题|可以的|那就这样|那就开始吧)+$/i,
-        /^(可以来吧|好来吧|好的来吧|那就开始吧|那就继续吧)$/i,
-        /^(嗯|嗯嗯|先这样|就这样|就按这个)$/i,
-      ]) ||
-      hasPattern(message, [
-        /(那就|那你就|那麻烦你).*(开始|继续|生成|整理|推进)/,
-        /(就先这样|就按这个方向吧|就这个方案吧)/,
+    wantsPreview:
+      wantsPreviewByKeyword &&
+      hasPattern(lowered, [
+        /(生成|出|看).*(预览|草案|方案|模型|3d)/i,
+        /(直接|现在).*(生成|出图)/i,
       ]),
+    wantsHandoff:
+      wantsHandoffByKeyword &&
+      hasPattern(lowered, [
+        /(交接|handoff|移交|提交).*(实验室|团队|工程)/i,
+        /(继续推进|往下走)/i,
+      ]),
+    isAffirmative:
+      affirmativeByKeyword ||
+      hasPattern(normalized, [/^(我愿意|愿意|可以|好的|好啊|好呀|行|开始吧|继续|就这样)$/i]),
     isNegative:
-      hasPattern(normalized, [
-        /^(先不要|不要|不急|先等等|等一下|先别|还不行|先不做|先不生成)+$/i,
-        /^(先不急|再等等|我再想想|先别推进)$/i,
-      ]) || hasPattern(message, [/(暂时|现在先).*(不要|不做|不生成|不推进)/]),
-    isCorrection: hasPattern(message, [
-      /(不是|不对|纠正一下|改一下|我说的是|应该是|准确地说)/,
-      /(不是.*而是|别用.*用)/,
-    ]),
+      negativeByKeyword ||
+      hasPattern(normalized, [/^(先不要|不要|先不|不做|不生成|等等|等一下|稍后)$/i]),
+    isCorrection:
+      correctionByKeyword || hasPattern(lowered, [/(不是.*而是|改成|应该是|我说的是)/i]),
   };
 }

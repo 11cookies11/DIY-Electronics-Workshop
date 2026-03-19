@@ -70,37 +70,37 @@ export type ProjectCollaborationRecord = {
 const FRONT_DESK_PROFILE: RoleplayAgentProfile = {
   id: "front_desk",
   name: "前台接待 Agent",
-  role: "需求收敛与跨团队编排",
+  role: "需求收敛与跨团队同步",
   identity: "你是项目入口协调者，负责把自然对话整理成可协作任务。",
   mode: "roleplay",
   capabilities: [
     "理解用户自然表达并提炼需求",
     "组织 preview 与 handoff 节点",
-    "给采购、研发、交付三方同步同一份上下文",
+    "将同一份上下文同步给采购、研发与交付",
   ],
-  boundaries: ["不直接执行采购下单", "不直接替代研发负责人做技术决策"],
+  boundaries: ["不直接执行采购下单", "不替代研发负责人做技术决策"],
 };
 
 const PROCUREMENT_PROFILE: RoleplayAgentProfile = {
   id: "hardware_procurement",
   name: "硬件采购 Agent",
-  role: "器件/BOM/供货风险",
+  role: "器件/BOM/供应风险",
   identity: "你是硬件采购规划者，负责把需求映射成可执行采购方案。",
   mode: "roleplay",
   capabilities: [
     "输出模块化器件清单与 BOM 草案",
     "识别供货周期、替代料与成本风险",
-    "对接前台总结给出采购维度补充问题",
+    "对接前台总结并给出采购维度补充问题",
   ],
   boundaries: [
     "当前阶段为角色扮演，不实际触发采购系统",
-    "项目硬件以模块化拼装为主，不包含自研硬件开发",
+    "硬件方案以模块化拼装为主，不包含自研硬件开发",
   ],
 };
 
 const SOFTWARE_LEAD_PROFILE: RoleplayAgentProfile = {
   id: "software_lead",
-  name: "软件开发负责人 Agent",
+  name: "软件负责人 Agent",
   role: "研发拆解/接口/里程碑",
   identity: "你是软件团队负责人，负责把需求拆成研发可落地计划。",
   mode: "roleplay",
@@ -111,7 +111,7 @@ const SOFTWARE_LEAD_PROFILE: RoleplayAgentProfile = {
   ],
   boundaries: [
     "当前阶段为角色扮演，不直接写入外部工单系统",
-    "硬件侧默认为模块化拼装输入，不展开自研硬件实现细节",
+    "硬件前提为模块化拼装输入，不展开自研硬件实现细节",
   ],
 };
 
@@ -224,6 +224,37 @@ function buildDeliveryPreview(output: IntakeAgentOutput) {
   }`;
 }
 
+function buildFallbackConversation(output: IntakeAgentOutput, stage: CollaborationStage) {
+  const turns: CollaborationConversationTurn[] = [
+    {
+      from: "front_desk",
+      to: ["hardware_procurement", "software_lead", "delivery_lead"],
+      message: `我先同步当前方向：${output.requirement_summary}`,
+    },
+    {
+      from: "hardware_procurement",
+      to: ["front_desk", "software_lead", "delivery_lead"],
+      message: buildProcurementPreview(output),
+    },
+    {
+      from: "software_lead",
+      to: ["front_desk", "hardware_procurement", "delivery_lead"],
+      message: buildSoftwareLeadPreview(output),
+    },
+  ];
+
+  // 交付 Agent 阶段触发：仅在跨团队同步阶段广播，避免每轮重复。
+  if (stage === "cross_agent_sync") {
+    turns.splice(1, 0, {
+      from: "delivery_lead",
+      to: ["front_desk", "hardware_procurement", "software_lead"],
+      message: buildDeliveryPreview(output),
+    });
+  }
+
+  return turns;
+}
+
 function buildFallbackPanel(output: IntakeAgentOutput): CollaborationPanel {
   const status = deriveFallbackStatus(output);
   const stage = deriveFallbackStage(output);
@@ -262,39 +293,19 @@ function buildFallbackPanel(output: IntakeAgentOutput): CollaborationPanel {
         handoff_preview: buildDeliveryPreview(output),
       },
     ],
-    conversation: [
-      {
-        from: "front_desk",
-        to: ["hardware_procurement", "software_lead", "delivery_lead"],
-        message: `我先同步当前方向：${output.requirement_summary}`,
-      },
-      {
-        from: "delivery_lead",
-        to: ["front_desk", "hardware_procurement", "software_lead"],
-        message: buildDeliveryPreview(output),
-      },
-      {
-        from: "hardware_procurement",
-        to: ["front_desk", "software_lead", "delivery_lead"],
-        message: buildProcurementPreview(output),
-      },
-      {
-        from: "software_lead",
-        to: ["front_desk", "hardware_procurement", "delivery_lead"],
-        message: buildSoftwareLeadPreview(output),
-      },
-    ],
+    conversation: buildFallbackConversation(output, stage),
   };
 }
 
 function buildCollabSystemPrompt() {
   return [
-    "你是一个多 Agent 协作导演，负责为 Demo 生成“像真人一样”的跨角色沟通记录。",
+    "你是一个多 Agent 协作导演，负责为 Demo 生成像真人团队协作的沟通记录。",
     "输出必须是 JSON，不要额外解释。",
     "角色包括：前台、采购、软件负责人、交付 Agent。",
-    "讨论时先给一个假定交付日期（如果没有明确日期），再向用户索要联系方式，最后明确后续会实时同步项目进度。",
     "注意边界：当前硬件方案是模块化拼装，不涉及自研硬件开发。",
-    "请生成自然口语化中文，不要写成系统日志口吻。",
+    "交付 Agent 采用阶段触发，不要每一轮都发同类广播。",
+    "交付 Agent 发言时需包含：假定交付日期、联系方式请求、后续实时进度通知承诺。",
+    "请生成自然中文，避免系统日志口吻。",
   ].join("\n");
 }
 
@@ -332,9 +343,9 @@ function buildCollabUserPrompt(output: IntakeAgentOutput) {
         ],
       },
       rules: [
-        "conversation 给 2-5 条即可，像团队内部短沟通，不要死板。",
+        "conversation 保持 2-5 条，像团队内部短沟通，不要死板。",
         "handoff_preview 用自然短句，不是字段罗列。",
-        "交付 Agent 至少要体现三点：假定交付日期、索要联系方式、后续实时进度通知。",
+        "delivery_lead 仅在阶段切换时出场，不要轮轮重复。",
       ],
     },
     null,
@@ -469,6 +480,12 @@ export function updateProjectCollaborationRecord(args: {
   });
 
   for (const event of nextEvents) {
+    const shouldSkipDelivery =
+      event.from === "delivery_lead" &&
+      previous?.stage === args.panel.stage &&
+      args.panel.stage !== "cross_agent_sync";
+    if (shouldSkipDelivery) continue;
+
     const duplicated = history.some(
       (item) => item.from === event.from && item.summary === event.summary && item.stage === event.stage,
     );

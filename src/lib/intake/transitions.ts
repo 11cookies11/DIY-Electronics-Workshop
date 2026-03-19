@@ -10,6 +10,33 @@ export type IntakeTransitionSignals = ReturnType<typeof parseConversationSignals
   shouldTriggerHandoff: boolean;
 };
 
+function normalizeMessage(message: string) {
+  return message
+    .trim()
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]+/gu, "");
+}
+
+function includesAny(message: string, keywords: string[]) {
+  return keywords.some((keyword) => message.includes(keyword));
+}
+
+function shouldAcceptPreviewByDirectPhrase(message: string) {
+  const normalized = normalizeMessage(message);
+  return includesAny(normalized, [
+    "我愿意",
+    "愿意",
+    "可以开始",
+    "开始吧",
+    "继续",
+    "就这样",
+    "直接出图",
+    "直接生成",
+    "不用再问",
+    "往下走",
+  ]);
+}
+
 export function evaluateIntakeTransitions(args: {
   message: string;
   state: IntakeAgentState;
@@ -20,10 +47,7 @@ export function evaluateIntakeTransitions(args: {
   const baseSignals = parseConversationSignals(args.message);
   const canPreview = Boolean(args.previewDraft);
   const canHandoff = Boolean(args.labHandoff) && args.unknowns.length <= 2;
-  const shouldOfferPreview =
-    canPreview &&
-    !baseSignals.isNegative &&
-    args.unknowns.length <= 1;
+  const shouldOfferPreview = canPreview && !baseSignals.isNegative && args.unknowns.length <= 1;
   const shouldOfferHandoff =
     canHandoff &&
     !baseSignals.isNegative &&
@@ -32,10 +56,7 @@ export function evaluateIntakeTransitions(args: {
   const shouldAcceptCurrentPreview =
     args.state.workflow_state === "preview_ready" &&
     !baseSignals.isNegative &&
-    (/^(继续|继续吧|就这样|就先这样|先这样|不用补充了|不补充了|直接出吧)$/i.test(
-      args.message.trim(),
-    ) ||
-      /不用(再)?补充|不用再问|直接生成|直接出图|往下走|继续推进/.test(args.message));
+    (baseSignals.isAffirmative || shouldAcceptPreviewByDirectPhrase(args.message));
 
   const shouldTriggerPreview =
     shouldOfferPreview &&
