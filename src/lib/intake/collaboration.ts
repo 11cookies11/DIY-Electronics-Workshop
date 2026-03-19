@@ -419,12 +419,16 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
     })
     .filter(Boolean)
     .slice(0, 8) as CollaborationConversationTurn[];
+  const stageFilteredConversation =
+    stage === "cross_agent_sync"
+      ? conversation
+      : conversation.filter((turn) => turn.from !== "delivery_lead");
 
   return {
     ...fallback,
     stage,
     agents: fallback.agents.map((agent) => byId.get(agent.id) ?? agent),
-    conversation: conversation.length ? conversation : fallback.conversation,
+    conversation: stageFilteredConversation.length ? stageFilteredConversation : fallback.conversation,
   };
 }
 
