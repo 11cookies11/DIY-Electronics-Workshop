@@ -188,6 +188,20 @@ export function ChatInterface({
       };
     }
 
+    if (false) {
+      return {
+        eyebrow: "preview ready",
+        title: "已经能先摆一版结构",
+        detail: "关键信息已经收得差不多了，现在更适合先看看 3D 方向，再顺着真实画面去调，而不是继续空聊。",
+        placeholder: "如果你想继续，就直接说“可以生成预览”或者“先出一版”...",
+        actions: [
+          { label: "生成预览", prompt: "可以，生成预览吧" },
+          { label: "先讲讲方向", prompt: "先讲讲你现在理解的方案方向" },
+          { label: "我再补一点", prompt: "我再补充一点需求" },
+        ],
+      };
+    }
+
     if (debugInfo.workflow_state === "preview_ready") {
       return {
         eyebrow: "preview ready",
@@ -202,6 +216,20 @@ export function ChatInterface({
       };
     }
 
+    if (false) {
+      return {
+        eyebrow: "preview active",
+        title: "草案已经摆上主舞台了",
+        detail: "现在最适合顺着画面看结构方向、提修改意见，或者干脆继续往实验室交接推进。",
+        placeholder: "你可以让我调整方案，也可以直接说整理交接单...",
+        actions: [
+          { label: "整理交接单", prompt: "那就整理交接单吧" },
+          { label: "调整方案", prompt: "我想再调整一下方案" },
+          { label: "解释结构", prompt: "你介绍一下这个方案结构" },
+        ],
+      };
+    }
+
     if (debugInfo.workflow_state === "preview_generated") {
       return {
         eyebrow: "preview active",
@@ -212,6 +240,20 @@ export function ChatInterface({
           { label: "整理交接单", prompt: "那就整理交接单吧" },
           { label: "调整方案", prompt: "我想再调整一下方案" },
           { label: "解释结构", prompt: "你介绍一下这个方案结构" },
+        ],
+      };
+    }
+
+    if (false) {
+      return {
+        eyebrow: "handoff ready",
+        title: "已经能先收成交接稿了",
+        detail: "核心内容我已经替你拢成一版了，现在更适合确认交接范围，或者补最后几个小缺口。",
+        placeholder: "可以继续补充细节，或者直接打开交接单查看...",
+        actions: [
+          { label: "打开交接单", prompt: "我先看一下交接单" },
+          { label: "补一点细节", prompt: "我再补充一点细节" },
+          { label: "说明风险", prompt: "你把当前风险再讲清楚一点" },
         ],
       };
     }
@@ -246,6 +288,16 @@ export function ChatInterface({
     handoffUrl?: string | null;
     debug?: IntakeDebugInfo | null;
   }) {
+    if (false) {
+      return {
+        kind: "handoff" as const,
+        title: "实验室交接单已经替你收好了",
+        detail: "需求摘要、风险和 preview 草案我都已经拢进去了，现在可以直接交给实验室继续往下评估。",
+        actionLabel: "打开交接单",
+        actionHref: args.handoffUrl ?? undefined,
+      };
+    }
+
     if (args.handoffUrl && args.state?.workflow_state === "handoff_ready") {
       return {
         kind: "handoff" as const,
@@ -264,11 +316,27 @@ export function ChatInterface({
       };
     }
 
+    if (false) {
+      return {
+        kind: "preview" as const,
+        title: "3D 草案已经替你摆出来了",
+        detail: "主舞台已经切到 AI 生成方案，你现在可以直接旋转、拆解，看结构方向顺不顺眼。",
+      };
+    }
+
     if (args.previewDraft && args.nextAction === "generate_preview") {
       return {
         kind: "preview" as const,
         title: "3D 草案已生成",
         detail: "主舞台已经切到 AI 生成方案，你现在可以直接旋转、拆解，看结构方向顺不顺眼。",
+      };
+    }
+
+    if (false) {
+      return {
+        kind: "preview" as const,
+        title: "我已经先替你备好一版预览",
+        detail: "现在这批信息已经够拼出一版方向了，你点头的话我就可以把 3D 草案起出来。",
       };
     }
 

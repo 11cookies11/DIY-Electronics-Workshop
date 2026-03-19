@@ -979,6 +979,16 @@ function buildLightAcknowledgementReply(args: {
   unknowns: string[];
 }) {
   if (args.previewDraft && args.unknowns.length <= 1) {
+    return "好呀，我就顺着这个方向继续替你收着。其实已经能先摆一版结构出来了，你点头的话我就把预览起出来。";
+  }
+
+  if (args.unknowns.length) {
+    return `好呀，我先把这条替你记住。后面我们就顺着把${args.unknowns[0]}收稳一点，整个方案会更顺。`;
+  }
+
+  return "好呀，我先接住这一条。你想继续往下补细节，或者让我先替你收一收当前方向，都可以。";
+
+  if (args.previewDraft && args.unknowns.length <= 1) {
     return "好呀，那我这边就顺着这个方向继续收着。现在其实已经很接近可以出预览了，你想看的话我就直接给你起一版。";
   }
 
@@ -1019,10 +1029,14 @@ function applyReplyGuard(args: {
   reply: string;
   confirmed: ConfirmedRequirement;
   unknowns: string[];
-  nextAction: IntakeNextAction;
+  nextAction: string;
   previewDraft?: PreviewDraft;
+  workflowState?: IntakeAgentState["workflow_state"];
+  handoffCandidate?: LabHandoff;
   focus?: string;
 }) {
+  const summary = buildRequirementSummary(args.confirmed);
+
   if (isLightAcknowledgementMessage(args.message)) {
     return buildLightAcknowledgementReply({
       previewDraft: args.previewDraft,
@@ -1032,6 +1046,40 @@ function applyReplyGuard(args: {
 
   if (/(什么细节|哪个细节|补什么|还差什么|差什么|细节是什么)/.test(args.message)) {
     return buildPendingDetailAnswer(args.unknowns);
+  }
+
+  if (args.nextAction === "generate_preview" && args.previewDraft) {
+    return summary
+      ? "好呀，我先把我们刚刚聊出来的方向摆成一版 3D 草案了。主舞台已经切到新方案，你可以直接看看结构顺不顺眼。"
+      : "好呀，我先把 3D 草案摆出来了。你可以先看看主舞台里的结构方向顺不顺眼。";
+  }
+
+  if (args.nextAction === "prepare_handoff" || args.nextAction === "handoff_to_lab") {
+    return args.unknowns?.length
+      ? `我先把能交给实验室的主体内容拢成一版了，像${args.unknowns.slice(0, 2).join("、")}这些小口子后面还能继续补，不过现在已经可以先开交接单。`
+      : "我先把这轮要交给实验室的内容收成一版了，你可以直接打开交接单看看。";
+  }
+
+  if (args.workflowState === "handoff_ready" && args.handoffCandidate) {
+    return args.unknowns?.length
+      ? `我这边已经能先替你收一版交接内容了，像${args.unknowns.slice(0, 2).join("、")}这些小口子后面还能继续补。你要是愿意，我现在就把 handoff 摆给你看。`
+      : "我这边已经能把交接内容替你收成一版了。你要是愿意，我现在就把 handoff 摆给你看。";
+  }
+
+  if (args.previewDraft && !(args.unknowns?.length)) {
+    return "我这边已经把一版结构方向替你收出来了。你要是愿意，我现在就直接给你起一个 3D 预览。";
+  }
+
+  if (args.nextAction === "generate_preview" && args.previewDraft) {
+    if (/[锛?]/.test(args.reply) || /(瑕佷笉瑕亅鏄惁|鍙互.*鐢熸垚|缁欎綘鐪嬫劅鍙梶鐪嬬湅鎰熻)/.test(args.reply)) {
+      return "好呀，我已经把刚才聊出来的方向先摆成一版 3D 草案了。你现在可以直接看看主舞台里的结构感觉，如果想调布局或尺寸，我们再顺着往下改。";
+    }
+  }
+
+  if (args.nextAction === "prepare_handoff") {
+    if (/[锛?]/.test(args.reply) || /(瑕佷笉瑕亅鏄惁|鍙互.*鏁寸悊|瑕佷笉瑕佹垜鏁寸悊)/.test(args.reply)) {
+      return "我已经把这轮能交给实验室的内容先收成一版了。你可以直接看交接单，如果还想补几个细节，我们也能继续往里添。";
+    }
   }
 
   if (args.nextAction === "generate_preview") {
@@ -1056,6 +1104,10 @@ function applyReplyGuard(args: {
     confirmed: args.confirmed,
   })) {
     if (args.previewDraft && args.unknowns.length <= 1) {
+      return "我这边已经把关键方向收得差不多了，完全可以先替你摆一版 3D 草案；你要是想更稳一点，我们也可以先把最后那个小口子补上。";
+    }
+
+    if (args.previewDraft && args.unknowns.length <= 1) {
       return "我这边已经把关键方向收得差不多了，可以先给你出一版 3D 草案；如果你愿意，我们也可以在出图前再补最后一个小细节。";
     }
 
@@ -1072,7 +1124,7 @@ function buildFallbackCustomerReply(args: {
   message?: string;
   confirmed: ConfirmedRequirement;
   workflowState: IntakeAgentState["workflow_state"];
-  nextAction: IntakeNextAction;
+  nextAction: string;
   previewDraft?: PreviewDraft;
   handoffCandidate?: LabHandoff;
   unknowns?: string[];
@@ -1083,6 +1135,18 @@ function buildFallbackCustomerReply(args: {
   const summary = buildRequirementSummary(args.confirmed);
   const focus = args.orchestration?.singleFocus ?? args.unknowns?.[0];
   const baseMode = args.message ? detectConversationBaseMode(args.message) : "none";
+
+  if (args.nextAction === "prepare_handoff" || args.nextAction === "handoff_to_lab") {
+    return args.unknowns?.length
+      ? `我先把能交给实验室的主体内容拢成一版了，像${args.unknowns.slice(0, 2).join("、")}这些小口子后面还能继续补，不过现在已经可以先开交接单。`
+      : "我先把这轮要交给实验室的内容收成一版了，你可以直接打开交接单看看。";
+  }
+
+  if (args.workflowState === "handoff_ready" && args.handoffCandidate) {
+    return args.unknowns?.length
+      ? `我这边已经能先替你收一版交接内容了，像${args.unknowns.slice(0, 2).join("、")}这些小口子后面还能继续补。你要是愿意，我现在就把 handoff 摆给你看。`
+      : "我这边已经能把交接内容替你收成一版了。你要是愿意，我现在就把 handoff 摆给你看。";
+  }
 
   if (args.message && isLightAcknowledgementMessage(args.message)) {
     return buildLightAcknowledgementReply({
@@ -1383,6 +1447,8 @@ export async function runIntakeWorkflow(
     unknowns,
     nextAction,
     previewDraft: exposedPreviewDraft ?? previewDraft,
+    workflowState,
+    handoffCandidate: labHandoff,
     focus: orchestration.singleFocus,
   });
 
