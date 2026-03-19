@@ -27,6 +27,7 @@ export function evaluateIntakeTransitions(args: {
   const shouldOfferHandoff =
     canHandoff &&
     !baseSignals.isNegative &&
+    args.unknowns.length === 0 &&
     (args.state.workflow_state === "preview_generated" || !canPreview);
   const shouldAcceptCurrentPreview =
     args.state.workflow_state === "preview_ready" &&
@@ -44,7 +45,7 @@ export function evaluateIntakeTransitions(args: {
       shouldAcceptCurrentPreview);
 
   const shouldTriggerHandoff =
-    shouldOfferHandoff &&
+    canHandoff &&
     !baseSignals.isNegative &&
     (baseSignals.wantsHandoff ||
       (args.state.workflow_state === "handoff_ready" && baseSignals.isAffirmative) ||

@@ -109,6 +109,28 @@ const scenarios = [
       },
     ],
   },
+  {
+    name: "preview_then_offer_handoff",
+    steps: [
+      "我想做一个红外万能遥控器",
+      "控制电视和空调",
+      "用触屏，保留按钮",
+      "内置电池，用Type-C",
+      "先出一版预览",
+      "继续推进",
+    ],
+    assertions: [
+      {
+        step: 4,
+        state: "preview_generated",
+      },
+      {
+        step: 5,
+        state: "handoff_ready",
+        includes: ["handoff", "交接"],
+      },
+    ],
+  },
 ];
 
 function rewriteSpecifiers(sourceText) {

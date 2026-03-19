@@ -1041,8 +1041,10 @@ function applyReplyGuard(args: {
 function buildFallbackCustomerReply(args: {
   message?: string;
   confirmed: ConfirmedRequirement;
+  workflowState: IntakeAgentState["workflow_state"];
   nextAction: IntakeNextAction;
   previewDraft?: PreviewDraft;
+  handoffCandidate?: LabHandoff;
   unknowns?: string[];
   suggestions?: string[];
   recommendationCards?: IntakeSuggestion[];
@@ -1081,6 +1083,12 @@ function buildFallbackCustomerReply(args: {
     return args.unknowns?.length
       ? `我先把能交给实验室的内容收好了，像${args.unknowns.slice(0, 2).join("、")}这类小项我们后面还能继续补，不过现在已经可以先整理交接单。`
       : "我先把要交给实验室的内容整理好了，你可以直接打开交接单看看。";
+  }
+
+  if (args.workflowState === "handoff_ready" && args.handoffCandidate) {
+    return args.unknowns?.length
+      ? `我这边已经能先替你收一版交接内容了，像${args.unknowns.slice(0, 2).join("、")}这些小口子后面还能继续补。你要是愿意，我可以先把 handoff 整给你看。`
+      : "我这边已经能把交接内容替你收成一版了。你要是愿意，我现在就可以直接把 handoff 整给你看。";
   }
 
   if (args.previewDraft && !(args.unknowns?.length)) {
@@ -1329,8 +1337,10 @@ export async function runIntakeWorkflow(
     buildFallbackCustomerReply({
       message,
       confirmed,
+      workflowState,
       nextAction,
       previewDraft: exposedPreviewDraft ?? previewDraft,
+      handoffCandidate: labHandoff,
       unknowns,
       suggestions: reasoning.suggestions,
       recommendationCards: suggestions,
