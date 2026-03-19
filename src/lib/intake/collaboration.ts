@@ -169,10 +169,26 @@ function deriveFallbackStatus(output: IntakeAgentOutput): RoleplayAgentStatus {
   return "listening";
 }
 
+function hasProcurementSignals(output: IntakeAgentOutput) {
+  const procurementUnknowns = new Set(["供电方式", "预算", "控制对象", "接口需求", "连接方式"]);
+  if ((output.unknowns ?? []).some((item) => procurementUnknowns.has(item))) {
+    return true;
+  }
+  return Boolean(
+    output.confirmed.target_devices?.length ||
+      output.confirmed.power?.length ||
+      output.confirmed.ports?.length ||
+      output.confirmed.budget,
+  );
+}
+
 function deriveFallbackStage(output: IntakeAgentOutput): CollaborationStage {
   const workflowState = output.state.workflow_state;
   if (workflowState === "handoff_ready" || workflowState === "handoff_completed") return "cross_agent_sync";
   if (workflowState === "preview_ready" || workflowState === "preview_generated") return "software_planning";
+  if (workflowState === "clarifying" && hasProcurementSignals(output)) {
+    return "procurement_planning";
+  }
   return "front_desk_intake";
 }
 
