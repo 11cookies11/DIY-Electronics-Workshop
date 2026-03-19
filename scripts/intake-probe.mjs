@@ -12,6 +12,7 @@ const sourceFiles = [
     "conversation-base.ts",
     "knowledge-config.ts",
     "knowledge.ts",
+    "llm-native.ts",
     "memory.ts",
     "orchestration.ts",
     "prompt-config.ts",

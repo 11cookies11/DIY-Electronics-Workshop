@@ -6,6 +6,8 @@ import { planReplyOrchestration } from "./orchestration";
 import {
   buildIntakeReasoningSystemPrompt,
   buildIntakeReasoningUserPrompt,
+  buildLlmNativeDecisionSystemPrompt,
+  buildLlmNativeDecisionUserPrompt,
   buildIntakeSystemPrompt,
   buildIntakeUserPrompt,
 } from "./prompt";
@@ -19,6 +21,7 @@ import {
 import { parseConversationSignals } from "./signals";
 import { routeIntakeSkills } from "./skills";
 import { buildIntakeSuggestions } from "./suggestions";
+import { sanitizeLlmNativeDecision } from "./llm-native";
 import { buildStructuredIntakeOutput } from "./state-pipeline";
 import {
   createEmptyState,
@@ -32,6 +35,7 @@ import {
   type IntakeReasoningPatch,
   type IntakeReasoningTrace,
   type LabHandoff,
+  type LlmNativeDecision,
   type PreviewDraft,
   type PreviewReadiness,
   type IntakeSuggestion,
@@ -351,8 +355,29 @@ function inferTargetUsers(message: string) {
   return undefined;
 }
 
+function inferBroadTargetDevices(message: string, recentQuestion?: string) {
+  const isTargetDeviceThread = Boolean(
+    recentQuestion &&
+      /(\u63a7\u5236\u54ea\u4e9b\u5bb6\u7535|\u63a7\u5236\u54ea\u4e9b\u8bbe\u5907|\u7535\u89c6|\u7a7a\u8c03|\u6295\u5f71|\u98ce\u6247|\u673a\u9876\u76d2|\u5bb6\u7535)/.test(
+        recentQuestion,
+      ),
+  );
+
+  if (
+    isTargetDeviceThread &&
+    /(\u5168\u9762\u4e00\u70b9|\u8986\u76d6\u5168\u9762|\u8986\u76d6\u66f4\u5168|\u8986\u76d6\u5bb6\u91cc\u5e38\u7528|\u5e38\u7528\u5bb6\u7535\u90fd\u60f3\u5e26\u4e0a|\u5bb6\u91cc\u5e38\u7528\u7684\u90fd\u60f3\u63a7\u5236|\u5c3d\u91cf\u90fd\u80fd\u63a7\u5236)/.test(
+      message,
+    )
+  ) {
+    return ["\u5e38\u7528\u5bb6\u7535"];
+  }
+
+  return [];
+}
+
 function inferUseCaseFromTargetDevices(targetDevices: string[]) {
   if (!targetDevices.length) return undefined;
+  if (targetDevices.includes("\u5e38\u7528\u5bb6\u7535")) return "\u63a7\u5236\u5bb6\u4e2d\u5e38\u7528\u5bb6\u7535";
   return `控制${targetDevices.join("、")}等常见家电`;
 }
 
@@ -417,6 +442,7 @@ function mergeContextualAnswer(args: {
   shouldReplace?: boolean;
 }) {
   const targetDevicesFromMessage = extractDeviceMentions(args.message);
+  const broadTargetDevices = inferBroadTargetDevices(args.message, args.recentQuestion);
   const targetDevicesFromQuestion =
     hasPattern(args.message, [/(这些都要|都要|都包括|都可以)/]) &&
     args.recentQuestion &&
@@ -437,6 +463,7 @@ function mergeContextualAnswer(args: {
 
   const useCaseFromDevices = inferUseCaseFromTargetDevices([
     ...targetDevicesFromMessage,
+    ...broadTargetDevices,
     ...targetDevicesFromQuestion,
   ]);
 
@@ -449,7 +476,7 @@ function mergeContextualAnswer(args: {
   return {
     target_devices: mergeOrReplaceArrays(
       args.current.target_devices,
-      unique([...targetDevicesFromMessage, ...targetDevicesFromQuestion]),
+      unique([...targetDevicesFromMessage, ...broadTargetDevices, ...targetDevicesFromQuestion]),
       Boolean(args.shouldReplace),
     ),
     button_preferences: mergeOrReplaceArrays(
@@ -1313,6 +1340,72 @@ async function buildModelRequirementPatch(request: IntakeAgentRequest) {
   }
 }
 
+function validateLlmNextAction(args: {
+  requested?: IntakeNextAction;
+  previewDraft?: PreviewDraft;
+  handoffCandidate?: LabHandoff;
+  fallback: IntakeNextAction;
+}) {
+  switch (args.requested) {
+    case "generate_preview":
+      return args.previewDraft ? "generate_preview" : args.fallback;
+    case "prepare_handoff":
+    case "handoff_to_lab":
+    case "handoff_to_human":
+      return args.handoffCandidate ? args.requested : args.fallback;
+    case "ask_more":
+      return "ask_more";
+    default:
+      return args.fallback;
+  }
+}
+
+async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
+  confirmed: ConfirmedRequirement;
+  unknowns: string[];
+  previewDraft?: PreviewDraft;
+  handoffCandidate?: LabHandoff;
+  reasoning: ReturnType<typeof analyzeRequirementReasoning>;
+  risks: string[];
+}) {
+  const model =
+    process.env.SECONDME_INTAKE_REASONING_MODEL ??
+    process.env.SECONDME_INTAKE_CHAT_MODEL;
+
+  if (!model) {
+    return undefined;
+  }
+
+  try {
+    const content = await requestSecondMeChatReply(
+      [
+        { role: "system", content: buildLlmNativeDecisionSystemPrompt() },
+        {
+          role: "user",
+          content: buildLlmNativeDecisionUserPrompt({
+            request,
+            confirmed: draft.confirmed,
+            unknowns: draft.unknowns,
+            previewCandidateReady: Boolean(draft.previewDraft),
+            handoffCandidateReady: Boolean(draft.handoffCandidate),
+            reasoningSummary: draft.reasoning.profile,
+            risks: draft.risks,
+          }),
+        },
+      ],
+      {
+        model,
+        requireJson: true,
+        temperature: 0,
+      },
+    );
+
+    return sanitizeLlmNativeDecision(JSON.parse(content) as unknown);
+  } catch {
+    return undefined;
+  }
+}
+
 async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   confirmed: ConfirmedRequirement;
   unknowns: string[];
@@ -1422,8 +1515,34 @@ export async function runIntakeWorkflow(
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
   const reminderBundle = buildReminderBundle(confirmed);
-  const unknowns = unique([...computeUnknowns(confirmed), ...reasoning.mustConfirm]);
+  const baselineUnknowns = unique([...computeUnknowns(confirmed), ...reasoning.mustConfirm]);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
+  const baselineRisks = unique([
+    ...state.risks,
+    ...reasoning.risks,
+    ...reminderBundle.riskAlerts,
+    ...(previewDraft ? [] : ["褰撳墠淇℃伅杩樹笉瓒充互绋冲畾鐢熸垚 3D 棰勮鑽夋"]),
+  ]);
+  const baselineRequirementSummary = buildRequirementSummary(confirmed);
+  const baselineLabHandoff = buildLabHandoff(
+    confirmed,
+    baselineRequirementSummary,
+    baselineUnknowns,
+    baselineRisks,
+    reasoningTrace,
+    previewDraft,
+  );
+  const llmNativeDecision = await buildLlmNativeDecision(request, {
+    confirmed,
+    unknowns: baselineUnknowns,
+    previewDraft,
+    handoffCandidate: baselineLabHandoff,
+    reasoning,
+    risks: baselineRisks,
+  });
+  const unknowns = llmNativeDecision?.unknowns.length
+    ? unique(llmNativeDecision.unknowns)
+    : baselineUnknowns;
   const memory = analyzeConversationMemory({
     message,
     history,
@@ -1438,7 +1557,7 @@ export async function runIntakeWorkflow(
     history,
     memory,
   });
-  const orchestration = planReplyOrchestration({
+  const baseOrchestration = planReplyOrchestration({
     message,
     confirmed,
     unknowns,
@@ -1447,6 +1566,11 @@ export async function runIntakeWorkflow(
     previewDraft,
     memory,
   });
+  const orchestration: ReturnType<typeof planReplyOrchestration> = llmNativeDecision?.single_focus
+    ? ({ ...baseOrchestration, singleFocus: llmNativeDecision.single_focus } as ReturnType<
+        typeof planReplyOrchestration
+      >)
+    : baseOrchestration;
 
   const risks = unique([
     ...state.risks,
@@ -1455,7 +1579,7 @@ export async function runIntakeWorkflow(
     ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
-  const requirementSummary = buildRequirementSummary(confirmed);
+  const requirementSummary = baselineRequirementSummary;
   const labHandoff = buildLabHandoff(
     confirmed,
     requirementSummary,
@@ -1479,15 +1603,24 @@ export async function runIntakeWorkflow(
     orchestration.transitionMode === "stay_conversational"
       ? "collecting"
       : readiness.workflowState;
-  const nextAction: IntakeNextAction =
-    orchestration.transitionMode === "stay_conversational"
-      ? "ask_more"
-      : readiness.nextAction;
+  const nextAction: IntakeNextAction = validateLlmNextAction({
+    requested:
+      orchestration.transitionMode === "stay_conversational"
+        ? "ask_more"
+        : llmNativeDecision?.next_action,
+    previewDraft,
+    handoffCandidate: labHandoff,
+    fallback:
+      orchestration.transitionMode === "stay_conversational"
+        ? "ask_more"
+        : readiness.nextAction,
+  });
 
   const exposedPreviewDraft = readiness.exposePreview ? previewDraft : undefined;
   const exposedLabHandoff = readiness.exposeHandoff ? labHandoff : undefined;
 
   const rawCustomerReply =
+    llmNativeDecision?.customer_reply ??
     (await buildModelCustomerReply(request, {
       confirmed,
       unknowns,
@@ -1550,6 +1683,10 @@ export async function runIntakeWorkflow(
       unknowns,
       risks,
       next_action: nextAction,
+      llm_native_stage: llmNativeDecision?.agent_stage,
+      llm_native_unknowns: llmNativeDecision?.unknowns,
+      llm_native_single_focus: llmNativeDecision?.single_focus,
+      llm_native_next_action: llmNativeDecision?.next_action,
       has_preview_candidate: Boolean(previewDraft),
       has_handoff_candidate: Boolean(labHandoff),
       offering_preview: workflowState === "preview_ready",

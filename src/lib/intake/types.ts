@@ -140,6 +140,10 @@ export type IntakeDebugInfo = {
   offering_handoff?: boolean;
   exposed_preview?: boolean;
   exposed_handoff?: boolean;
+  llm_native_stage?: LlmNativeAgentStage;
+  llm_native_unknowns?: string[];
+  llm_native_single_focus?: string;
+  llm_native_next_action?: IntakeNextAction;
   reasoning_trace?: IntakeReasoningTrace;
 };
 
