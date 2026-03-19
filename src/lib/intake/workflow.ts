@@ -400,7 +400,10 @@ function extractDeviceMentions(text?: string) {
   if (!text) return [];
   // 仅在“控制设备”语境下提取目标设备，避免把“灯光提示”误判为控制对象。
   const controlContext = /(控制|遥控|开关|调节|联动|家电)/.test(text);
-  if (!controlContext) return [];
+  const explicitSingleDeviceReply = /^(电视|tv|空调|智能灯|灯|投影|投影仪|风扇|机顶盒)[\s，,。!?？]*$/i.test(
+    text.trim(),
+  );
+  if (!controlContext && !explicitSingleDeviceReply) return [];
 
   return unique(
     collectKeywords(text, [
@@ -2106,6 +2109,10 @@ async function deriveRequirementContext(request: IntakeAgentRequest): Promise<Re
 }
 
 type IntakeRuntimeContext = {
+  confirmed: ConfirmedRequirement;
+  reasoning: ReturnType<typeof analyzeRequirementReasoning>;
+  suggestions: IntakeSuggestion[];
+  reminderBundle: ReturnType<typeof buildReminderBundle>;
   previewDraft?: PreviewDraft;
   llmNativeDecision?: LlmNativeDecision;
   unknowns: string[];
@@ -2161,21 +2168,58 @@ async function deriveRuntimeContext(args: {
     reasoning,
     risks: baselineRisks,
   });
+  const llmDecisionPatch =
+    llmNativeDecision?.should_store_patch && llmNativeDecision.confirmed_patch
+      ? sanitizeModelRequirementPatch({
+          confirmed_patch: llmNativeDecision.confirmed_patch,
+          replace_fields: llmNativeDecision.replace_fields ?? [],
+          confidence: "medium",
+        })
+      : undefined;
+  const resolvedConfirmed = llmDecisionPatch
+    ? mergeReasoningPatch(confirmed, llmDecisionPatch)
+    : confirmed;
+  const resolvedReasoning = llmDecisionPatch
+    ? analyzeRequirementReasoning(resolvedConfirmed)
+    : reasoning;
+  const resolvedSuggestions = llmDecisionPatch
+    ? buildIntakeSuggestions(resolvedConfirmed, resolvedReasoning)
+    : buildIntakeSuggestions(confirmed, reasoning);
+  const resolvedReminderBundle = llmDecisionPatch
+    ? buildReminderBundle(resolvedConfirmed)
+    : reminderBundle;
+  const resolvedGuardrailUnknowns = computeUnknowns(resolvedConfirmed);
+  const resolvedBaselineUnknowns = unique([
+    ...resolvedGuardrailUnknowns,
+    ...resolvedReasoning.mustConfirm,
+  ]);
+  const resolvedPreviewDraft =
+    mapConfirmedToPreviewDraft(resolvedConfirmed) ??
+    (canForcePreviewWithAssumptions({
+      message,
+      confirmed: resolvedConfirmed,
+      unknowns: resolvedBaselineUnknowns,
+    })
+      ? buildForcedPreviewDraftWithAssumptions(resolvedConfirmed, resolvedBaselineUnknowns)
+      : undefined);
   const slotAssessmentUnknowns = llmNativeDecision
-    ? deriveUnknownsFromSlotAssessments(guardrailUnknowns, llmNativeDecision.slot_assessments)
-    : baselineUnknowns;
+    ? deriveUnknownsFromSlotAssessments(
+        resolvedGuardrailUnknowns,
+        llmNativeDecision.slot_assessments,
+      )
+    : resolvedBaselineUnknowns;
   const llmNativeUnknowns = llmNativeDecision?.unknowns.length
     ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
     : slotAssessmentUnknowns;
   const unknowns = filterUnknownsByContext(
     normalizeUnknownFieldsSafe(
-    llmNativeDecision
-      ? isLlmFirstModeEnabled()
-        ? (llmNativeUnknowns.length ? llmNativeUnknowns : guardrailUnknowns)
-        : unique([...llmNativeUnknowns, ...guardrailUnknowns])
-      : baselineUnknowns,
+      llmNativeDecision
+        ? isLlmFirstModeEnabled()
+          ? (llmNativeUnknowns.length ? llmNativeUnknowns : resolvedGuardrailUnknowns)
+          : unique([...llmNativeUnknowns, ...resolvedGuardrailUnknowns])
+        : resolvedBaselineUnknowns,
     ),
-    confirmed,
+    resolvedConfirmed,
     message,
   );
   const memory = analyzeConversationMemory({
@@ -2186,43 +2230,47 @@ async function deriveRuntimeContext(args: {
   const route: IntakeSkillRoute = buildLlmNativeSkillRoute(llmNativeDecision);
   const legacyOrchestration = planReplyOrchestration({
     message,
-    confirmed,
+    confirmed: resolvedConfirmed,
     unknowns,
     nextAction: "ask_more",
     route,
-    previewDraft,
+    previewDraft: resolvedPreviewDraft,
     memory,
   });
   const orchestration = buildOrchestrationFromLlmDecision({
     decision: llmNativeDecision,
     message,
-    confirmed,
+    confirmed: resolvedConfirmed,
     unknowns,
-    previewDraft,
+    previewDraft: resolvedPreviewDraft,
     fallback: legacyOrchestration,
   });
 
   const risks = unique([
     ...state.risks,
-    ...reasoning.risks,
-    ...reminderBundle.riskAlerts,
+    ...resolvedReasoning.risks,
+    ...resolvedReminderBundle.riskAlerts,
     ...(llmNativeDecision ? deriveRisksFromSlotAssessments(llmNativeDecision.slot_assessments) : []),
     ...(llmNativeDecision?.risks ?? []),
-    ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
+    ...(resolvedPreviewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
 
-  const requirementSummary = baselineRequirementSummary;
+  const requirementSummary = buildRequirementSummary(resolvedConfirmed);
   const labHandoff = buildLabHandoff(
-    confirmed,
+    resolvedConfirmed,
     requirementSummary,
     unknowns,
     risks,
     reasoningTrace,
-    previewDraft,
+    resolvedPreviewDraft,
   );
 
   return {
-    previewDraft,
+    confirmed: resolvedConfirmed,
+    reasoning: resolvedReasoning,
+    suggestions: resolvedSuggestions,
+    reminderBundle: resolvedReminderBundle,
+    previewDraft: resolvedPreviewDraft,
     llmNativeDecision,
     unknowns,
     memory,
@@ -2251,6 +2299,10 @@ export async function runIntakeWorkflow(
   const { confirmed, reasoningTrace, reasoning, suggestions, reminderBundle } =
     await deriveRequirementContext(request);
   const {
+    confirmed: runtimeConfirmed,
+    reasoning: runtimeReasoning,
+    suggestions: runtimeSuggestions,
+    reminderBundle: runtimeReminderBundle,
     previewDraft,
     llmNativeDecision,
     unknowns,
@@ -2366,16 +2418,16 @@ export async function runIntakeWorkflow(
   const customerReply = await buildCustomerReply({
     request,
     message,
-    confirmed,
+    confirmed: runtimeConfirmed,
     workflowState,
     nextAction,
     previewDraft: replyPreviewDraft,
     handoffCandidate: labHandoff,
     unknowns,
-    reasoning,
-    suggestions,
+    reasoning: runtimeReasoning,
+    suggestions: runtimeSuggestions,
     orchestration,
-    reminderBundle,
+    reminderBundle: runtimeReminderBundle,
     memory,
     route,
     llmNativeDecision,
@@ -2419,10 +2471,10 @@ export async function runIntakeWorkflow(
   const structuredOutput = buildWorkflowStructuredOutput({
     message,
     workflowState,
-    confirmed,
+    confirmed: runtimeConfirmed,
     unknowns,
     risks,
-    suggestions,
+    suggestions: runtimeSuggestions,
     previewDraft,
     labHandoff,
     exposedPreviewDraft,
