@@ -1787,6 +1787,17 @@ async function buildCustomerReply(args: {
   route: IntakeSkillRoute;
   llmNativeDecision?: LlmNativeDecision;
 }): Promise<string> {
+  const llmFirstFallback = () =>
+    buildLlmFirstFallbackCustomerReply({
+      message: args.message,
+      workflowState: args.workflowState,
+      nextAction: args.nextAction,
+      previewDraft: args.previewDraft,
+      handoffCandidate: args.handoffCandidate,
+      unknowns: args.unknowns,
+      focus: args.orchestration.singleFocus,
+    });
+
   const rawCustomerReply =
     args.llmNativeDecision?.customer_reply ??
     (await buildModelCustomerReply(args.request, {
@@ -1801,18 +1812,20 @@ async function buildCustomerReply(args: {
       memory: args.memory,
       route: args.route,
     })) ??
-    buildFallbackCustomerReply({
-      message: args.message,
-      confirmed: args.confirmed,
-      workflowState: args.workflowState,
-      nextAction: args.nextAction,
-      previewDraft: args.previewDraft,
-      handoffCandidate: args.handoffCandidate,
-      unknowns: args.unknowns,
-      suggestions: args.reasoning.suggestions,
-      recommendationCards: args.suggestions,
-      orchestration: args.orchestration,
-    });
+    (isLlmFirstModeEnabled()
+      ? llmFirstFallback()
+      : buildFallbackCustomerReply({
+          message: args.message,
+          confirmed: args.confirmed,
+          workflowState: args.workflowState,
+          nextAction: args.nextAction,
+          previewDraft: args.previewDraft,
+          handoffCandidate: args.handoffCandidate,
+          unknowns: args.unknowns,
+          suggestions: args.reasoning.suggestions,
+          recommendationCards: args.suggestions,
+          orchestration: args.orchestration,
+        }));
 
   return applyReplyGuard({
     message: args.message,
@@ -1826,6 +1839,36 @@ async function buildCustomerReply(args: {
     focus: args.orchestration.singleFocus,
     transitionMode: args.orchestration.transitionMode,
   });
+}
+
+function buildLlmFirstFallbackCustomerReply(args: {
+  message: string;
+  workflowState: IntakeAgentState["workflow_state"];
+  nextAction: IntakeNextAction;
+  previewDraft?: PreviewDraft;
+  handoffCandidate?: LabHandoff;
+  unknowns: string[];
+  focus?: string;
+}) {
+  if (args.nextAction === "generate_preview" && args.previewDraft) {
+    return "好呀，我先按当前信息生成一版 3D 预览，你现在可以直接看主舞台效果。";
+  }
+  if (args.nextAction === "prepare_handoff" || args.nextAction === "handoff_to_lab") {
+    return args.unknowns.length
+      ? `我先把可交接内容整理好了，像${args.unknowns.slice(0, 2).join("、")}这类细节后续还能补；现在可以先看 handoff。`
+      : "我已经把交接内容整理好了，你可以直接查看 handoff。";
+  }
+  if (args.workflowState === "handoff_ready" && args.handoffCandidate) {
+    return "交接内容已经 ready，你确认的话我就直接进入 handoff 展示。";
+  }
+  if (args.workflowState === "preview_ready" && args.previewDraft) {
+    return "我这边已经收敛出一版结构方向了，你愿意的话我现在就起 3D 预览。";
+  }
+  if (args.unknowns.length) {
+    const focus = args.focus ?? args.unknowns[0];
+    return `我先接住这条信息。为了继续推进，我们先补一个关键点「${focus}」，你也可以让我按默认方案先往下走。`;
+  }
+  return "我先把当前方向收好了，我们继续往下推进。";
 }
 
 type RequirementContext = {
