@@ -34,6 +34,7 @@ tsconfig.tsbuildinfo
 .where/diy-agent-e2e-runtime/
 .where/diy-agent-e2e-25-runtime/
 .where/repro-preview-runtime/
+.where/backups/
 
 # Local test reports
 docs/test-reports/

@@ -131,6 +131,8 @@ function resolveDeviceTypeWithDynamicRegistry(args: {
   decisionTypeCandidate?: DynamicDeviceTypeTag;
   dynamicRegistry: DynamicDeviceTypeTag[];
 }) {
+  if (isKnownDeviceType(args.current)) return args.current;
+
   const patchType = args.llmPatchType?.trim();
   if (isKnownDeviceType(patchType)) return patchType;
 
@@ -1862,6 +1864,7 @@ function buildWorkflowDebugInfo(args: {
   labHandoff?: LabHandoff;
   exposedPreviewDraft?: PreviewDraft;
   exposedLabHandoff?: LabHandoff;
+  dynamicDeviceTypes?: DynamicDeviceTypeTag[];
   reasoningTrace?: IntakeReasoningTrace;
 }) {
   return {
@@ -1882,6 +1885,12 @@ function buildWorkflowDebugInfo(args: {
     llm_native_next_action: args.llmNativeDecision?.next_action,
     llm_native_preview_ready: args.llmNativeDecision?.preview_candidate_ready,
     llm_native_handoff_ready: args.llmNativeDecision?.handoff_candidate_ready,
+    llm_native_device_type_candidate: args.llmNativeDecision?.device_type_candidate?.display_name,
+    dynamic_device_type_count: args.dynamicDeviceTypes?.length ?? 0,
+    active_dynamic_device_type:
+      args.dynamicDeviceTypes && args.dynamicDeviceTypes.length > 0
+        ? args.dynamicDeviceTypes[args.dynamicDeviceTypes.length - 1]?.display_name
+        : undefined,
     has_preview_candidate: Boolean(args.previewDraft),
     has_handoff_candidate: Boolean(args.labHandoff),
     offering_preview: args.workflowState === "preview_ready",
@@ -2225,6 +2234,7 @@ function buildWorkflowStructuredOutput(args: {
       labHandoff: args.labHandoff,
       exposedPreviewDraft: args.exposedPreviewDraft,
       exposedLabHandoff: args.exposedLabHandoff,
+      dynamicDeviceTypes: args.dynamicDeviceTypes,
       reasoningTrace: args.reasoningTrace,
     }),
   });

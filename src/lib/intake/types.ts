@@ -160,6 +160,9 @@ export type IntakeDebugInfo = {
   llm_native_next_action?: IntakeNextAction;
   llm_native_preview_ready?: boolean;
   llm_native_handoff_ready?: boolean;
+  llm_native_device_type_candidate?: string;
+  dynamic_device_type_count?: number;
+  active_dynamic_device_type?: string;
   reasoning_trace?: IntakeReasoningTrace;
 };
 
