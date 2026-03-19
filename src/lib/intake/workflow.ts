@@ -19,7 +19,6 @@ import {
   requestSecondMeChatReply,
 } from "./secondme-client";
 import { parseConversationSignals } from "./signals";
-import { routeIntakeSkills } from "./skills";
 import { buildIntakeSuggestions } from "./suggestions";
 import {
   deriveRisksFromSlotAssessments,
@@ -1544,23 +1543,13 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   orchestration: ReplyOrchestration;
   reminderBundle: ReturnType<typeof buildReminderBundle>;
   memory: ReturnType<typeof analyzeConversationMemory>;
-  route?: IntakeSkillRoute;
+  route: IntakeSkillRoute;
 }) {
   if (!isSecondMeChatConfigured()) {
     return null;
   }
 
-  const route =
-    draft.route ??
-    routeIntakeSkills({
-      message: request.message,
-      state: request.state,
-      confirmed: draft.confirmed,
-      unknowns: draft.unknowns,
-      previewDraft: draft.previewDraft,
-      history: request.history,
-      memory: draft.memory,
-    });
+  const route = draft.route;
   const singleFocusInstruction = draft.orchestration.singleFocus
     ? `\u5982\u679c\u8fd9\u8f6e\u9700\u8981\u8ffd\u95ee\uff0c\u53ea\u80fd\u56f4\u7ed5\u300c${draft.orchestration.singleFocus}\u300d\u8fd9\u4e00\u4e2a\u70b9\u95ee\u4e00\u4e2a\u6700\u5173\u952e\u7684\u95ee\u9898\uff0c\u4e0d\u8981\u6362\u6210\u66f4\u5bbd\u7684\u9700\u6c42\u76d8\u95ee\uff0c\u4e5f\u4e0d\u8981\u8df3\u5230\u5176\u4ed6\u4e3b\u9898\u3002`
     : undefined;
@@ -1688,26 +1677,13 @@ export async function runIntakeWorkflow(
     history,
     unknowns,
   });
-  const legacyRoute = llmNativeDecision
-    ? undefined
-    : routeIntakeSkills({
-        message,
-        state,
-        confirmed,
-        unknowns,
-        previewDraft,
-        history,
-        memory,
-      });
-  const route: IntakeSkillRoute = llmNativeDecision
-    ? buildLlmNativeSkillRoute(llmNativeDecision)
-    : (legacyRoute ?? buildLlmNativeSkillRoute());
+  const route: IntakeSkillRoute = buildLlmNativeSkillRoute(llmNativeDecision);
   const legacyOrchestration = planReplyOrchestration({
     message,
     confirmed,
     unknowns,
     nextAction: "ask_more",
-    route: legacyRoute ?? route,
+    route,
     previewDraft,
     memory,
   });
