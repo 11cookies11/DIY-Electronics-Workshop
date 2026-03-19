@@ -1046,6 +1046,38 @@ function replyStillAsksResolvedFocus(args: {
   }
 }
 
+function replyMatchesExpectedFocus(reply: string, focus?: string) {
+  if (!focus) return true;
+
+  switch (focus) {
+    case "\u4f7f\u7528\u573a\u666f":
+      return /(\u573a\u666f|\u5ba2\u5385|\u5367\u5ba4|\u684c\u4e0a|\u51fa\u95e8|\u968f\u8eab|\u5bb6\u91cc\u7528|\u653e\u54ea|\u5728\u54ea\u7528)/.test(reply);
+    case "\u4f9b\u7535\u65b9\u5f0f":
+      return /(\u4f9b\u7535|\u7535\u6c60|\u5145\u7535|USB-C|Type-C|\u66f4\u6362\u7535\u6c60|\u5185\u7f6e\u7535\u6c60)/i.test(reply);
+    case "\u63a7\u5236\u5bf9\u8c61":
+      return /(\u7535\u89c6|\u6295\u5f71|\u7a7a\u8c03|\u706f\u5149|\u63a7\u5236\u54ea\u4e9b|\u5bf9\u8c61|\u5bb6\u7535)/.test(reply);
+    case "\u6838\u5fc3\u529f\u80fd":
+      return /(\u529f\u80fd|\u4e3b\u8981\u505a\u4ec0\u4e48|\u63a7\u5236|\u663e\u793a|\u91c7\u96c6|\u63d0\u9192|\u64ad\u653e)/.test(reply);
+    case "\u4e3b\u8981\u4ea4\u4e92\u65b9\u5f0f":
+    case "\u6309\u952e\u6216\u89e6\u5c4f\u4ea4\u4e92":
+      return /(\u6309\u952e|\u5b9e\u4f53\u952e|\u89e6\u5c4f|\u4ea4\u4e92|\u65cb\u94ae|\u5c4f\u5e55)/.test(reply);
+    case "\u5c3a\u5bf8\u4e0e\u5916\u5f62":
+      return /(\u5c3a\u5bf8|\u5916\u5f62|\u624b\u611f|\u6bd4\u4f8b|\u5927\u5c0f|\u8584\u539a|\u957f\u77ed|\u5bbd\u7a84)/.test(reply);
+    case "\u63a5\u53e3\u9700\u6c42":
+      return /(\u63a5\u53e3|USB|Type-C|\u97f3\u9891\u53e3|\u6269\u5c55\u53e3|\u63d2\u53e3)/i.test(reply);
+    case "\u8fde\u63a5\u65b9\u5f0f":
+      return /(\u84dd\u7259|Wi-?Fi|\u65e0\u7ebf|\u8fde\u63a5|\u914d\u7f51|\u7ec4\u7f51)/i.test(reply);
+    case "\u8bbe\u5907\u7c7b\u578b":
+      return /(\u9065\u63a7\u5668|\u624b\u6301|\u684c\u9762|\u7a7f\u6234|\u5f62\u6001|\u8bbe\u5907)/.test(reply);
+    default:
+      return true;
+  }
+}
+
+function replyLooksLikeQuestion(reply: string) {
+  return /[\uff1f?]/.test(reply) || /(\u8fd8\u662f|\u66f4\u504f|\u8981\u4e0d\u8981|\u5e0c\u671b|\u60f3|\u5148\u8865|\u518d\u786e\u8ba4|\u95ee\u4e00\u4e0b)/.test(reply);
+}
+
 function applyReplyGuard(args: {
   message: string;
   reply: string;
@@ -1056,6 +1088,7 @@ function applyReplyGuard(args: {
   workflowState?: IntakeAgentState["workflow_state"];
   handoffCandidate?: LabHandoff;
   focus?: string;
+  transitionMode?: string;
 }) {
   const summary = buildRequirementSummary(args.confirmed);
 
@@ -1136,6 +1169,18 @@ function applyReplyGuard(args: {
     return (
       buildNextStepQuestion(args.unknowns, args.focus) ??
       "我先把刚才那条信息记住了，我们继续往下补最后几个关键点。"
+    );
+  }
+
+  if (
+    args.transitionMode === "soft_clarify" &&
+    args.focus &&
+    replyLooksLikeQuestion(args.reply) &&
+    !replyMatchesExpectedFocus(args.reply, args.focus)
+  ) {
+    return (
+      buildNextStepQuestion(args.unknowns, args.focus) ??
+      "\u6211\u5148\u628a\u521a\u624d\u8fd9\u6761\u4fe1\u606f\u6536\u4f4f\uff0c\u6211\u4eec\u7ee7\u7eed\u987a\u7740\u6700\u5173\u952e\u7684\u4e00\u4e2a\u70b9\u5f80\u4e0b\u804a\u5c31\u597d\u3002"
     );
   }
 
@@ -1292,6 +1337,9 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
     history: request.history,
     memory: draft.memory,
   });
+  const singleFocusInstruction = draft.orchestration.singleFocus
+    ? `\u5982\u679c\u8fd9\u8f6e\u9700\u8981\u8ffd\u95ee\uff0c\u53ea\u80fd\u56f4\u7ed5\u300c${draft.orchestration.singleFocus}\u300d\u8fd9\u4e00\u4e2a\u70b9\u95ee\u4e00\u4e2a\u6700\u5173\u952e\u7684\u95ee\u9898\uff0c\u4e0d\u8981\u6362\u6210\u66f4\u5bbd\u7684\u9700\u6c42\u76d8\u95ee\uff0c\u4e5f\u4e0d\u8981\u8df3\u5230\u5176\u4ed6\u4e3b\u9898\u3002`
+    : undefined;
 
   const prompt = [
     buildIntakeUserPrompt(request),
@@ -1321,6 +1369,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
       2,
     ),
     [
+      ...(singleFocusInstruction ? [singleFocusInstruction] : []),
       "请只输出一段自然中文回复，不要输出 JSON。",
       "不要复述结构化字段名。",
       "不要把自己说得像表单机器人。",
@@ -1472,6 +1521,7 @@ export async function runIntakeWorkflow(
     workflowState,
     handoffCandidate: labHandoff,
     focus: orchestration.singleFocus,
+    transitionMode: orchestration.transitionMode,
   });
 
   const structuredOutput = buildStructuredIntakeOutput({
