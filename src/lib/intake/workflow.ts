@@ -150,6 +150,17 @@ function resolveDeviceTypeWithDynamicRegistry(args: {
   return args.current;
 }
 
+function applyLightLocalGuardrails(args: {
+  llmFirstResolved: ConfirmedRequirement;
+  localResolved: ConfirmedRequirement;
+}) {
+  return {
+    ...args.llmFirstResolved,
+    device_type: args.llmFirstResolved.device_type ?? args.localResolved.device_type,
+    use_case: args.llmFirstResolved.use_case ?? args.localResolved.use_case,
+  } satisfies ConfirmedRequirement;
+}
+
 const WORKFLOW_FALLBACK_STRATEGY = {
   requirement_patch: {
     model_unavailable: "skip_patch_and_keep_local",
@@ -472,6 +483,23 @@ function reconcileDeviceTypeByContext(
   }
 
   return deviceType;
+}
+
+function inferFallbackDeviceTypeFromStructure(confirmed: ConfirmedRequirement) {
+  if (confirmed.portability?.includes("便携") || confirmed.portability?.includes("随身")) {
+    return "手持设备";
+  }
+
+  if (
+    confirmed.placement ||
+    confirmed.screen ||
+    confirmed.controls?.length ||
+    confirmed.sensors?.length
+  ) {
+    return "桌面设备";
+  }
+
+  return undefined;
 }
 
 function collectKeywords(message: string, patterns: Array<[RegExp, string]>) {
@@ -877,10 +905,11 @@ function deriveConfirmed(
       targetDevices: provisionalRequirement.target_devices,
     },
   );
+  const fallbackDeviceType = inferFallbackDeviceTypeFromStructure(provisionalRequirement);
 
   return {
     ...provisionalRequirement,
-    device_type: resolvedDeviceType ?? current.device_type,
+    device_type: resolvedDeviceType ?? current.device_type ?? fallbackDeviceType,
   };
 }
 
@@ -1148,7 +1177,16 @@ function canForcePreviewWithAssumptions(args: {
   const signals = parseConversationSignals(args.message);
   if (!signals.wantsPreview) return false;
   if (!args.confirmed.device_type) return false;
-  return args.unknowns.length <= 2;
+  const hasCoreStructure = Boolean(
+    args.confirmed.core_features?.length ||
+      args.confirmed.screen ||
+      args.confirmed.controls?.length ||
+      args.confirmed.power?.length ||
+      args.confirmed.sensors?.length ||
+      args.confirmed.connectivity?.length,
+  );
+  if (!hasCoreStructure) return false;
+  return args.unknowns.length <= 4;
 }
 
 function buildForcedPreviewDraftWithAssumptions(
@@ -2266,7 +2304,10 @@ async function deriveRequirementContext(request: IntakeAgentRequest): Promise<Re
 
   const confirmed = llmFirst
     ? modelRequirementPatch
-      ? mergeReasoningPatch(request.state.confirmed, modelRequirementPatch)
+      ? applyLightLocalGuardrails({
+          llmFirstResolved: mergeReasoningPatch(request.state.confirmed, modelRequirementPatch),
+          localResolved: getLocalConfirmed(),
+        })
       : getLocalConfirmed()
     : mergeReasoningPatch(getLocalConfirmed(), modelRequirementPatch);
   const reasoningTrace = buildReasoningTrace(modelRequirementPatch);
