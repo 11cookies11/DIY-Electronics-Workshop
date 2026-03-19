@@ -204,6 +204,43 @@ export type IntakeReasoningPatch = {
   notes?: string[];
 };
 
+export type LlmNativeAgentStage =
+  | "free_chat"
+  | "intake"
+  | "clarify"
+  | "preview_offer"
+  | "preview_commit"
+  | "handoff_offer"
+  | "handoff_commit"
+  | "blocked";
+
+export type LlmNativeSlotStatus = "unanswered" | "broadly_answered" | "answered" | "conflicted";
+
+export type LlmNativeSlotAssessment = {
+  slot: keyof ConfirmedRequirement | string;
+  status: LlmNativeSlotStatus;
+  evidence?: string;
+  confidence?: "low" | "medium" | "high";
+};
+
+export type LlmNativeDecision = {
+  customer_reply: string;
+  agent_stage: LlmNativeAgentStage;
+  intent?: IntakeIntent;
+  should_store_patch?: boolean;
+  confirmed_patch?: Partial<ConfirmedRequirement>;
+  replace_fields?: Array<keyof ConfirmedRequirement>;
+  slot_assessments: LlmNativeSlotAssessment[];
+  unknowns: string[];
+  single_focus?: string;
+  next_action: IntakeNextAction;
+  preview_candidate_ready: boolean;
+  handoff_candidate_ready: boolean;
+  reasoning_summary?: string;
+  assumptions?: string[];
+  risks?: string[];
+};
+
 export type IntakeSkillId =
   | "capability-intro"
   | "lab-intro"
