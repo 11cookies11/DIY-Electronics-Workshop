@@ -15,6 +15,11 @@ import { decideReadinessFlow } from "./readiness";
 import { buildReminderBundle } from "./reminders";
 import { analyzeRequirementReasoning } from "./reasoning";
 import {
+  isLlmFirstModeEnabled,
+  resolveIntakeChatModel,
+  resolveReasoningModel,
+} from "./llm-config";
+import {
   isSecondMeChatConfigured,
   requestSecondMeChatReply,
 } from "./secondme-client";
@@ -225,16 +230,7 @@ function mergeReasoningPatch(
 }
 
 function canUseReasoningModel() {
-  return Boolean(
-    process.env.DEEPSEEK_INTAKE_REASONING_MODEL ||
-      process.env.LLM_INTAKE_REASONING_MODEL ||
-      process.env.SECONDME_INTAKE_REASONING_MODEL,
-  );
-}
-
-function isLlmFirstModeEnabled() {
-  const flag = process.env.INTAKE_LLM_FIRST_MODE ?? "true";
-  return flag !== "false";
+  return Boolean(resolveReasoningModel());
 }
 
 function buildReasoningTrace(
@@ -1400,10 +1396,7 @@ function buildFallbackCustomerReply(args: {
 }
 
 async function buildModelRequirementPatch(request: IntakeAgentRequest) {
-  const model =
-    process.env.DEEPSEEK_INTAKE_REASONING_MODEL ??
-    process.env.LLM_INTAKE_REASONING_MODEL ??
-    process.env.SECONDME_INTAKE_REASONING_MODEL;
+  const model = resolveReasoningModel();
   if (!model) {
     return undefined;
   }
@@ -1657,12 +1650,8 @@ async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
   risks: string[];
 }) {
   const model =
-    process.env.DEEPSEEK_INTAKE_REASONING_MODEL ??
-    process.env.LLM_INTAKE_REASONING_MODEL ??
-    process.env.DEEPSEEK_INTAKE_CHAT_MODEL ??
-    process.env.LLM_INTAKE_CHAT_MODEL ??
-    process.env.SECONDME_INTAKE_REASONING_MODEL ??
-    process.env.SECONDME_INTAKE_CHAT_MODEL;
+    resolveReasoningModel() ??
+    resolveIntakeChatModel();
 
   if (!model) {
     return undefined;

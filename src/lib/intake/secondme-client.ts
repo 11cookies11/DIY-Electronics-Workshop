@@ -1,4 +1,10 @@
 import { getAccessToken, getSecondMeConfig } from "@/lib/secondme";
+import {
+  hasGatewayApiKeyEnv,
+  resolveGatewayBaseUrl,
+  resolveGatewayChatModel,
+  resolveGatewayCompletionsUrl,
+} from "./llm-config";
 import type { SecondMeChatMessage } from "./types";
 
 type OpenAIChatCompletionResponse = {
@@ -10,28 +16,13 @@ type OpenAIChatCompletionResponse = {
 };
 
 function getChatEndpoint() {
-  const override = process.env.LLM_CHAT_COMPLETIONS_URL ?? process.env.SECONDME_CHAT_COMPLETIONS_URL;
+  const override = resolveGatewayCompletionsUrl();
   if (override) {
     return override;
   }
 
-  const base =
-    process.env.DEEPSEEK_BASE_URL ??
-    process.env.LLM_BASE_URL ??
-    process.env.SECONDME_OPENAI_BASE_URL ??
-    process.env.SECONDME_API_BASE_URL ??
-    getSecondMeConfig().apiBaseUrl;
+  const base = resolveGatewayBaseUrl() ?? getSecondMeConfig().apiBaseUrl;
   return `${base.replace(/\/$/, "")}/chat/completions`;
-}
-
-function resolveModel(optionsModel?: string) {
-  return (
-    optionsModel ??
-    process.env.DEEPSEEK_CHAT_MODEL ??
-    process.env.LLM_CHAT_MODEL ??
-    process.env.SECONDME_CHAT_MODEL ??
-    "deepseek-chat"
-  );
 }
 
 async function resolveApiKey() {
@@ -45,15 +36,13 @@ async function resolveApiKey() {
   );
 }
 
-// 保留旧名字，避免现有调用方大面积改动；实际已是通用 LLM 配置检测。
+// 保留旧方法名，避免现有调用方大面积改动；实际为通用 LLM 网关配置检测。
 export function isSecondMeChatConfigured() {
   return Boolean(
     process.env.DEEPSEEK_CHAT_MODEL ||
       process.env.LLM_CHAT_MODEL ||
       process.env.SECONDME_CHAT_MODEL ||
-      process.env.DEEPSEEK_API_KEY ||
-      process.env.LLM_API_KEY ||
-      process.env.SECONDME_CHAT_API_KEY,
+      hasGatewayApiKeyEnv(),
   );
 }
 
@@ -69,7 +58,7 @@ export async function requestSecondMeChatReply(
     temperature?: number;
   } = {},
 ) {
-  const model = resolveModel(options.model);
+  const model = options.model ?? resolveGatewayChatModel("deepseek-chat");
   const apiKey = await resolveApiKey();
 
   if (!apiKey) {

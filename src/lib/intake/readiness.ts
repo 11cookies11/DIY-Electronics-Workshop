@@ -1,4 +1,5 @@
 import { evaluateIntakeTransitions } from "./transitions";
+import { isLlmFirstModeEnabled } from "./llm-config";
 import type {
   IntakeAgentState,
   IntakeNextAction,
@@ -16,11 +17,6 @@ export type ReadinessDecision = {
 
 function canPrepareHandoff(labHandoff?: LabHandoff) {
   return Boolean(labHandoff);
-}
-
-function isLlmFirstEnabled() {
-  const flag = process.env.INTAKE_LLM_FIRST_MODE ?? "true";
-  return flag !== "false";
 }
 
 function resolveByLlmFirst(args: {
@@ -86,7 +82,7 @@ export function decideReadinessFlow(args: {
     "agent_stage" | "preview_candidate_ready" | "handoff_candidate_ready" | "next_action"
   >;
 }) {
-  if (isLlmFirstEnabled() && args.llmDecision) {
+  if (isLlmFirstModeEnabled() && args.llmDecision) {
     const llmFirst = resolveByLlmFirst(args);
     if (llmFirst) {
       return llmFirst;
