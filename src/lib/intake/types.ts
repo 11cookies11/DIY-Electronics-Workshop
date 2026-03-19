@@ -129,6 +129,7 @@ export type IntakeDebugInfo = {
   routing_reason: string;
   transition_mode: string;
   single_focus?: string;
+  inferred_archetype?: string;
   memory_mode: ConversationMemoryMode;
   unknowns: string[];
   risks: string[];

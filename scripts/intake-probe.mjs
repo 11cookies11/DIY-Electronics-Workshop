@@ -8,6 +8,7 @@ const runtimeRoot = path.join(projectRoot, ".where", "intake-probe-runtime");
 
 const sourceFiles = [
   ...[
+    "archetypes.ts",
     "conversation-base.ts",
     "knowledge-config.ts",
     "knowledge.ts",
@@ -128,6 +129,25 @@ const scenarios = [
         step: 5,
         state: "handoff_ready",
         includes: ["handoff", "交接"],
+      },
+    ],
+  },
+  {
+    name: "natural_language_infers_device_archetype",
+    steps: [
+      "我想做一个放客厅茶几上的小东西",
+      "平时拿在手里控制电视和投影，想保留几个实体按键",
+      "家里用，内置电池，Type-C 充电",
+    ],
+    assertions: [
+      {
+        step: 1,
+        focus: "供电方式",
+      },
+      {
+        step: 2,
+        state: "preview_ready",
+        includes: ["3D 预览"],
       },
     ],
   },

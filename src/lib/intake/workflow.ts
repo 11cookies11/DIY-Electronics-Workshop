@@ -1,4 +1,5 @@
 import type { PreviewInput } from "@/engine/preview/types";
+import { inferDeviceTypeFromArchetype } from "./archetypes";
 import { detectConversationBaseMode } from "./conversation-base";
 import { analyzeConversationMemory } from "./memory";
 import { planReplyOrchestration } from "./orchestration";
@@ -502,6 +503,8 @@ function deriveConfirmed(
     [/(电池|充电)/, "电池供电"],
     [/(外接供电|适配器)/, "外接供电"],
   ]);
+  const targetDevicesFromText = extractDeviceMentions(extractionText);
+  const buttonPreferencesFromText = extractButtonPreferences(extractionText);
   const coreFeatures = collectKeywords(extractionText, [
     [/(显示|屏幕)/, "显示"],
     [/(遥控|红外)/, "红外控制"],
@@ -536,13 +539,8 @@ function deriveConfirmed(
   const normalizedControls =
     screenCandidate === "触控屏" ? mergeArrays(controls, ["触控"]) : controls;
 
-  return {
+  const provisionalRequirement = {
     ...current,
-    device_type: preferOverride(
-      current.device_type,
-      inferDeviceType(extractionText),
-      signals.isCorrection,
-    ),
     use_case: contextualAnswer.use_case ?? useCase,
     target_users: contextualAnswer.target_users ?? current.target_users,
     target_devices: contextualAnswer.target_devices,
@@ -555,7 +553,10 @@ function deriveConfirmed(
     connectivity: mergeOrReplaceArrays(current.connectivity, connectivity, signals.isCorrection),
     ports: mergeOrReplaceArrays(current.ports, ports, signals.isCorrection),
     power: mergeOrReplaceArrays(current.power, power, signals.isCorrection),
-    core_features: mergeArrays(current.core_features, coreFeatures),
+    core_features: mergeArrays(
+      current.core_features,
+      targetDevicesFromText.length ? [...coreFeatures, "红外控制"] : coreFeatures,
+    ),
     size: preferOverride(
       current.size,
       extractApproxSize(extractionText) ?? contextualAnswer.size,
@@ -563,6 +564,35 @@ function deriveConfirmed(
     ),
     placement: contextualAnswer.placement,
     portability: contextualAnswer.portability,
+  } satisfies ConfirmedRequirement;
+
+  const explicitDeviceType = inferDeviceType(extractionText);
+  const inferredDeviceType =
+    explicitDeviceType ??
+    inferDeviceTypeFromArchetype({
+      message: extractionText,
+      confirmed: provisionalRequirement,
+    });
+  const hasFreshArchetypeEvidence = Boolean(
+    explicitDeviceType ||
+      targetDevicesFromText.length ||
+      buttonPreferencesFromText.length ||
+      hasPattern(extractionText, [
+        /(拿在手里|握在手里|随身带着|手持|便携)/,
+        /(放桌上|桌面上|办公桌|书桌|床头柜|茶几上)/,
+        /(戴在手上|戴在手腕|穿戴|表带)/,
+        /(控制电视|控制空调|控制投影|控制灯|控制风扇)/,
+        /(音箱|扬声器|听歌|播歌|外放)/,
+      ]),
+  );
+
+  return {
+    ...provisionalRequirement,
+    device_type: signals.isCorrection
+      ? inferredDeviceType ?? current.device_type
+      : explicitDeviceType ??
+        (hasFreshArchetypeEvidence ? inferredDeviceType : current.device_type) ??
+        inferredDeviceType,
   };
 }
 
@@ -1377,6 +1407,7 @@ export async function runIntakeWorkflow(
       routing_reason: route.reason,
       transition_mode: orchestration.transitionMode,
       single_focus: orchestration.singleFocus,
+      inferred_archetype: orchestration.inferredArchetype,
       memory_mode: memory.mode,
       unknowns,
       risks,

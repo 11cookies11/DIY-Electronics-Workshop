@@ -1,3 +1,8 @@
+import {
+  inferDeviceArchetypeScores,
+  pickLeadingArchetype,
+  type DeviceArchetype,
+} from "./archetypes";
 import { detectConversationBaseMode } from "./conversation-base";
 import type { ConversationMemory } from "./types";
 import { parseConversationSignals } from "./signals";
@@ -26,6 +31,7 @@ export type ReplyOrchestration = {
   priorities: ReplyPriority[];
   shouldAdvanceRequirement: boolean;
   singleFocus?: string;
+  inferredArchetype?: DeviceArchetype;
 };
 
 function hasCollectedCore(confirmed: ConfirmedRequirement) {
@@ -71,6 +77,7 @@ function hasResolvedFocus(
 }
 
 function pickSingleFocus(
+  message: string,
   confirmed: ConfirmedRequirement,
   unknowns: string[],
   memoryFocus?: string,
@@ -79,16 +86,19 @@ function pickSingleFocus(
     return memoryFocus;
   }
 
-  const preferredOrderByDeviceType: Partial<Record<string, string[]>> = {
-    红外遥控器: ["控制对象", "主要交互方式", "按键或触屏交互", "供电方式", "使用场景"],
-    手持设备: ["使用场景", "供电方式", "主要交互方式", "核心功能", "尺寸与外形"],
-    桌面设备: ["核心功能", "接口需求", "供电方式", "使用场景", "连接方式"],
-    智能手表: ["使用场景", "供电方式", "主要交互方式", "连接方式", "核心功能"],
-    蓝牙音箱: ["核心功能", "连接方式", "供电方式", "主要交互方式", "使用场景"],
+  const preferredOrderByArchetype: Record<DeviceArchetype, string[]> = {
+    remote_like: ["控制对象", "主要交互方式", "按键或触屏交互", "供电方式", "使用场景"],
+    handheld_like: ["使用场景", "供电方式", "主要交互方式", "核心功能", "尺寸与外形"],
+    desktop_like: ["核心功能", "接口需求", "供电方式", "使用场景", "连接方式"],
+    wearable_like: ["使用场景", "供电方式", "主要交互方式", "连接方式", "核心功能"],
+    speaker_like: ["核心功能", "连接方式", "供电方式", "主要交互方式", "使用场景"],
   };
 
-  const preferredOrder = confirmed.device_type
-    ? preferredOrderByDeviceType[confirmed.device_type]
+  const inferredArchetype = pickLeadingArchetype(
+    inferDeviceArchetypeScores({ message, confirmed }),
+  );
+  const preferredOrder = inferredArchetype
+    ? preferredOrderByArchetype[inferredArchetype]
     : undefined;
 
   if (preferredOrder?.length) {
@@ -113,11 +123,10 @@ export function planReplyOrchestration(args: {
   const baseMode = detectConversationBaseMode(args.message);
   const signals = parseConversationSignals(args.message);
   const hasCore = hasCollectedCore(args.confirmed);
-  const focus = pickSingleFocus(
-    args.confirmed,
-    args.unknowns,
-    args.memory?.focusHint,
+  const inferredArchetype = pickLeadingArchetype(
+    inferDeviceArchetypeScores({ message: args.message, confirmed: args.confirmed }),
   );
+  const focus = pickSingleFocus(args.message, args.confirmed, args.unknowns, args.memory?.focusHint);
   const focusResolved = hasResolvedFocus(focus, args.confirmed);
 
   if (baseMode !== "none" && !hasCore) {
@@ -126,6 +135,7 @@ export function planReplyOrchestration(args: {
       transitionMode: "stay_conversational",
       priorities: ["connect", "answer_directly", "invite_next_step"],
       shouldAdvanceRequirement: false,
+      inferredArchetype,
     } satisfies ReplyOrchestration;
   }
 
@@ -136,6 +146,7 @@ export function planReplyOrchestration(args: {
       priorities: ["acknowledge", "invite_next_step"],
       shouldAdvanceRequirement: false,
       singleFocus: focus,
+      inferredArchetype,
     } satisfies ReplyOrchestration;
   }
 
@@ -145,6 +156,7 @@ export function planReplyOrchestration(args: {
       transitionMode: "preview_ready",
       priorities: ["acknowledge", "confirm_preview", "invite_next_step"],
       shouldAdvanceRequirement: true,
+      inferredArchetype,
     } satisfies ReplyOrchestration;
   }
 
@@ -154,6 +166,7 @@ export function planReplyOrchestration(args: {
       transitionMode: "handoff_ready",
       priorities: ["acknowledge", "confirm_handoff", "invite_next_step"],
       shouldAdvanceRequirement: true,
+      inferredArchetype,
     } satisfies ReplyOrchestration;
   }
 
@@ -163,6 +176,7 @@ export function planReplyOrchestration(args: {
       transitionMode: "answer_then_offer",
       priorities: ["answer_directly", "invite_next_step"],
       shouldAdvanceRequirement: hasCore,
+      inferredArchetype,
     } satisfies ReplyOrchestration;
   }
 
@@ -172,6 +186,7 @@ export function planReplyOrchestration(args: {
       transitionMode: "stay_conversational",
       priorities: ["acknowledge", "offer_suggestion"],
       shouldAdvanceRequirement: false,
+      inferredArchetype,
     } satisfies ReplyOrchestration;
   }
 
@@ -188,6 +203,7 @@ export function planReplyOrchestration(args: {
       priorities: ["acknowledge", "offer_suggestion", "invite_next_step"],
       shouldAdvanceRequirement: true,
       singleFocus: focus,
+      inferredArchetype,
     } satisfies ReplyOrchestration;
   }
 
@@ -198,6 +214,7 @@ export function planReplyOrchestration(args: {
       priorities: ["acknowledge", "ask_single_question"],
       shouldAdvanceRequirement: true,
       singleFocus: focus,
+      inferredArchetype,
     } satisfies ReplyOrchestration;
   }
 
@@ -207,5 +224,6 @@ export function planReplyOrchestration(args: {
     priorities: ["acknowledge", "offer_suggestion", "ask_single_question"],
     shouldAdvanceRequirement: true,
     singleFocus: focus,
+    inferredArchetype,
   } satisfies ReplyOrchestration;
 }
