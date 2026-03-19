@@ -1721,6 +1721,108 @@ async function deriveRequirementContext(request: IntakeAgentRequest) {
   };
 }
 
+async function deriveRuntimeContext(args: {
+  request: IntakeAgentRequest;
+  confirmed: ConfirmedRequirement;
+  reasoningTrace: IntakeReasoningTrace;
+  reasoning: ReturnType<typeof analyzeRequirementReasoning>;
+  reminderBundle: ReturnType<typeof buildReminderBundle>;
+}) {
+  const { request, confirmed, reasoningTrace, reasoning, reminderBundle } = args;
+  const { message, history = [], state } = request;
+  const guardrailUnknowns = computeUnknowns(confirmed);
+  const baselineUnknowns = unique([...guardrailUnknowns, ...reasoning.mustConfirm]);
+  const previewDraft = mapConfirmedToPreviewDraft(confirmed);
+  const baselineRisks = unique([
+    ...state.risks,
+    ...reasoning.risks,
+    ...reminderBundle.riskAlerts,
+    ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
+  ]);
+  const baselineRequirementSummary = buildRequirementSummary(confirmed);
+  const baselineLabHandoff = buildLabHandoff(
+    confirmed,
+    baselineRequirementSummary,
+    baselineUnknowns,
+    baselineRisks,
+    reasoningTrace,
+    previewDraft,
+  );
+  const llmNativeDecision = await buildLlmNativeDecision(request, {
+    confirmed,
+    unknowns: baselineUnknowns,
+    previewDraft,
+    handoffCandidate: baselineLabHandoff,
+    reasoning,
+    risks: baselineRisks,
+  });
+  const slotAssessmentUnknowns = llmNativeDecision
+    ? deriveUnknownsFromSlotAssessments(guardrailUnknowns, llmNativeDecision.slot_assessments)
+    : baselineUnknowns;
+  const llmNativeUnknowns = llmNativeDecision?.unknowns.length
+    ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
+    : slotAssessmentUnknowns;
+  const unknowns = normalizeUnknownFields(
+    llmNativeDecision
+      ? unique([...llmNativeUnknowns, ...guardrailUnknowns])
+      : baselineUnknowns,
+  );
+  const memory = analyzeConversationMemory({
+    message,
+    history,
+    unknowns,
+  });
+  const route: IntakeSkillRoute = buildLlmNativeSkillRoute(llmNativeDecision);
+  const legacyOrchestration = planReplyOrchestration({
+    message,
+    confirmed,
+    unknowns,
+    nextAction: "ask_more",
+    route,
+    previewDraft,
+    memory,
+  });
+  const orchestration = buildOrchestrationFromLlmDecision({
+    decision: llmNativeDecision,
+    message,
+    confirmed,
+    unknowns,
+    previewDraft,
+    fallback: legacyOrchestration,
+  });
+
+  const risks = unique([
+    ...state.risks,
+    ...reasoning.risks,
+    ...reminderBundle.riskAlerts,
+    ...(llmNativeDecision ? deriveRisksFromSlotAssessments(llmNativeDecision.slot_assessments) : []),
+    ...(llmNativeDecision?.risks ?? []),
+    ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
+  ]);
+
+  const requirementSummary = baselineRequirementSummary;
+  const labHandoff = buildLabHandoff(
+    confirmed,
+    requirementSummary,
+    unknowns,
+    risks,
+    reasoningTrace,
+    previewDraft,
+  );
+
+  return {
+    previewDraft,
+    llmNativeDecision,
+    unknowns,
+    memory,
+    route,
+    orchestration,
+    risks,
+    requirementSummary,
+    labHandoff,
+  };
+}
+
 export async function runIntakeWorkflow(
   sessionId: string,
   message: string,
@@ -1744,7 +1846,7 @@ export async function runIntakeWorkflow(
     ...state.risks,
     ...reasoning.risks,
     ...reminderBundle.riskAlerts,
-    ...(previewDraft ? [] : ["褰撳墠淇℃伅杩樹笉瓒充互绋冲畾鐢熸垚 3D 棰勮鑽夋"]),
+    ...(previewDraft ? [] : ["当前信息还不足以稳定生成 3D 预览草案"]),
   ]);
   const baselineRequirementSummary = buildRequirementSummary(confirmed);
   const baselineLabHandoff = buildLabHandoff(
