@@ -151,6 +151,19 @@ const scenarios = [
       },
     ],
   },
+  {
+    name: "summary_request_should_not_infer_direction_button",
+    steps: [
+      "\\u6211\\u60f3\\u505a\\u4e2a\\u624b\\u6301\\u8bbe\\u5907\\uff0c\\u5bb6\\u91cc\\u7528\\uff0c\\u5185\\u7f6e\\u7535\\u6c60",
+      "\\u90a3\\u4f60\\u5148\\u5e2e\\u6211\\u6536\\u4e00\\u4e0b\\u5f53\\u524d\\u65b9\\u5411",
+    ],
+    assertions: [
+      {
+        step: 1,
+        buttonNotIncludes: ["方向键"],
+      },
+    ],
+  },
 ];
 
 function rewriteSpecifiers(sourceText) {
@@ -200,6 +213,7 @@ function summarizeTurn(payload) {
     focus: payload.debug?.single_focus ?? null,
     memory: payload.debug?.memory_mode ?? null,
     unknowns: payload.unknowns ?? [],
+    buttonPreferences: payload.confirmed?.button_preferences ?? [],
   };
 }
 
@@ -223,6 +237,16 @@ function assertScenarioTurn(result, assertion, scenarioName) {
       if (!summary.reply.includes(token)) {
         throw new Error(
           `${scenarioName}: expected reply to include "${token}" at step ${assertion.step}, got ${summary.reply}`,
+        );
+      }
+    }
+  }
+
+  if (assertion.buttonNotIncludes?.length) {
+    for (const token of assertion.buttonNotIncludes) {
+      if (summary.buttonPreferences.includes(token)) {
+        throw new Error(
+          `${scenarioName}: expected button preferences to exclude "${token}" at step ${assertion.step}, got ${summary.buttonPreferences.join(", ")}`,
         );
       }
     }

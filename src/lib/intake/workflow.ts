@@ -326,6 +326,24 @@ function extractButtonPreferences(text?: string) {
   );
 }
 
+function sanitizeButtonPreferences(
+  preferences: string[],
+  text?: string,
+) {
+  if (!preferences.length) return preferences;
+
+  const hasDirectionalButtonIntent = Boolean(
+    text &&
+      (/(方向键)/.test(text) || /(上下左右)/.test(text)),
+  );
+
+  if (hasDirectionalButtonIntent) {
+    return preferences;
+  }
+
+  return preferences.filter((item) => item !== "方向键");
+}
+
 function inferTargetUsers(message: string) {
   if (hasPattern(message, [/(自己用|我自己用|个人使用)/])) return "个人用户";
   if (hasPattern(message, [/(家人|全家|家里人)/])) return "家庭成员";
@@ -412,6 +430,10 @@ function mergeContextualAnswer(args: {
     args.recentQuestion
       ? extractButtonPreferences(args.recentQuestion)
       : [];
+  const normalizedButtonPreferences = sanitizeButtonPreferences(
+    unique([...buttonPreferencesFromMessage, ...buttonPreferencesFromQuestion]),
+    [args.message, args.recentQuestion].filter(Boolean).join(" "),
+  );
 
   const useCaseFromDevices = inferUseCaseFromTargetDevices([
     ...targetDevicesFromMessage,
@@ -432,7 +454,7 @@ function mergeContextualAnswer(args: {
     ),
     button_preferences: mergeOrReplaceArrays(
       args.current.button_preferences,
-      unique([...buttonPreferencesFromMessage, ...buttonPreferencesFromQuestion]),
+      normalizedButtonPreferences,
       Boolean(args.shouldReplace),
     ),
     interaction_layout: preferOverride(
