@@ -1695,6 +1695,64 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   }
 }
 
+async function buildCustomerReply(args: {
+  request: IntakeAgentRequest;
+  message: string;
+  confirmed: ConfirmedRequirement;
+  workflowState: IntakeAgentState["workflow_state"];
+  nextAction: IntakeNextAction;
+  previewDraft?: PreviewDraft;
+  handoffCandidate?: LabHandoff;
+  unknowns: string[];
+  reasoning: ReturnType<typeof analyzeRequirementReasoning>;
+  suggestions: IntakeSuggestion[];
+  orchestration: ReplyOrchestration;
+  reminderBundle: ReturnType<typeof buildReminderBundle>;
+  memory: ReturnType<typeof analyzeConversationMemory>;
+  route: IntakeSkillRoute;
+  llmNativeDecision?: LlmNativeDecision;
+}) {
+  const rawCustomerReply =
+    args.llmNativeDecision?.customer_reply ??
+    (await buildModelCustomerReply(args.request, {
+      confirmed: args.confirmed,
+      unknowns: args.unknowns,
+      nextAction: args.nextAction,
+      previewDraft: args.previewDraft,
+      reasoning: args.reasoning,
+      suggestions: args.suggestions,
+      orchestration: args.orchestration,
+      reminderBundle: args.reminderBundle,
+      memory: args.memory,
+      route: args.route,
+    })) ??
+    buildFallbackCustomerReply({
+      message: args.message,
+      confirmed: args.confirmed,
+      workflowState: args.workflowState,
+      nextAction: args.nextAction,
+      previewDraft: args.previewDraft,
+      handoffCandidate: args.handoffCandidate,
+      unknowns: args.unknowns,
+      suggestions: args.reasoning.suggestions,
+      recommendationCards: args.suggestions,
+      orchestration: args.orchestration,
+    });
+
+  return applyReplyGuard({
+    message: args.message,
+    reply: rawCustomerReply,
+    confirmed: args.confirmed,
+    unknowns: args.unknowns,
+    nextAction: args.nextAction,
+    previewDraft: args.previewDraft,
+    workflowState: args.workflowState,
+    handoffCandidate: args.handoffCandidate,
+    focus: args.orchestration.singleFocus,
+    transitionMode: args.orchestration.transitionMode,
+  });
+}
+
 async function deriveRequirementContext(request: IntakeAgentRequest) {
   const localConfirmed = deriveConfirmed(request.message, request.state.confirmed, request.history ?? []);
   const modelRequirementPatch = canUseReasoningModel()
@@ -1929,44 +1987,22 @@ export async function runIntakeWorkflow(
       orchestration,
     });
   const replyPreviewDraft = exposedPreviewDraft ?? previewDraft;
-
-  const rawCustomerReply =
-    llmNativeDecision?.customer_reply ??
-    (await buildModelCustomerReply(request, {
-      confirmed,
-      unknowns,
-      nextAction,
-      previewDraft: replyPreviewDraft,
-      reasoning,
-      suggestions,
-      orchestration,
-      reminderBundle,
-      memory,
-      route,
-    })) ??
-    buildFallbackCustomerReply({
-      message,
-      confirmed,
-      workflowState,
-      nextAction,
-      previewDraft: replyPreviewDraft,
-      handoffCandidate: labHandoff,
-      unknowns,
-      suggestions: reasoning.suggestions,
-      recommendationCards: suggestions,
-      orchestration,
-    });
-  const customerReply = applyReplyGuard({
+  const customerReply = await buildCustomerReply({
+    request,
     message,
-    reply: rawCustomerReply,
     confirmed,
-    unknowns,
+    workflowState,
     nextAction,
     previewDraft: replyPreviewDraft,
-    workflowState,
     handoffCandidate: labHandoff,
-    focus: orchestration.singleFocus,
-    transitionMode: orchestration.transitionMode,
+    unknowns,
+    reasoning,
+    suggestions,
+    orchestration,
+    reminderBundle,
+    memory,
+    route,
+    llmNativeDecision,
   });
 
   const structuredOutput = buildStructuredIntakeOutput({
