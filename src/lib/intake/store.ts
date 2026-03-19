@@ -104,7 +104,6 @@ export function saveSessionOutput(
     ? updateProjectCollaborationRecord({
         sessionId,
         panel: collaborationPanel,
-        output,
         previous: previous?.projectRecord,
         now,
       })

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       currentState,
       record?.history ?? [],
     );
-    const collaborationPanel = buildCollaborationPanel(result);
+    const collaborationPanel = await buildCollaborationPanel(result);
     saveSessionOutput(sessionId, message, result, collaborationPanel);
     const savedRecord = getSessionRecord(sessionId);
 
