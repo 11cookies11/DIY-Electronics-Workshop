@@ -1711,7 +1711,7 @@ async function buildCustomerReply(args: {
   memory: ReturnType<typeof analyzeConversationMemory>;
   route: IntakeSkillRoute;
   llmNativeDecision?: LlmNativeDecision;
-}) {
+}): Promise<string> {
   const rawCustomerReply =
     args.llmNativeDecision?.customer_reply ??
     (await buildModelCustomerReply(args.request, {
@@ -1752,6 +1752,14 @@ async function buildCustomerReply(args: {
     transitionMode: args.orchestration.transitionMode,
   });
 }
+
+type RequirementContext = {
+  confirmed: ConfirmedRequirement;
+  reasoningTrace?: IntakeReasoningTrace;
+  reasoning: ReturnType<typeof analyzeRequirementReasoning>;
+  suggestions: IntakeSuggestion[];
+  reminderBundle: ReturnType<typeof buildReminderBundle>;
+};
 
 function buildWorkflowStructuredOutput(args: {
   message: string;
@@ -1804,7 +1812,7 @@ function buildWorkflowStructuredOutput(args: {
   });
 }
 
-async function deriveRequirementContext(request: IntakeAgentRequest) {
+async function deriveRequirementContext(request: IntakeAgentRequest): Promise<RequirementContext> {
   const localConfirmed = deriveConfirmed(request.message, request.state.confirmed, request.history ?? []);
   const modelRequirementPatch = canUseReasoningModel()
     ? await buildModelRequirementPatch({
@@ -1845,7 +1853,7 @@ type IntakeRuntimeContext = {
 async function deriveRuntimeContext(args: {
   request: IntakeAgentRequest;
   confirmed: ConfirmedRequirement;
-  reasoningTrace: IntakeReasoningTrace;
+  reasoningTrace?: IntakeReasoningTrace;
   reasoning: ReturnType<typeof analyzeRequirementReasoning>;
   reminderBundle: ReturnType<typeof buildReminderBundle>;
 }): Promise<IntakeRuntimeContext> {
