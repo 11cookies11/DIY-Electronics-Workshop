@@ -2269,6 +2269,17 @@ async function deriveRuntimeContext(args: {
     previewDraft: resolvedPreviewDraft,
     fallback: legacyOrchestration,
   });
+  const repeatedQuestionSuppressedOrchestration: ReplyOrchestration =
+    (memory.repeatedFocusCount ?? 0) >= 2 &&
+    unknowns.length > 0 &&
+    orchestration.transitionMode === "soft_clarify"
+      ? {
+          ...orchestration,
+          transitionMode: "answer_then_offer",
+          priorities: ["acknowledge", "offer_suggestion"],
+          singleFocus: orchestration.singleFocus ?? memory.focusHint ?? unknowns[0],
+        }
+      : orchestration;
 
   const risks = unique([
     ...state.risks,
@@ -2299,7 +2310,7 @@ async function deriveRuntimeContext(args: {
     unknowns,
     memory,
     route,
-    orchestration,
+    orchestration: repeatedQuestionSuppressedOrchestration,
     risks,
     requirementSummary,
     labHandoff,
