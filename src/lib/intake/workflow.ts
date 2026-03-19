@@ -54,6 +54,34 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+const WORKFLOW_FALLBACK_STRATEGY = {
+  requirement_patch: {
+    model_unavailable: "skip_patch_and_keep_local",
+    request_failed: "skip_patch_and_keep_local",
+    invalid_json: "skip_patch_and_keep_local",
+  },
+  llm_decision: {
+    model_unavailable: "fallback_to_legacy_orchestration",
+    request_failed: "fallback_to_legacy_orchestration",
+    invalid_json: "fallback_to_legacy_orchestration",
+  },
+  customer_reply: {
+    llm_unavailable: "use_template_reply",
+    request_failed: "use_template_reply",
+  },
+} as const;
+
+type WorkflowFallbackChannel = keyof typeof WORKFLOW_FALLBACK_STRATEGY;
+type WorkflowFallbackReason<C extends WorkflowFallbackChannel> =
+  keyof (typeof WORKFLOW_FALLBACK_STRATEGY)[C];
+
+function resolveWorkflowFallback<C extends WorkflowFallbackChannel>(
+  channel: C,
+  reason: WorkflowFallbackReason<C>,
+) {
+  return WORKFLOW_FALLBACK_STRATEGY[channel][reason];
+}
+
 function canonicalizeUnknownField(field: string) {
   if (field.includes("交互")) {
     return "主要交互方式";
@@ -457,18 +485,18 @@ function inferTargetUsers(message: string) {
 function inferBroadTargetDevices(message: string, recentQuestion?: string) {
   const isTargetDeviceThread = Boolean(
     recentQuestion &&
-      /(\u63a7\u5236\u54ea\u4e9b\u5bb6\u7535|\u63a7\u5236\u54ea\u4e9b\u8bbe\u5907|\u7535\u89c6|\u7a7a\u8c03|\u6295\u5f71|\u98ce\u6247|\u673a\u9876\u76d2|\u5bb6\u7535)/.test(
+      /(控制哪些家电|控制哪些设备|电视|空调|投影|风扇|机顶盒|家电)/.test(
         recentQuestion,
       ),
   );
 
   if (
     isTargetDeviceThread &&
-    /(\u5168\u9762\u4e00\u70b9|\u8986\u76d6\u5168\u9762|\u8986\u76d6\u66f4\u5168|\u8986\u76d6\u5bb6\u91cc\u5e38\u7528|\u5e38\u7528\u5bb6\u7535\u90fd\u60f3\u5e26\u4e0a|\u5bb6\u91cc\u5e38\u7528\u7684\u90fd\u60f3\u63a7\u5236|\u5c3d\u91cf\u90fd\u80fd\u63a7\u5236)/.test(
+    /(全面一点|覆盖全面|覆盖更全|覆盖家里常用|常用家电都想带上|家里常用的都想控制|尽量都能控制)/.test(
       message,
     )
   ) {
-    return ["\u5e38\u7528\u5bb6\u7535"];
+    return ["常用家电"];
   }
 
   return [];
@@ -476,7 +504,7 @@ function inferBroadTargetDevices(message: string, recentQuestion?: string) {
 
 function inferUseCaseFromTargetDevices(targetDevices: string[]) {
   if (!targetDevices.length) return undefined;
-  if (targetDevices.includes("\u5e38\u7528\u5bb6\u7535")) return "\u63a7\u5236\u5bb6\u4e2d\u5e38\u7528\u5bb6\u7535";
+  if (targetDevices.includes("常用家电")) return "控制家中常用家电";
   return `控制${targetDevices.join("、")}等常见家电`;
 }
 
@@ -1243,32 +1271,32 @@ function replyMatchesExpectedFocus(reply: string, focus?: string) {
   if (!focus) return true;
 
   switch (focus) {
-    case "\u4f7f\u7528\u573a\u666f":
-      return /(\u573a\u666f|\u5ba2\u5385|\u5367\u5ba4|\u684c\u4e0a|\u51fa\u95e8|\u968f\u8eab|\u5bb6\u91cc\u7528|\u653e\u54ea|\u5728\u54ea\u7528)/.test(reply);
-    case "\u4f9b\u7535\u65b9\u5f0f":
-      return /(\u4f9b\u7535|\u7535\u6c60|\u5145\u7535|USB-C|Type-C|\u66f4\u6362\u7535\u6c60|\u5185\u7f6e\u7535\u6c60)/i.test(reply);
-    case "\u63a7\u5236\u5bf9\u8c61":
-      return /(\u7535\u89c6|\u6295\u5f71|\u7a7a\u8c03|\u706f\u5149|\u63a7\u5236\u54ea\u4e9b|\u5bf9\u8c61|\u5bb6\u7535)/.test(reply);
-    case "\u6838\u5fc3\u529f\u80fd":
-      return /(\u529f\u80fd|\u4e3b\u8981\u505a\u4ec0\u4e48|\u63a7\u5236|\u663e\u793a|\u91c7\u96c6|\u63d0\u9192|\u64ad\u653e)/.test(reply);
-    case "\u4e3b\u8981\u4ea4\u4e92\u65b9\u5f0f":
-    case "\u6309\u952e\u6216\u89e6\u5c4f\u4ea4\u4e92":
-      return /(\u6309\u952e|\u5b9e\u4f53\u952e|\u89e6\u5c4f|\u4ea4\u4e92|\u65cb\u94ae|\u5c4f\u5e55)/.test(reply);
-    case "\u5c3a\u5bf8\u4e0e\u5916\u5f62":
-      return /(\u5c3a\u5bf8|\u5916\u5f62|\u624b\u611f|\u6bd4\u4f8b|\u5927\u5c0f|\u8584\u539a|\u957f\u77ed|\u5bbd\u7a84)/.test(reply);
-    case "\u63a5\u53e3\u9700\u6c42":
-      return /(\u63a5\u53e3|USB|Type-C|\u97f3\u9891\u53e3|\u6269\u5c55\u53e3|\u63d2\u53e3)/i.test(reply);
-    case "\u8fde\u63a5\u65b9\u5f0f":
-      return /(\u84dd\u7259|Wi-?Fi|\u65e0\u7ebf|\u8fde\u63a5|\u914d\u7f51|\u7ec4\u7f51)/i.test(reply);
-    case "\u8bbe\u5907\u7c7b\u578b":
-      return /(\u9065\u63a7\u5668|\u624b\u6301|\u684c\u9762|\u7a7f\u6234|\u5f62\u6001|\u8bbe\u5907)/.test(reply);
+    case "使用场景":
+      return /(场景|客厅|卧室|桌上|出门|随身|家里用|放哪|在哪用)/.test(reply);
+    case "供电方式":
+      return /(供电|电池|充电|USB-C|Type-C|更换电池|内置电池)/i.test(reply);
+    case "控制对象":
+      return /(电视|投影|空调|灯光|控制哪些|对象|家电)/.test(reply);
+    case "核心功能":
+      return /(功能|主要做什么|控制|显示|采集|提醒|播放)/.test(reply);
+    case "主要交互方式":
+    case "按键或触屏交互":
+      return /(按键|实体键|触屏|交互|旋钮|屏幕)/.test(reply);
+    case "尺寸与外形":
+      return /(尺寸|外形|手感|比例|大小|薄厚|长短|宽窄)/.test(reply);
+    case "接口需求":
+      return /(接口|USB|Type-C|音频口|扩展口|插口)/i.test(reply);
+    case "连接方式":
+      return /(蓝牙|Wi-?Fi|无线|连接|配网|组网)/i.test(reply);
+    case "设备类型":
+      return /(遥控器|手持|桌面|穿戴|形态|设备)/.test(reply);
     default:
       return true;
   }
 }
 
 function replyLooksLikeQuestion(reply: string) {
-  return /[\uff1f?]/.test(reply) || /(\u8fd8\u662f|\u66f4\u504f|\u8981\u4e0d\u8981|\u5e0c\u671b|\u60f3|\u5148\u8865|\u518d\u786e\u8ba4|\u95ee\u4e00\u4e0b)/.test(reply);
+  return /[？?]/.test(reply) || /(还是|更偏|要不要|希望|想|先补|再确认|问一下)/.test(reply);
 }
 
 function applyReplyGuard(args: {
@@ -1392,7 +1420,7 @@ function applyReplyGuard(args: {
   ) {
     return (
       buildNextStepQuestion(args.unknowns, args.focus) ??
-      "\u6211\u5148\u628a\u521a\u624d\u8fd9\u6761\u4fe1\u606f\u6536\u4f4f\uff0c\u6211\u4eec\u7ee7\u7eed\u987a\u7740\u6700\u5173\u952e\u7684\u4e00\u4e2a\u70b9\u5f80\u4e0b\u804a\u5c31\u597d\u3002"
+      "我先把刚才这条信息收住，我们继续顺着最关键的一个点往下聊就好。"
     );
   }
 
@@ -1503,6 +1531,7 @@ function buildFallbackCustomerReply(args: {
 async function buildModelRequirementPatch(request: IntakeAgentRequest) {
   const model = resolveReasoningModel();
   if (!model) {
+    resolveWorkflowFallback("requirement_patch", "model_unavailable");
     return undefined;
   }
 
@@ -1519,8 +1548,14 @@ async function buildModelRequirementPatch(request: IntakeAgentRequest) {
       },
     );
 
-    return sanitizeModelRequirementPatch(JSON.parse(content) as unknown);
+    try {
+      return sanitizeModelRequirementPatch(JSON.parse(content) as unknown);
+    } catch {
+      resolveWorkflowFallback("requirement_patch", "invalid_json");
+      return undefined;
+    }
   } catch {
+    resolveWorkflowFallback("requirement_patch", "request_failed");
     return undefined;
   }
 }
@@ -1776,6 +1811,7 @@ async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
     resolveIntakeChatModel();
 
   if (!model) {
+    resolveWorkflowFallback("llm_decision", "model_unavailable");
     return undefined;
   }
 
@@ -1803,8 +1839,14 @@ async function buildLlmNativeDecision(request: IntakeAgentRequest, draft: {
       },
     );
 
-    return sanitizeLlmNativeDecision(JSON.parse(content) as unknown);
+    try {
+      return sanitizeLlmNativeDecision(JSON.parse(content) as unknown);
+    } catch {
+      resolveWorkflowFallback("llm_decision", "invalid_json");
+      return undefined;
+    }
   } catch {
+    resolveWorkflowFallback("llm_decision", "request_failed");
     return undefined;
   }
 }
@@ -1822,12 +1864,13 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
   route: IntakeSkillRoute;
 }) {
   if (!isLlmChatConfigured()) {
+    resolveWorkflowFallback("customer_reply", "llm_unavailable");
     return null;
   }
 
   const route = draft.route;
   const singleFocusInstruction = draft.orchestration.singleFocus
-    ? `\u5982\u679c\u8fd9\u8f6e\u9700\u8981\u8ffd\u95ee\uff0c\u53ea\u80fd\u56f4\u7ed5\u300c${draft.orchestration.singleFocus}\u300d\u8fd9\u4e00\u4e2a\u70b9\u95ee\u4e00\u4e2a\u6700\u5173\u952e\u7684\u95ee\u9898\uff0c\u4e0d\u8981\u6362\u6210\u66f4\u5bbd\u7684\u9700\u6c42\u76d8\u95ee\uff0c\u4e5f\u4e0d\u8981\u8df3\u5230\u5176\u4ed6\u4e3b\u9898\u3002`
+    ? `如果这轮需要追问，只能围绕「${draft.orchestration.singleFocus}」这一个点问一个最关键的问题，不要换成更宽的需求盘问，也不要跳到其他主题。`
     : undefined;
 
   if (isLlmFirstModeEnabled()) {
@@ -1873,6 +1916,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
         { role: "user", content: prompt },
       ]);
     } catch {
+      resolveWorkflowFallback("customer_reply", "request_failed");
       return null;
     }
   }
@@ -1925,6 +1969,7 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
       { role: "user", content: prompt },
     ]);
   } catch {
+    resolveWorkflowFallback("customer_reply", "request_failed");
     return null;
   }
 }

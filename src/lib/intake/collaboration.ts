@@ -139,6 +139,20 @@ const ALL_PROFILES: RoleplayAgentProfile[] = [
   DELIVERY_LEAD_PROFILE,
 ];
 
+const COLLAB_FALLBACK_STRATEGY = {
+  panel: {
+    llm_unavailable: "use_fallback_panel",
+    request_failed: "use_fallback_panel",
+    invalid_json: "use_fallback_panel",
+  },
+} as const;
+
+function resolveCollabFallback(
+  reason: keyof typeof COLLAB_FALLBACK_STRATEGY.panel,
+) {
+  return COLLAB_FALLBACK_STRATEGY.panel[reason];
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -361,10 +375,12 @@ function buildCollabSystemPrompt() {
 }
 
 function buildCollabUserPrompt(output: IntakeAgentOutput) {
+  const preferredStage = deriveFallbackStage(output);
   return JSON.stringify(
     {
       workflow_state: output.state.workflow_state,
       next_action: output.next_action,
+      preferred_stage: preferredStage,
       requirement_summary: output.requirement_summary,
       confirmed: output.confirmed,
       unknowns: output.unknowns,
@@ -397,6 +413,7 @@ function buildCollabUserPrompt(output: IntakeAgentOutput) {
         "conversation 保持 2-5 条，像团队内部短沟通，不要死板。",
         "handoff_preview 用自然短句，不是字段罗列。",
         "delivery_lead 仅在阶段切换时出场，不要轮轮重复。",
+        "stage 优先跟随 preferred_stage，不要倒退到更早阶段。",
       ],
     },
     null,
@@ -496,6 +513,7 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
 export async function buildCollaborationPanel(output: IntakeAgentOutput): Promise<CollaborationPanel> {
   const fallback = buildFallbackPanel(output);
   if (!isLlmChatConfigured()) {
+    resolveCollabFallback("llm_unavailable");
     return fallback;
   }
 
@@ -504,9 +522,20 @@ export async function buildCollaborationPanel(output: IntakeAgentOutput): Promis
       { role: "system", content: buildCollabSystemPrompt() },
       { role: "user", content: buildCollabUserPrompt(output) },
     ]);
-    const payload = JSON.parse(content) as unknown;
+    const payload = (() => {
+      try {
+        return JSON.parse(content) as unknown;
+      } catch {
+        return undefined;
+      }
+    })();
+    if (!payload) {
+      resolveCollabFallback("invalid_json");
+      return fallback;
+    }
     return sanitizePanelFromLlm(payload, fallback);
   } catch {
+    resolveCollabFallback("request_failed");
     return fallback;
   }
 }
