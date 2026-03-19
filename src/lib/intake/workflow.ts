@@ -1189,6 +1189,16 @@ function applyReplyGuard(args: {
   transitionMode?: string;
 }) {
   const summary = buildRequirementSummary(args.confirmed);
+  if (isLlmFirstModeEnabled() && args.nextAction !== "ask_more") {
+    if (args.nextAction === "generate_preview" && args.previewDraft) {
+      return "好呀，我已经按当前信息生成一版 3D 预览了，你现在可以直接看主舞台效果。";
+    }
+    if (args.nextAction === "prepare_handoff" || args.nextAction === "handoff_to_lab") {
+      return args.unknowns.length
+        ? `我先把可交接内容整理好了，像${args.unknowns.slice(0, 2).join("、")}这类细节后面还能补；现在可以先看 handoff。`
+        : "我已经把交接内容整理好了，你可以直接查看 handoff。";
+    }
+  }
 
   if (
     args.transitionMode === "answer_then_offer" &&
