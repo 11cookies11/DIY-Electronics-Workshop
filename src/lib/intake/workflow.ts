@@ -1718,6 +1718,53 @@ async function buildModelCustomerReply(request: IntakeAgentRequest, draft: {
     ? `\u5982\u679c\u8fd9\u8f6e\u9700\u8981\u8ffd\u95ee\uff0c\u53ea\u80fd\u56f4\u7ed5\u300c${draft.orchestration.singleFocus}\u300d\u8fd9\u4e00\u4e2a\u70b9\u95ee\u4e00\u4e2a\u6700\u5173\u952e\u7684\u95ee\u9898\uff0c\u4e0d\u8981\u6362\u6210\u66f4\u5bbd\u7684\u9700\u6c42\u76d8\u95ee\uff0c\u4e5f\u4e0d\u8981\u8df3\u5230\u5176\u4ed6\u4e3b\u9898\u3002`
     : undefined;
 
+  if (isLlmFirstModeEnabled()) {
+    const prompt = [
+      buildIntakeUserPrompt(request),
+      JSON.stringify(
+        {
+          conversation_mode: detectConversationBaseMode(request.message),
+          active_skill: route.active_skill,
+          matched_skills: route.matched_skills,
+          routing_reason: route.reason,
+          confirmed: draft.confirmed,
+          unknowns: draft.unknowns,
+          reasoning_profile: draft.reasoning.profile,
+          reasoning_must_confirm: draft.reasoning.mustConfirm,
+          reasoning_suggestions: draft.reasoning.suggestions,
+          reasoning_risks: draft.reasoning.risks,
+          recommendation_cards: draft.suggestions,
+          reminders: draft.reminderBundle.reminders,
+          risk_alerts: draft.reminderBundle.riskAlerts,
+          conversation_memory: draft.memory,
+          reply_priorities: draft.orchestration.priorities,
+          transition_mode: draft.orchestration.transitionMode,
+          single_focus: draft.orchestration.singleFocus,
+          next_action: draft.nextAction,
+          preview_ready: Boolean(draft.previewDraft),
+        },
+        null,
+        2,
+      ),
+      [
+        ...(singleFocusInstruction ? [singleFocusInstruction] : []),
+        "请只输出自然中文，不要输出 JSON。",
+        "语气像前台接待，简洁、自然、有人味。",
+        "若用户已回答过同一问题，不要重复追问；改成总结并给 2-3 个可选补全。",
+        "若已可预览就引导预览，若已可交接就引导 handoff。",
+      ].join("\n"),
+    ].join("\n\n");
+
+    try {
+      return await requestSecondMeChatReply([
+        { role: "system", content: buildIntakeSystemPrompt() },
+        { role: "user", content: prompt },
+      ]);
+    } catch {
+      return null;
+    }
+  }
+
   const prompt = [
     buildIntakeUserPrompt(request),
     JSON.stringify(
