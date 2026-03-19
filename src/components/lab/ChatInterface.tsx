@@ -623,7 +623,7 @@ export function ChatInterface({
 
               {stageFeedback ? (
                 <div
-                  className={`rounded-sm border p-4 ${
+                  className={`hidden rounded-sm border p-4 ${
                     isDark
                       ? "border-white/10 bg-white/[0.03]"
                       : "border-slate-200 bg-white/85"
@@ -783,7 +783,7 @@ export function ChatInterface({
                   <Send className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
+              <div className="hidden">
                 <span
                   className={`text-[10px] ${
                     isDark ? "text-white/28" : "text-slate-400"
@@ -897,7 +897,7 @@ export function ChatInterface({
 
                       {stageFeedback ? (
                         <section
-                          className={`rounded-sm border p-3 ${
+                          className={`hidden rounded-sm border p-3 ${
                             isDark
                               ? "border-white/10 bg-white/[0.02]"
                               : "border-slate-200 bg-slate-50/85"
