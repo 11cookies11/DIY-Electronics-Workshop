@@ -1753,6 +1753,57 @@ async function buildCustomerReply(args: {
   });
 }
 
+function buildWorkflowStructuredOutput(args: {
+  message: string;
+  workflowState: IntakeAgentState["workflow_state"];
+  confirmed: ConfirmedRequirement;
+  unknowns: string[];
+  risks: string[];
+  suggestions: IntakeSuggestion[];
+  previewDraft?: PreviewDraft;
+  labHandoff?: LabHandoff;
+  exposedPreviewDraft?: PreviewDraft;
+  exposedLabHandoff?: LabHandoff;
+  requirementSummary: string;
+  nextAction: IntakeNextAction;
+  route: IntakeSkillRoute;
+  orchestration: ReplyOrchestration;
+  memory: ReturnType<typeof analyzeConversationMemory>;
+  llmNativeDecision?: LlmNativeDecision;
+  reasoningTrace?: IntakeReasoningTrace;
+}) {
+  return buildStructuredIntakeOutput({
+    workflowState: args.workflowState,
+    confirmed: args.confirmed,
+    unknowns: args.unknowns,
+    risks: args.risks,
+    suggestions: args.suggestions,
+    assumptions: args.previewDraft?.assumptions ?? [],
+    previewCandidate: args.previewDraft,
+    handoffCandidate: args.labHandoff,
+    exposedPreviewDraft: args.exposedPreviewDraft,
+    exposedLabHandoff: args.exposedLabHandoff,
+    requirementSummary: args.requirementSummary || "已记录当前对话，等待进一步补充。",
+    intent: inferIntent(args.message),
+    nextAction: args.nextAction,
+    debug: buildWorkflowDebugInfo({
+      workflowState: args.workflowState,
+      route: args.route,
+      orchestration: args.orchestration,
+      memory: args.memory,
+      unknowns: args.unknowns,
+      risks: args.risks,
+      nextAction: args.nextAction,
+      llmNativeDecision: args.llmNativeDecision,
+      previewDraft: args.previewDraft,
+      labHandoff: args.labHandoff,
+      exposedPreviewDraft: args.exposedPreviewDraft,
+      exposedLabHandoff: args.exposedLabHandoff,
+      reasoningTrace: args.reasoningTrace,
+    }),
+  });
+}
+
 async function deriveRequirementContext(request: IntakeAgentRequest) {
   const localConfirmed = deriveConfirmed(request.message, request.state.confirmed, request.history ?? []);
   const modelRequirementPatch = canUseReasoningModel()
@@ -2005,7 +2056,7 @@ export async function runIntakeWorkflow(
     llmNativeDecision,
   });
 
-  const structuredOutput = buildStructuredIntakeOutput({
+  const legacyStructuredOutput = buildStructuredIntakeOutput({
     workflowState,
     confirmed,
     unknowns,
@@ -2035,6 +2086,28 @@ export async function runIntakeWorkflow(
       reasoningTrace,
     }),
   });
+
+  const structuredOutput = buildWorkflowStructuredOutput({
+    message,
+    workflowState,
+    confirmed,
+    unknowns,
+    risks,
+    suggestions,
+    previewDraft,
+    labHandoff,
+    exposedPreviewDraft,
+    exposedLabHandoff,
+    requirementSummary,
+    nextAction,
+    route,
+    orchestration,
+    memory,
+    llmNativeDecision,
+    reasoningTrace,
+  });
+
+  void legacyStructuredOutput;
 
   return {
     customer_reply: customerReply,
