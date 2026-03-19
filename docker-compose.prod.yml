@@ -1,0 +1,12 @@
+services:
+  secondme-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: secondme-embedded-store:latest
+    container_name: secondme-embedded-store
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env.local

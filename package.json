@@ -6,6 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "deploy:pack": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-package.ps1",
+    "deploy:run": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-run.ps1",
+    "deploy:docker": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-docker.ps1 -Rebuild",
     "intake:regression": "node scripts/intake-regression.mjs",
     "poly:fetch": "node scripts/poly-pizza-fetch.mjs"
   },
