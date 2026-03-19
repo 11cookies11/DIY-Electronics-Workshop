@@ -2192,8 +2192,12 @@ async function deriveRuntimeContext(args: {
     reasoning,
     risks: baselineRisks,
   });
+  const shouldPersistLlmDecisionPatch = Boolean(
+    llmNativeDecision?.confirmed_patch &&
+      (llmNativeDecision.should_store_patch || isLlmFirstModeEnabled()),
+  );
   const llmDecisionPatch =
-    llmNativeDecision?.should_store_patch && llmNativeDecision.confirmed_patch
+    shouldPersistLlmDecisionPatch && llmNativeDecision?.confirmed_patch
       ? sanitizeModelRequirementPatch({
           confirmed_patch: llmNativeDecision.confirmed_patch,
           replace_fields: llmNativeDecision.replace_fields ?? [],
