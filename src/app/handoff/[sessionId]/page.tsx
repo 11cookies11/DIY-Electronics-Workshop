@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSessionRecord } from "@/lib/intake/store";
+import { ensureSecondMeAuthorized } from "@/lib/secondme-auth-guard";
 
 type HandoffPageProps = {
   params: Promise<{
@@ -64,6 +65,7 @@ function List({
 
 export default async function HandoffPage({ params }: HandoffPageProps) {
   const { sessionId } = await params;
+  await ensureSecondMeAuthorized(`/handoff/${encodeURIComponent(sessionId)}`);
   const record = getSessionRecord(sessionId);
 
   if (!record?.lastOutput?.lab_handoff) {

@@ -1,5 +1,6 @@
 import { LabExperience } from "@/components/lab/LabExperience";
 import { fetchSecondMe, getSecondMeConnectionState } from "@/lib/secondme";
+import { ensureSecondMeAuthorized } from "@/lib/secondme-auth-guard";
 
 type HomeProps = {
   searchParams?: Promise<{
@@ -12,6 +13,7 @@ type UserInfo = Record<string, unknown>;
 
 export default async function Home({ searchParams }: HomeProps) {
   const params = (await searchParams) ?? {};
+  await ensureSecondMeAuthorized("/");
   const connected = params.connected === "1";
   const error = params.error;
   const connectionState = await getSecondMeConnectionState();
