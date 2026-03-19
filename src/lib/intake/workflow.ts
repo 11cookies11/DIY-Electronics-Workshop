@@ -1635,7 +1635,8 @@ export async function runIntakeWorkflow(
   const reasoning = analyzeRequirementReasoning(confirmed);
   const suggestions = buildIntakeSuggestions(confirmed, reasoning);
   const reminderBundle = buildReminderBundle(confirmed);
-  const baselineUnknowns = unique([...computeUnknowns(confirmed), ...reasoning.mustConfirm]);
+  const guardrailUnknowns = computeUnknowns(confirmed);
+  const baselineUnknowns = unique([...guardrailUnknowns, ...reasoning.mustConfirm]);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
   const baselineRisks = unique([
     ...state.risks,
@@ -1661,11 +1662,14 @@ export async function runIntakeWorkflow(
     risks: baselineRisks,
   });
   const slotAssessmentUnknowns = llmNativeDecision
-    ? deriveUnknownsFromSlotAssessments(baselineUnknowns, llmNativeDecision.slot_assessments)
+    ? deriveUnknownsFromSlotAssessments(guardrailUnknowns, llmNativeDecision.slot_assessments)
     : baselineUnknowns;
-  const unknowns = llmNativeDecision?.unknowns.length
+  const llmNativeUnknowns = llmNativeDecision?.unknowns.length
     ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
     : slotAssessmentUnknowns;
+  const unknowns = llmNativeDecision
+    ? unique([...llmNativeUnknowns, ...guardrailUnknowns])
+    : baselineUnknowns;
   const memory = analyzeConversationMemory({
     message,
     history,
@@ -1682,7 +1686,9 @@ export async function runIntakeWorkflow(
         history,
         memory,
       });
-  const route = llmNativeDecision ? buildLlmNativeSkillRoute(llmNativeDecision) : legacyRoute;
+  const route: IntakeSkillRoute = llmNativeDecision
+    ? buildLlmNativeSkillRoute(llmNativeDecision)
+    : (legacyRoute ?? buildLlmNativeSkillRoute());
   const legacyOrchestration = planReplyOrchestration({
     message,
     confirmed,
