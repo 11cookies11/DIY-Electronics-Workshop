@@ -244,6 +244,7 @@ export function ChatInterface({
     state?: IntakeAgentState;
     previewDraft?: PreviewDraft;
     handoffUrl?: string | null;
+    debug?: IntakeDebugInfo | null;
   }) {
     if (args.handoffUrl && args.state?.workflow_state === "handoff_ready") {
       return {
@@ -255,6 +256,14 @@ export function ChatInterface({
       };
     }
 
+    if (args.debug?.offering_handoff && args.debug.has_handoff_candidate) {
+      return {
+        kind: "handoff" as const,
+        title: "交接内容已经能先收一版",
+        detail: "我这边已经能整理出一份实验室可接手的交接内容了，只是还没正式替你打开交接单。",
+      };
+    }
+
     if (args.previewDraft && args.nextAction === "generate_preview") {
       return {
         kind: "preview" as const,
@@ -263,10 +272,10 @@ export function ChatInterface({
       };
     }
 
-    if (args.state?.workflow_state === "preview_ready") {
+    if (args.debug?.offering_preview && args.debug.has_preview_candidate) {
       return {
         kind: "preview" as const,
-        title: "已进入预览准备阶段",
+        title: "我已经悄悄备好一版预览",
         detail: "现在这批信息已经够拼出一版方向了，你点头的话我就可以把 3D 草案起出来。",
       };
     }
@@ -306,8 +315,8 @@ export function ChatInterface({
         preview_input_draft?: PreviewDraft;
         handoffUrl?: string | null;
         next_action?: IntakeNextAction;
-        state?: IntakeAgentState;
-        debug?: IntakeDebugInfo;
+          state?: IntakeAgentState;
+          debug?: IntakeDebugInfo;
       };
 
       setSessionId(payload.sessionId);
@@ -319,6 +328,7 @@ export function ChatInterface({
           state: payload.state,
           previewDraft: payload.preview_input_draft,
           handoffUrl: payload.handoffUrl,
+          debug: payload.debug ?? null,
         }),
       );
       if (payload.preview_input_draft) {
@@ -477,6 +487,40 @@ export function ChatInterface({
                     >
                       {contextGuide.detail}
                     </div>
+                    {debugInfo?.has_preview_candidate || debugInfo?.has_handoff_candidate ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {debugInfo.has_preview_candidate ? (
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[9px] ${
+                              isDark
+                                ? "bg-emerald-400/10 text-emerald-300"
+                                : "bg-emerald-50 text-emerald-700"
+                            }`}
+                          >
+                            {debugInfo.exposed_preview
+                              ? "preview 已展示"
+                              : debugInfo.offering_preview
+                                ? "preview 已就绪"
+                                : "preview 候选已生成"}
+                          </span>
+                        ) : null}
+                        {debugInfo.has_handoff_candidate ? (
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[9px] ${
+                              isDark
+                                ? "bg-cyan-400/10 text-cyan-300"
+                                : "bg-cyan-50 text-cyan-700"
+                            }`}
+                          >
+                            {debugInfo.exposed_handoff
+                              ? "handoff 已展示"
+                              : debugInfo.offering_handoff
+                                ? "handoff 已就绪"
+                                : "handoff 候选已生成"}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                   <div
                     className={`rounded-full px-2.5 py-1 font-mono text-[8px] uppercase tracking-[0.22em] ${
@@ -965,6 +1009,34 @@ export function ChatInterface({
                             </div>
                           </div>
                           <div className="mt-2 space-y-2">
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                preview candidate
+                              </div>
+                              <div>
+                                {debugInfo.has_preview_candidate
+                                  ? debugInfo.exposed_preview
+                                    ? "exposed"
+                                    : debugInfo.offering_preview
+                                      ? "offering"
+                                      : "candidate"
+                                  : "—"}
+                              </div>
+                            </div>
+                            <div>
+                              <div className={isDark ? "text-white/35" : "text-slate-400"}>
+                                handoff candidate
+                              </div>
+                              <div>
+                                {debugInfo.has_handoff_candidate
+                                  ? debugInfo.exposed_handoff
+                                    ? "exposed"
+                                    : debugInfo.offering_handoff
+                                      ? "offering"
+                                      : "candidate"
+                                  : "—"}
+                              </div>
+                            </div>
                             <div>
                               <div className={isDark ? "text-white/35" : "text-slate-400"}>
                                 routing reason

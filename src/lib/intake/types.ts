@@ -135,6 +135,8 @@ export type IntakeDebugInfo = {
   next_action: IntakeNextAction;
   has_preview_candidate?: boolean;
   has_handoff_candidate?: boolean;
+  offering_preview?: boolean;
+  offering_handoff?: boolean;
   exposed_preview?: boolean;
   exposed_handoff?: boolean;
   reasoning_trace?: IntakeReasoningTrace;

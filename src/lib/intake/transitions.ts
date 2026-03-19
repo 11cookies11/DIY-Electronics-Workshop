@@ -4,6 +4,8 @@ import type { IntakeAgentState, LabHandoff, PreviewDraft } from "./types";
 export type IntakeTransitionSignals = ReturnType<typeof parseConversationSignals> & {
   canPreview: boolean;
   canHandoff: boolean;
+  shouldOfferPreview: boolean;
+  shouldOfferHandoff: boolean;
   shouldTriggerPreview: boolean;
   shouldTriggerHandoff: boolean;
 };
@@ -18,6 +20,14 @@ export function evaluateIntakeTransitions(args: {
   const baseSignals = parseConversationSignals(args.message);
   const canPreview = Boolean(args.previewDraft);
   const canHandoff = Boolean(args.labHandoff) && args.unknowns.length <= 2;
+  const shouldOfferPreview =
+    canPreview &&
+    !baseSignals.isNegative &&
+    args.unknowns.length <= 1;
+  const shouldOfferHandoff =
+    canHandoff &&
+    !baseSignals.isNegative &&
+    (args.state.workflow_state === "preview_generated" || !canPreview);
   const shouldAcceptCurrentPreview =
     args.state.workflow_state === "preview_ready" &&
     !baseSignals.isNegative &&
@@ -27,14 +37,14 @@ export function evaluateIntakeTransitions(args: {
       /不用(再)?补充|不用再问|直接生成|直接出图|往下走|继续推进/.test(args.message));
 
   const shouldTriggerPreview =
-    canPreview &&
+    shouldOfferPreview &&
     !baseSignals.isNegative &&
     (baseSignals.wantsPreview ||
       (args.state.workflow_state === "preview_ready" && baseSignals.isAffirmative) ||
       shouldAcceptCurrentPreview);
 
   const shouldTriggerHandoff =
-    canHandoff &&
+    shouldOfferHandoff &&
     !baseSignals.isNegative &&
     (baseSignals.wantsHandoff ||
       (args.state.workflow_state === "handoff_ready" && baseSignals.isAffirmative) ||
@@ -44,6 +54,8 @@ export function evaluateIntakeTransitions(args: {
     ...baseSignals,
     canPreview,
     canHandoff,
+    shouldOfferPreview,
+    shouldOfferHandoff,
     shouldTriggerPreview,
     shouldTriggerHandoff,
   } satisfies IntakeTransitionSignals;

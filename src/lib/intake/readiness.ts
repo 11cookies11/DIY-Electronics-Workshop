@@ -50,7 +50,11 @@ export function decideReadinessFlow(args: {
     } satisfies ReadinessDecision;
   }
 
-  if (args.state.workflow_state === "preview_generated" && canPrepareHandoff(args.labHandoff) && args.unknowns.length <= 2) {
+  if (
+    args.state.workflow_state === "preview_generated" &&
+    canPrepareHandoff(args.labHandoff) &&
+    args.unknowns.length <= 2
+  ) {
     return {
       workflowState: "handoff_ready",
       nextAction: "ask_more",
@@ -59,11 +63,20 @@ export function decideReadinessFlow(args: {
     } satisfies ReadinessDecision;
   }
 
-  if (args.previewDraft) {
+  if (transitions.shouldOfferPreview && args.previewDraft) {
     return {
       workflowState: "preview_ready",
       nextAction: "ask_more",
       exposePreview: false,
+      exposeHandoff: false,
+    } satisfies ReadinessDecision;
+  }
+
+  if (transitions.shouldOfferHandoff && canPrepareHandoff(args.labHandoff)) {
+    return {
+      workflowState: "handoff_ready",
+      nextAction: "ask_more",
+      exposePreview: Boolean(args.previewDraft),
       exposeHandoff: false,
     } satisfies ReadinessDecision;
   }

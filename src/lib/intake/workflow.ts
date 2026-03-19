@@ -1373,6 +1373,8 @@ export async function runIntakeWorkflow(
       next_action: nextAction,
       has_preview_candidate: Boolean(previewDraft),
       has_handoff_candidate: Boolean(labHandoff),
+      offering_preview: workflowState === "preview_ready",
+      offering_handoff: workflowState === "handoff_ready" && !exposedLabHandoff,
       exposed_preview: Boolean(exposedPreviewDraft),
       exposed_handoff: Boolean(exposedLabHandoff),
       reasoning_trace: reasoningTrace,
