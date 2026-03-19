@@ -144,6 +144,8 @@ export type IntakeDebugInfo = {
   llm_native_unknowns?: string[];
   llm_native_single_focus?: string;
   llm_native_next_action?: IntakeNextAction;
+  llm_native_preview_ready?: boolean;
+  llm_native_handoff_ready?: boolean;
   reasoning_trace?: IntakeReasoningTrace;
 };
 

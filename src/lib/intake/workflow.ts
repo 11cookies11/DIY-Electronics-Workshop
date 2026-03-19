@@ -1606,6 +1606,14 @@ export async function runIntakeWorkflow(
         ? { ...state, workflow_state: "collecting" }
         : state,
     unknowns,
+    llmDecision: llmNativeDecision
+      ? {
+          agent_stage: llmNativeDecision.agent_stage,
+          preview_candidate_ready: llmNativeDecision.preview_candidate_ready,
+          handoff_candidate_ready: llmNativeDecision.handoff_candidate_ready,
+          next_action: llmNativeDecision.next_action,
+        }
+      : undefined,
   });
 
   const workflowState: IntakeAgentState["workflow_state"] =
@@ -1696,6 +1704,8 @@ export async function runIntakeWorkflow(
       llm_native_unknowns: llmNativeDecision?.unknowns,
       llm_native_single_focus: llmNativeDecision?.single_focus,
       llm_native_next_action: llmNativeDecision?.next_action,
+      llm_native_preview_ready: llmNativeDecision?.preview_candidate_ready,
+      llm_native_handoff_ready: llmNativeDecision?.handoff_candidate_ready,
       has_preview_candidate: Boolean(previewDraft),
       has_handoff_candidate: Boolean(labHandoff),
       offering_preview: workflowState === "preview_ready",

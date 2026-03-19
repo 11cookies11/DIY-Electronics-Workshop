@@ -3,6 +3,7 @@ import type {
   IntakeAgentState,
   IntakeNextAction,
   LabHandoff,
+  LlmNativeDecision,
   PreviewDraft,
 } from "./types";
 
@@ -23,6 +24,10 @@ export function decideReadinessFlow(args: {
   labHandoff?: LabHandoff;
   state: IntakeAgentState;
   unknowns: string[];
+  llmDecision?: Pick<
+    LlmNativeDecision,
+    "agent_stage" | "preview_candidate_ready" | "handoff_candidate_ready" | "next_action"
+  >;
 }) {
   const transitions = evaluateIntakeTransitions({
     message: args.message,
@@ -31,8 +36,24 @@ export function decideReadinessFlow(args: {
     labHandoff: args.labHandoff,
     unknowns: args.unknowns,
   });
+  const llmWantsPreviewOffer =
+    Boolean(args.llmDecision?.preview_candidate_ready) &&
+    (args.llmDecision?.agent_stage === "preview_offer" ||
+      args.llmDecision?.next_action === "generate_preview");
+  const llmWantsPreviewCommit =
+    Boolean(args.llmDecision?.preview_candidate_ready) &&
+    args.llmDecision?.agent_stage === "preview_commit";
+  const llmWantsHandoffOffer =
+    Boolean(args.llmDecision?.handoff_candidate_ready) &&
+    (args.llmDecision?.agent_stage === "handoff_offer" ||
+      args.llmDecision?.next_action === "prepare_handoff" ||
+      args.llmDecision?.next_action === "handoff_to_lab");
+  const llmWantsHandoffCommit =
+    Boolean(args.llmDecision?.handoff_candidate_ready) &&
+    (args.llmDecision?.agent_stage === "handoff_commit" ||
+      args.llmDecision?.next_action === "handoff_to_lab");
 
-  if (transitions.shouldTriggerPreview && args.previewDraft) {
+  if ((transitions.shouldTriggerPreview || llmWantsPreviewCommit) && args.previewDraft) {
     return {
       workflowState: "preview_generated",
       nextAction: "generate_preview",
@@ -41,7 +62,7 @@ export function decideReadinessFlow(args: {
     } satisfies ReadinessDecision;
   }
 
-  if (transitions.shouldTriggerHandoff && canPrepareHandoff(args.labHandoff)) {
+  if ((transitions.shouldTriggerHandoff || llmWantsHandoffCommit) && canPrepareHandoff(args.labHandoff)) {
     return {
       workflowState: "handoff_ready",
       nextAction: "prepare_handoff",
@@ -63,7 +84,7 @@ export function decideReadinessFlow(args: {
     } satisfies ReadinessDecision;
   }
 
-  if (transitions.shouldOfferPreview && args.previewDraft) {
+  if ((transitions.shouldOfferPreview || llmWantsPreviewOffer) && args.previewDraft) {
     return {
       workflowState: "preview_ready",
       nextAction: "ask_more",
@@ -72,7 +93,7 @@ export function decideReadinessFlow(args: {
     } satisfies ReadinessDecision;
   }
 
-  if (transitions.shouldOfferHandoff && canPrepareHandoff(args.labHandoff)) {
+  if ((transitions.shouldOfferHandoff || llmWantsHandoffOffer) && canPrepareHandoff(args.labHandoff)) {
     return {
       workflowState: "handoff_ready",
       nextAction: "ask_more",
