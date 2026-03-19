@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runIntakeWorkflow } from "@/lib/intake/workflow";
+import { buildCollaborationPanel } from "@/lib/intake/collaboration";
 import { getSessionRecord, getSessionState, saveSessionOutput } from "@/lib/intake/store";
 
 type RequestBody = {
@@ -33,10 +34,12 @@ export async function POST(request: Request) {
       record?.history ?? [],
     );
     saveSessionOutput(sessionId, message, result);
+    const collaborationPanel = buildCollaborationPanel(result);
 
     return NextResponse.json({
       sessionId,
       handoffUrl: result.lab_handoff ? `/handoff/${sessionId}` : null,
+      collaboration_panel: collaborationPanel,
       ...result,
     });
   } catch (error) {

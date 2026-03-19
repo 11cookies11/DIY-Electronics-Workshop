@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PreviewView } from "@/engine/preview";
+import type { CollaborationPanel, RoleplayAgentStatus } from "@/lib/intake/collaboration";
 import type {
   IntakeAgentState,
   IntakeDebugInfo,
@@ -117,6 +118,7 @@ export function ChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
+  const [collaborationPanel, setCollaborationPanel] = useState<CollaborationPanel | null>(null);
   const [debugInfo, setDebugInfo] = useState<IntakeDebugInfo | null>(null);
   const [stageFeedback, setStageFeedback] = useState<StageFeedback | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -150,6 +152,7 @@ export function ChatInterface({
     ]);
     setSessionId(null);
     setHandoffUrl(null);
+    setCollaborationPanel(null);
     setDebugInfo(null);
     setStageFeedback(null);
     setIsSettingsOpen(false);
@@ -351,6 +354,30 @@ export function ChatInterface({
     return null;
   }
 
+  function getRoleplayStatusText(status: RoleplayAgentStatus) {
+    if (status === "ready") return "已可交接";
+    if (status === "drafting") return "编排中";
+    return "监听中";
+  }
+
+  function getRoleplayStatusClass(status: RoleplayAgentStatus) {
+    if (status === "ready") {
+      return isDark
+        ? "border-cyan-400/35 bg-cyan-400/10 text-cyan-200"
+        : "border-cyan-200 bg-cyan-50 text-cyan-700";
+    }
+
+    if (status === "drafting") {
+      return isDark
+        ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-200"
+        : "border-emerald-200 bg-emerald-50 text-emerald-700";
+    }
+
+    return isDark
+      ? "border-white/15 bg-white/[0.03] text-white/65"
+      : "border-slate-200 bg-white text-slate-600";
+  }
+
   const handleSend = async (prompt?: string) => {
     const nextInput = (prompt ?? input).trim();
     if (!nextInput || isLoading) return;
@@ -382,6 +409,7 @@ export function ChatInterface({
         customer_reply?: string;
         preview_input_draft?: PreviewDraft;
         handoffUrl?: string | null;
+        collaboration_panel?: CollaborationPanel;
         next_action?: IntakeNextAction;
           state?: IntakeAgentState;
           debug?: IntakeDebugInfo;
@@ -389,6 +417,7 @@ export function ChatInterface({
 
       setSessionId(payload.sessionId);
       setHandoffUrl(payload.handoffUrl ?? null);
+      setCollaborationPanel(payload.collaboration_panel ?? null);
       setDebugInfo(payload.debug ?? null);
       setStageFeedback(
         buildStageFeedback({
@@ -1006,6 +1035,49 @@ export function ChatInterface({
                           ))}
                         </div>
                       </section>
+
+                      {collaborationPanel ? (
+                        <section
+                          className={`rounded-sm border p-3 ${
+                            isDark
+                              ? "border-white/10 bg-white/[0.02]"
+                              : "border-slate-200 bg-slate-50/85"
+                          }`}
+                        >
+                          <div className={`text-[10px] ${isDark ? "text-white/35" : "text-slate-400"}`}>
+                            多 Agent 协作（角色扮演）
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {collaborationPanel.agents.map((agent) => (
+                              <div
+                                key={agent.id}
+                                className={`rounded-sm border p-2.5 ${
+                                  isDark ? "border-white/10 bg-white/[0.02]" : "border-slate-200 bg-white"
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div>
+                                    <div className={`text-[11px] font-medium ${isDark ? "text-white/85" : "text-slate-900"}`}>
+                                      {agent.name}
+                                    </div>
+                                    <div className={`mt-0.5 text-[10px] ${isDark ? "text-white/45" : "text-slate-500"}`}>
+                                      {agent.role}
+                                    </div>
+                                  </div>
+                                  <span
+                                    className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] ${getRoleplayStatusClass(agent.status)}`}
+                                  >
+                                    {getRoleplayStatusText(agent.status)}
+                                  </span>
+                                </div>
+                                <div className={`mt-2 text-[10px] leading-5 ${isDark ? "text-white/58" : "text-slate-600"}`}>
+                                  {agent.handoff_preview}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      ) : null}
 
                       {handoffUrl ? (
                         <section
