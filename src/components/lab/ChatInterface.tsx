@@ -398,6 +398,13 @@ export function ChatInterface({
     });
   }
 
+  function getAgentLabel(id: string) {
+    if (id === "front_desk") return "前台接待";
+    if (id === "hardware_procurement") return "硬件采购";
+    if (id === "software_lead") return "软件负责人";
+    return id;
+  }
+
   const handleSend = async (prompt?: string) => {
     const nextInput = (prompt ?? input).trim();
     if (!nextInput || isLoading) return;
@@ -490,6 +497,10 @@ export function ChatInterface({
 
   const viewLabel = activeView === "exploded" ? "完整拆解" : "装配预览";
   const showMainGuide = messages.length <= 2 || Boolean(stageFeedback);
+  const canShowAgentDiscussion =
+    debugInfo?.workflow_state === "preview_generated" ||
+    debugInfo?.workflow_state === "handoff_ready" ||
+    debugInfo?.workflow_state === "handoff_completed";
 
   return (
     <div
@@ -1058,7 +1069,7 @@ export function ChatInterface({
                         </div>
                       </section>
 
-                      {collaborationPanel ? (
+                      {collaborationPanel && false ? (
                         <section
                           className={`rounded-sm border p-3 ${
                             isDark
@@ -1070,10 +1081,10 @@ export function ChatInterface({
                             多 Agent 协作（角色扮演）
                           </div>
                           <div className={`mt-1 text-[10px] ${isDark ? "text-white/45" : "text-slate-500"}`}>
-                            当前阶段：{getCollaborationStageText(collaborationPanel.stage)}
+                            当前阶段：{getCollaborationStageText(collaborationPanel!.stage)}
                           </div>
                           <div className="mt-2 space-y-2">
-                            {collaborationPanel.agents.map((agent) => (
+                            {collaborationPanel!.agents.map((agent) => (
                               <div
                                 key={agent.id}
                                 className={`rounded-sm border p-2.5 ${
@@ -1098,7 +1109,7 @@ export function ChatInterface({
                                 <div className={`mt-2 text-[10px] leading-5 ${isDark ? "text-white/58" : "text-slate-600"}`}>
                                   {agent.handoff_preview}
                                 </div>
-                                {collaborationPanel.profiles
+                                {collaborationPanel!.profiles
                                   .filter((profile) => profile.id === agent.id)
                                   .map((profile) => (
                                     <div key={profile.id} className="mt-2 space-y-1">
@@ -1119,7 +1130,7 @@ export function ChatInterface({
                         </section>
                       ) : null}
 
-                      {projectRecord ? (
+                      {canShowAgentDiscussion && projectRecord ? (
                         <section
                           className={`rounded-sm border p-3 ${
                             isDark
