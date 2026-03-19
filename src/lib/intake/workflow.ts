@@ -65,6 +65,26 @@ function normalizeUnknownFields(fields: string[]) {
   return unique(fields.map(canonicalizeUnknownField));
 }
 
+function normalizeUnknownFieldsSafe(fields: string[]) {
+  const alias: Record<string, string> = {
+    主要交互方式: "主要交互方式",
+    交互方式: "主要交互方式",
+    使用场景: "使用场景",
+    场景: "使用场景",
+    核心功能: "核心功能",
+    功能: "核心功能",
+    供电方式: "供电方式",
+    供电: "供电方式",
+  };
+
+  return unique(
+    fields
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => alias[item] ?? canonicalizeUnknownField(item)),
+  );
+}
+
 function mergeArrays(left?: string[], right?: string[]) {
   return unique([...(left ?? []), ...(right ?? [])]);
 }
@@ -2071,7 +2091,7 @@ async function deriveRuntimeContext(args: {
   const llmNativeUnknowns = llmNativeDecision?.unknowns.length
     ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
     : slotAssessmentUnknowns;
-  const unknowns = normalizeUnknownFields(
+  const unknowns = normalizeUnknownFieldsSafe(
     llmNativeDecision
       ? isLlmFirstModeEnabled()
         ? (llmNativeUnknowns.length ? llmNativeUnknowns : guardrailUnknowns)
