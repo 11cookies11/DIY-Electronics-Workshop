@@ -435,14 +435,26 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
     })
     .filter(Boolean)
     .slice(0, 8) as CollaborationConversationTurn[];
-  const stageFilteredConversation =
-    conversation.filter((turn) => shouldAgentSpeakInStage(turn.from, stage));
+  const stageFilteredConversation = conversation.filter((turn) =>
+    shouldAgentSpeakInStage(turn.from, stage),
+  );
+  const uniqueConversation: CollaborationConversationTurn[] = [];
+  const seen = new Set<string>();
+  for (const turn of stageFilteredConversation) {
+    const key = `${turn.from}::${turn.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueConversation.push(turn);
+    if (uniqueConversation.length >= 5) break;
+  }
+  const conversationFinal =
+    uniqueConversation.length >= 2 ? uniqueConversation : fallback.conversation.slice(0, 3);
 
   return {
     ...fallback,
     stage,
     agents: fallback.agents.map((agent) => byId.get(agent.id) ?? agent),
-    conversation: stageFilteredConversation.length ? stageFilteredConversation : fallback.conversation,
+    conversation: conversationFinal,
   };
 }
 
