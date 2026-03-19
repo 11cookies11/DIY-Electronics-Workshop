@@ -16,7 +16,11 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PreviewView } from "@/engine/preview";
-import type { CollaborationPanel, RoleplayAgentStatus } from "@/lib/intake/collaboration";
+import type {
+  CollaborationPanel,
+  ProjectCollaborationRecord,
+  RoleplayAgentStatus,
+} from "@/lib/intake/collaboration";
 import type {
   IntakeAgentState,
   IntakeDebugInfo,
@@ -119,6 +123,7 @@ export function ChatInterface({
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [handoffUrl, setHandoffUrl] = useState<string | null>(null);
   const [collaborationPanel, setCollaborationPanel] = useState<CollaborationPanel | null>(null);
+  const [projectRecord, setProjectRecord] = useState<ProjectCollaborationRecord | null>(null);
   const [debugInfo, setDebugInfo] = useState<IntakeDebugInfo | null>(null);
   const [stageFeedback, setStageFeedback] = useState<StageFeedback | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -153,6 +158,7 @@ export function ChatInterface({
     setSessionId(null);
     setHandoffUrl(null);
     setCollaborationPanel(null);
+    setProjectRecord(null);
     setDebugInfo(null);
     setStageFeedback(null);
     setIsSettingsOpen(false);
@@ -378,6 +384,20 @@ export function ChatInterface({
       : "border-slate-200 bg-white text-slate-600";
   }
 
+  function getCollaborationStageText(stage: CollaborationPanel["stage"] | ProjectCollaborationRecord["stage"]) {
+    if (stage === "cross_agent_sync") return "跨 Agent 协同";
+    if (stage === "software_planning") return "软件规划";
+    if (stage === "procurement_planning") return "采购规划";
+    return "前台收敛";
+  }
+
+  function formatTime(ts: number) {
+    return new Date(ts).toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
   const handleSend = async (prompt?: string) => {
     const nextInput = (prompt ?? input).trim();
     if (!nextInput || isLoading) return;
@@ -410,6 +430,7 @@ export function ChatInterface({
         preview_input_draft?: PreviewDraft;
         handoffUrl?: string | null;
         collaboration_panel?: CollaborationPanel;
+        project_record?: ProjectCollaborationRecord | null;
         next_action?: IntakeNextAction;
           state?: IntakeAgentState;
           debug?: IntakeDebugInfo;
@@ -418,6 +439,7 @@ export function ChatInterface({
       setSessionId(payload.sessionId);
       setHandoffUrl(payload.handoffUrl ?? null);
       setCollaborationPanel(payload.collaboration_panel ?? null);
+      setProjectRecord(payload.project_record ?? null);
       setDebugInfo(payload.debug ?? null);
       setStageFeedback(
         buildStageFeedback({
@@ -1047,6 +1069,9 @@ export function ChatInterface({
                           <div className={`text-[10px] ${isDark ? "text-white/35" : "text-slate-400"}`}>
                             多 Agent 协作（角色扮演）
                           </div>
+                          <div className={`mt-1 text-[10px] ${isDark ? "text-white/45" : "text-slate-500"}`}>
+                            当前阶段：{getCollaborationStageText(collaborationPanel.stage)}
+                          </div>
                           <div className="mt-2 space-y-2">
                             {collaborationPanel.agents.map((agent) => (
                               <div
@@ -1073,8 +1098,60 @@ export function ChatInterface({
                                 <div className={`mt-2 text-[10px] leading-5 ${isDark ? "text-white/58" : "text-slate-600"}`}>
                                   {agent.handoff_preview}
                                 </div>
+                                {collaborationPanel.profiles
+                                  .filter((profile) => profile.id === agent.id)
+                                  .map((profile) => (
+                                    <div key={profile.id} className="mt-2 space-y-1">
+                                      <div className={`text-[10px] ${isDark ? "text-white/42" : "text-slate-500"}`}>
+                                        身份：{profile.identity}
+                                      </div>
+                                      <div className={`text-[10px] ${isDark ? "text-white/42" : "text-slate-500"}`}>
+                                        能力：{profile.capabilities.slice(0, 2).join("；")}
+                                      </div>
+                                      <div className={`text-[10px] ${isDark ? "text-white/36" : "text-slate-400"}`}>
+                                        边界：{profile.boundaries.join("；")}
+                                      </div>
+                                    </div>
+                                  ))}
                               </div>
                             ))}
+                          </div>
+                        </section>
+                      ) : null}
+
+                      {projectRecord ? (
+                        <section
+                          className={`rounded-sm border p-3 ${
+                            isDark
+                              ? "border-white/10 bg-white/[0.02]"
+                              : "border-slate-200 bg-slate-50/85"
+                          }`}
+                        >
+                          <div className={`text-[10px] ${isDark ? "text-white/35" : "text-slate-400"}`}>
+                            项目协作记录
+                          </div>
+                          <div className={`mt-1 text-[10px] ${isDark ? "text-white/45" : "text-slate-500"}`}>
+                            阶段：{getCollaborationStageText(projectRecord.stage)}
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {projectRecord.timeline
+                              .slice(-5)
+                              .reverse()
+                              .map((event) => (
+                                <div
+                                  key={event.id}
+                                  className={`rounded-sm border p-2 ${
+                                    isDark ? "border-white/10 bg-white/[0.02]" : "border-slate-200 bg-white"
+                                  }`}
+                                >
+                                  <div className={`text-[10px] ${isDark ? "text-white/45" : "text-slate-500"}`}>
+                                    {formatTime(event.ts)} · {event.from} → {event.to.join(" / ")}
+                                  </div>
+                                  <div className={`mt-1 text-[10px] leading-5 ${isDark ? "text-white/65" : "text-slate-700"}`}>
+                                    {event.summary}
+                                  </div>
+                                </div>
+                              ))}
                           </div>
                         </section>
                       ) : null}

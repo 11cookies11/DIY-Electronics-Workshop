@@ -4,6 +4,11 @@ import {
   type IntakeAgentOutput,
   type IntakeAgentState,
 } from "./types";
+import {
+  type CollaborationPanel,
+  type ProjectCollaborationRecord,
+  updateProjectCollaborationRecord,
+} from "./collaboration";
 
 export type SessionRecord = {
   id: string;
@@ -12,6 +17,7 @@ export type SessionRecord = {
   state: IntakeAgentState;
   history: ConversationTurn[];
   lastOutput?: IntakeAgentOutput;
+  projectRecord?: ProjectCollaborationRecord;
 };
 
 const SESSION_TTL_MS = 1000 * 60 * 60 * 6;
@@ -79,6 +85,7 @@ export function saveSessionOutput(
   sessionId: string,
   userMessage: string,
   output: IntakeAgentOutput,
+  collaborationPanel?: CollaborationPanel,
 ) {
   const store = getStore();
   const previous = store.get(sessionId);
@@ -93,6 +100,16 @@ export function saveSessionOutput(
     },
   ].slice(-16);
 
+  const nextProjectRecord = collaborationPanel
+    ? updateProjectCollaborationRecord({
+        sessionId,
+        panel: collaborationPanel,
+        output,
+        previous: previous?.projectRecord,
+        now,
+      })
+    : previous?.projectRecord;
+
   store.set(sessionId, {
     id: sessionId,
     createdAt: previous?.createdAt ?? Date.now(),
@@ -100,6 +117,7 @@ export function saveSessionOutput(
     state: output.state,
     history: nextHistory,
     lastOutput: output,
+    projectRecord: nextProjectRecord,
   });
 
   return output;

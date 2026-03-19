@@ -33,13 +33,15 @@ export async function POST(request: Request) {
       currentState,
       record?.history ?? [],
     );
-    saveSessionOutput(sessionId, message, result);
     const collaborationPanel = buildCollaborationPanel(result);
+    saveSessionOutput(sessionId, message, result, collaborationPanel);
+    const savedRecord = getSessionRecord(sessionId);
 
     return NextResponse.json({
       sessionId,
       handoffUrl: result.lab_handoff ? `/handoff/${sessionId}` : null,
       collaboration_panel: collaborationPanel,
+      project_record: savedRecord?.projectRecord ?? null,
       ...result,
     });
   } catch (error) {

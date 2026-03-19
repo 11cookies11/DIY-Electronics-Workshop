@@ -27,5 +27,6 @@ export async function GET(request: Request) {
     updatedAt: record.updatedAt,
     state: record.state,
     result: record.lastOutput ?? null,
+    projectRecord: record.projectRecord ?? null,
   });
 }
