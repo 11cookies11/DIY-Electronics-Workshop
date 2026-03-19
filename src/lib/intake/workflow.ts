@@ -1968,6 +1968,24 @@ export async function runIntakeWorkflow(
 
   const { confirmed, reasoningTrace, reasoning, suggestions, reminderBundle } =
     await deriveRequirementContext(request);
+  const {
+    previewDraft,
+    llmNativeDecision,
+    unknowns,
+    memory,
+    route,
+    orchestration,
+    risks,
+    requirementSummary,
+    labHandoff,
+  } = await deriveRuntimeContext({
+    request,
+    confirmed,
+    reasoningTrace,
+    reasoning,
+    reminderBundle,
+  });
+  /*
   const guardrailUnknowns = computeUnknowns(confirmed);
   const baselineUnknowns = unique([...guardrailUnknowns, ...reasoning.mustConfirm]);
   const previewDraft = mapConfirmedToPreviewDraft(confirmed);
@@ -2047,6 +2065,7 @@ export async function runIntakeWorkflow(
     reasoningTrace,
     previewDraft,
   );
+  */
   const { workflowState, nextAction, exposedPreviewDraft, exposedLabHandoff } =
     resolveWorkflowControl({
       message,
@@ -2076,6 +2095,7 @@ export async function runIntakeWorkflow(
     llmNativeDecision,
   });
 
+  /*
   const legacyStructuredOutput = buildStructuredIntakeOutput({
     workflowState,
     confirmed,
@@ -2107,6 +2127,9 @@ export async function runIntakeWorkflow(
     }),
   });
 
+  });
+  */
+
   const structuredOutput = buildWorkflowStructuredOutput({
     message,
     workflowState,
@@ -2127,7 +2150,6 @@ export async function runIntakeWorkflow(
     reasoningTrace,
   });
 
-  void legacyStructuredOutput;
 
   return {
     customer_reply: customerReply,
