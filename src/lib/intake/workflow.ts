@@ -1666,12 +1666,14 @@ function resolveWorkflowControl(args: {
   llmNativeDecision?: LlmNativeDecision;
   orchestration: ReplyOrchestration;
 }) {
-  const forcedConversational = args.orchestration.transitionMode === "stay_conversational";
   const readiness = decideReadinessFlow({
     message: args.message,
     previewDraft: args.previewDraft,
     labHandoff: args.labHandoff,
-    state: forcedConversational ? { ...args.state, workflow_state: "collecting" } : args.state,
+    state:
+      args.orchestration.transitionMode === "stay_conversational"
+        ? { ...args.state, workflow_state: "collecting" }
+        : args.state,
     unknowns: args.unknowns,
     llmDecision: args.llmNativeDecision
       ? {
@@ -1682,12 +1684,27 @@ function resolveWorkflowControl(args: {
         }
       : undefined,
   });
+  const deriveDecisionRequestedAction = (): IntakeNextAction | undefined => {
+    const decision = args.llmNativeDecision;
+    if (!decision) return undefined;
+    if (decision.next_action !== "ask_more") return decision.next_action;
+    if (decision.agent_stage === "preview_commit" && decision.preview_candidate_ready) {
+      return "generate_preview";
+    }
+    if (decision.agent_stage === "handoff_commit" && decision.handoff_candidate_ready) {
+      return "prepare_handoff";
+    }
+    return undefined;
+  };
+  const forcedConversational =
+    args.orchestration.transitionMode === "stay_conversational" &&
+    readiness.nextAction === "ask_more";
 
   const workflowState: IntakeAgentState["workflow_state"] = forcedConversational
     ? "collecting"
     : readiness.workflowState;
   const nextAction = validateLlmNextAction({
-    requested: forcedConversational ? "ask_more" : args.llmNativeDecision?.next_action,
+    requested: forcedConversational ? "ask_more" : deriveDecisionRequestedAction(),
     previewDraft: args.previewDraft,
     handoffCandidate: args.labHandoff,
     fallback: forcedConversational ? "ask_more" : readiness.nextAction,
