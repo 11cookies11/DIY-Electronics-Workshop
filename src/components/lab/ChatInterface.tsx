@@ -402,6 +402,7 @@ export function ChatInterface({
     if (id === "front_desk") return "前台接待";
     if (id === "hardware_procurement") return "硬件采购";
     if (id === "software_lead") return "软件负责人";
+    if (id === "delivery_lead") return "交付 Agent";
     return id;
   }
 

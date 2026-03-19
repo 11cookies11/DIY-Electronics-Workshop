@@ -1,7 +1,11 @@
 import { isSecondMeChatConfigured, requestSecondMeStructuredReply } from "./secondme-client";
 import type { IntakeAgentOutput } from "./types";
 
-export type RoleplayAgentId = "front_desk" | "hardware_procurement" | "software_lead";
+export type RoleplayAgentId =
+  | "front_desk"
+  | "hardware_procurement"
+  | "software_lead"
+  | "delivery_lead";
 export type RoleplayAgentStatus = "listening" | "drafting" | "ready";
 export type CollaborationStage =
   | "front_desk_intake"
@@ -72,7 +76,7 @@ const FRONT_DESK_PROFILE: RoleplayAgentProfile = {
   capabilities: [
     "理解用户自然表达并提炼需求",
     "组织 preview 与 handoff 节点",
-    "给采购与软件负责人分发同一份上下文",
+    "给采购与研发团队分发同一份上下文",
   ],
   boundaries: ["不直接执行采购下单", "不直接替代研发负责人做技术决策"],
 };
@@ -111,10 +115,28 @@ const SOFTWARE_LEAD_PROFILE: RoleplayAgentProfile = {
   ],
 };
 
+const DELIVERY_LEAD_PROFILE: RoleplayAgentProfile = {
+  id: "delivery_lead",
+  name: "交付 Agent",
+  role: "排期/里程碑/交付节奏",
+  identity: "你是交付协调负责人，负责把采购与研发节奏整合成可执行交付计划。",
+  mode: "roleplay",
+  capabilities: [
+    "给出里程碑拆分与阶段目标",
+    "对齐采购、软件开发与联调窗口",
+    "识别影响演示与交付的关键依赖",
+  ],
+  boundaries: [
+    "当前阶段为角色扮演，不直接触发外部项目管理系统",
+    "硬件前提为模块化拼装，不展开自研硬件开发路径",
+  ],
+};
+
 const ALL_PROFILES: RoleplayAgentProfile[] = [
   FRONT_DESK_PROFILE,
   PROCUREMENT_PROFILE,
   SOFTWARE_LEAD_PROFILE,
+  DELIVERY_LEAD_PROFILE,
 ];
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -188,6 +210,26 @@ function buildSoftwareLeadPreview(output: IntakeAgentOutput) {
     : "先沉淀功能与交互边界，再拆分软件模块、接口清单与迭代里程碑。";
 }
 
+function buildDeliveryPreview(output: IntakeAgentOutput) {
+  const timeline = output.confirmed.timeline;
+  const unknowns = output.unknowns.slice(0, 2).join("、");
+  const hasPreview = output.state.workflow_state === "preview_generated";
+
+  if (timeline) {
+    return `先按「${timeline}」做里程碑倒排，并同步采购与软件联调窗口。${
+      unknowns ? `待补充：${unknowns}` : ""
+    }`;
+  }
+
+  if (hasPreview) {
+    return `预览方向已确认，可先定义 P0 演示里程碑，再拆采购与开发并行节奏。${
+      unknowns ? `待补充：${unknowns}` : ""
+    }`;
+  }
+
+  return "先定义演示目标日期与验收标准，再把采购、开发、联调整合到同一交付节奏。";
+}
+
 function buildFallbackPanel(output: IntakeAgentOutput): CollaborationPanel {
   const status = deriveFallbackStatus(output);
   const stage = deriveFallbackStage(output);
@@ -215,22 +257,36 @@ function buildFallbackPanel(output: IntakeAgentOutput): CollaborationPanel {
         objective: "根据功能与交互约束，提前给出软件团队可落地的开发分解。",
         handoff_preview: buildSoftwareLeadPreview(output),
       },
+      {
+        id: "delivery_lead",
+        name: DELIVERY_LEAD_PROFILE.name,
+        role: DELIVERY_LEAD_PROFILE.role,
+        mode: "roleplay",
+        status,
+        objective: "根据采购与研发节奏，提前收敛演示与交付里程碑。",
+        handoff_preview: buildDeliveryPreview(output),
+      },
     ],
     conversation: [
       {
         from: "front_desk",
-        to: ["hardware_procurement", "software_lead"],
+        to: ["hardware_procurement", "software_lead", "delivery_lead"],
         message: `我先同步当前方向：${output.requirement_summary}`,
       },
       {
         from: "hardware_procurement",
-        to: ["front_desk", "software_lead"],
+        to: ["front_desk", "software_lead", "delivery_lead"],
         message: buildProcurementPreview(output),
       },
       {
         from: "software_lead",
-        to: ["front_desk", "hardware_procurement"],
+        to: ["front_desk", "hardware_procurement", "delivery_lead"],
         message: buildSoftwareLeadPreview(output),
+      },
+      {
+        from: "delivery_lead",
+        to: ["front_desk", "hardware_procurement", "software_lead"],
+        message: buildDeliveryPreview(output),
       },
     ],
   };
@@ -240,7 +296,7 @@ function buildCollabSystemPrompt() {
   return [
     "你是一个多 Agent 协作导演，负责为 Demo 生成“像真人一样”的跨角色沟通记录。",
     "输出必须是 JSON，不要额外解释。",
-    "目标不是模板化流程，而是表达真实协作：前台、采购、软件负责人互相传达上下文、提问、补充、确认。",
+    "目标不是模板化流程，而是表达真实协作：前台、采购、软件负责人、交付负责人互相传达上下文、提问、补充、确认。",
     "注意边界：当前硬件方案是模块化拼装，不涉及自研硬件开发。",
     "请生成自然口语化的中文，不要写成系统日志口吻。",
   ].join("\n");
@@ -265,7 +321,7 @@ function buildCollabUserPrompt(output: IntakeAgentOutput) {
         ],
         agents: [
           {
-            id: "hardware_procurement | software_lead",
+            id: "hardware_procurement | software_lead | delivery_lead",
             status: "listening | drafting | ready",
             objective: "string",
             handoff_preview: "string",
@@ -273,14 +329,14 @@ function buildCollabUserPrompt(output: IntakeAgentOutput) {
         ],
         conversation: [
           {
-            from: "front_desk | hardware_procurement | software_lead",
-            to: ["front_desk | hardware_procurement | software_lead"],
+            from: "front_desk | hardware_procurement | software_lead | delivery_lead",
+            to: ["front_desk | hardware_procurement | software_lead | delivery_lead"],
             message: "自然语言沟通内容",
           },
         ],
       },
       rules: [
-        "conversation 给 2-4 条即可，像团队内部短沟通，不要死板。",
+        "conversation 给 2-5 条即可，像团队内部短沟通，不要死板。",
         "handoff_preview 用自然短句，不是字段罗列。",
         "如果信息不全，可以在 message 里体现“建议先补什么”。",
       ],
@@ -300,7 +356,12 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
   const byId = new Map(
     llmAgents
       .map((agent) => {
-        const id = agent.id === "hardware_procurement" || agent.id === "software_lead" ? agent.id : null;
+        const id =
+          agent.id === "hardware_procurement" ||
+          agent.id === "software_lead" ||
+          agent.id === "delivery_lead"
+            ? agent.id
+            : null;
         if (!id) return null;
         const fallbackAgent = fallback.agents.find((item) => item.id === id);
         if (!fallbackAgent) return null;
@@ -309,7 +370,10 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
           {
             ...fallbackAgent,
             status: asStatus(agent.status),
-            objective: typeof agent.objective === "string" && agent.objective.trim() ? agent.objective : fallbackAgent.objective,
+            objective:
+              typeof agent.objective === "string" && agent.objective.trim()
+                ? agent.objective
+                : fallbackAgent.objective,
             handoff_preview:
               typeof agent.handoff_preview === "string" && agent.handoff_preview.trim()
                 ? agent.handoff_preview
@@ -324,14 +388,20 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
   const conversation = conversationRaw
     .map((turn) => {
       const from: RoleplayAgentId | null =
-        turn.from === "front_desk" || turn.from === "hardware_procurement" || turn.from === "software_lead"
+        turn.from === "front_desk" ||
+        turn.from === "hardware_procurement" ||
+        turn.from === "software_lead" ||
+        turn.from === "delivery_lead"
           ? turn.from
           : null;
       const to =
         Array.isArray(turn.to) && turn.to.length
           ? turn.to.filter(
               (item): item is RoleplayAgentId =>
-                item === "front_desk" || item === "hardware_procurement" || item === "software_lead",
+                item === "front_desk" ||
+                item === "hardware_procurement" ||
+                item === "software_lead" ||
+                item === "delivery_lead",
             )
           : [];
       const message = typeof turn.message === "string" ? turn.message.trim() : "";
@@ -341,7 +411,7 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
       return { from, to, message } satisfies CollaborationConversationTurn;
     })
     .filter(Boolean)
-    .slice(0, 6) as CollaborationConversationTurn[];
+    .slice(0, 8) as CollaborationConversationTurn[];
 
   return {
     ...fallback,
@@ -353,7 +423,6 @@ function sanitizePanelFromLlm(payload: unknown, fallback: CollaborationPanel): C
 
 export async function buildCollaborationPanel(output: IntakeAgentOutput): Promise<CollaborationPanel> {
   const fallback = buildFallbackPanel(output);
-
   if (!isSecondMeChatConfigured()) {
     return fallback;
   }
@@ -414,6 +483,7 @@ export function updateProjectCollaborationRecord(args: {
 
   const procurement = args.panel.agents.find((agent) => agent.id === "hardware_procurement");
   const softwareLead = args.panel.agents.find((agent) => agent.id === "software_lead");
+  const deliveryLead = args.panel.agents.find((agent) => agent.id === "delivery_lead");
 
   return {
     session_id: args.sessionId,
@@ -424,6 +494,7 @@ export function updateProjectCollaborationRecord(args: {
     agent_status: {
       hardware_procurement: procurement?.status ?? "listening",
       software_lead: softwareLead?.status ?? "listening",
+      delivery_lead: deliveryLead?.status ?? "listening",
     },
     timeline: history.slice(-50),
   };
