@@ -165,6 +165,20 @@ const scenarios = [
       },
     ],
   },
+  {
+    name: "unknowns_should_merge_interaction_aliases",
+    steps: [
+      "我想做一个手持设备",
+      "家里用",
+    ],
+    assertions: [
+      {
+        step: 0,
+        unknownIncludes: ["主要交互方式"],
+        unknownNotIncludes: ["主交互方式", "按键或触屏交互"],
+      },
+    ],
+  },
 ];
 
 function rewriteSpecifiers(sourceText) {
@@ -248,6 +262,26 @@ function assertScenarioTurn(result, assertion, scenarioName) {
       if (summary.buttonPreferences.includes(token)) {
         throw new Error(
           `${scenarioName}: expected button preferences to exclude "${token}" at step ${assertion.step}, got ${summary.buttonPreferences.join(", ")}`,
+        );
+      }
+    }
+  }
+
+  if (assertion.unknownIncludes?.length) {
+    for (const token of assertion.unknownIncludes) {
+      if (!summary.unknowns.includes(token)) {
+        throw new Error(
+          `${scenarioName}: expected unknowns to include "${token}" at step ${assertion.step}, got ${summary.unknowns.join(", ")}`,
+        );
+      }
+    }
+  }
+
+  if (assertion.unknownNotIncludes?.length) {
+    for (const token of assertion.unknownNotIncludes) {
+      if (summary.unknowns.includes(token)) {
+        throw new Error(
+          `${scenarioName}: expected unknowns to exclude "${token}" at step ${assertion.step}, got ${summary.unknowns.join(", ")}`,
         );
       }
     }

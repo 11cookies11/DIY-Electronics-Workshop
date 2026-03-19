@@ -50,6 +50,17 @@ function unique(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+function canonicalizeUnknownField(field: string) {
+  if (field.includes("交互")) {
+    return "主要交互方式";
+  }
+  return field;
+}
+
+function normalizeUnknownFields(fields: string[]) {
+  return unique(fields.map(canonicalizeUnknownField));
+}
+
 function mergeArrays(left?: string[], right?: string[]) {
   return unique([...(left ?? []), ...(right ?? [])]);
 }
@@ -1667,9 +1678,11 @@ export async function runIntakeWorkflow(
   const llmNativeUnknowns = llmNativeDecision?.unknowns.length
     ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
     : slotAssessmentUnknowns;
-  const unknowns = llmNativeDecision
-    ? unique([...llmNativeUnknowns, ...guardrailUnknowns])
-    : baselineUnknowns;
+  const unknowns = normalizeUnknownFields(
+    llmNativeDecision
+      ? unique([...llmNativeUnknowns, ...guardrailUnknowns])
+      : baselineUnknowns,
+  );
   const memory = analyzeConversationMemory({
     message,
     history,
