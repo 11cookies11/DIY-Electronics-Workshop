@@ -283,6 +283,99 @@ function shouldAgentSpeakInStage(agent: RoleplayAgentId, stage: CollaborationSta
   return true;
 }
 
+function shortList(values: string[] | undefined, count = 2) {
+  return values?.slice(0, count).join(" / ");
+}
+
+function buildProcurementFreeform(output: IntakeAgentOutput) {
+  const devices = shortList(output.confirmed.target_devices, 3);
+  const power = shortList(output.confirmed.power, 2);
+  const ports = shortList(output.confirmed.ports, 2);
+  const unknowns = output.unknowns.slice(0, 2).join("、");
+  const known = [
+    devices ? `目标设备 ${devices}` : null,
+    power ? `供电 ${power}` : null,
+    ports ? `接口 ${ports}` : null,
+  ]
+    .filter(Boolean)
+    .join("，");
+
+  if (!known) {
+    return "我先按模块化思路做一版通用 BOM，先保证器件可买、可替代、可快速到货。";
+  }
+
+  return `我先按已知条件推进采购侧方案：${known}。我会同步两档器件组合，给软件侧和前台一起看取舍${unknowns ? `；还缺 ${unknowns}` : ""}。`;
+}
+
+function buildSoftwareFreeform(output: IntakeAgentOutput) {
+  const features = shortList(output.confirmed.core_features, 3);
+  const interaction = output.confirmed.interaction_layout ?? output.confirmed.screen;
+  const connectivity = shortList(output.confirmed.connectivity, 2);
+  const unknowns = output.unknowns.slice(0, 2).join("、");
+  const known = [
+    features ? `功能 ${features}` : null,
+    interaction ? `交互 ${interaction}` : null,
+    connectivity ? `连接 ${connectivity}` : null,
+  ]
+    .filter(Boolean)
+    .join("，");
+
+  if (!known) {
+    return "我先按功能、设备接入、状态同步三条线并行拆任务，后续根据采购结果收口接口。";
+  }
+
+  return `软件侧可先落这版：${known}。我会先把可演示路径打通，再逐步补齐边界${unknowns ? `；还需确认 ${unknowns}` : ""}。`;
+}
+
+function buildDeliveryFreeform(output: IntakeAgentOutput) {
+  const timeline = output.confirmed.timeline || "T+14天（两周后）";
+  const unknowns = output.unknowns.slice(0, 2).join("、");
+  return `我先按「${timeline}」倒排里程碑，先保演示可交付，再收敛长期版本。麻烦留一个联系方式（微信或邮箱），我按关键节点同步进度${unknowns ? `；当前待补：${unknowns}` : ""}。`;
+}
+
+function buildFreeformConversation(output: IntakeAgentOutput, stage: CollaborationStage) {
+  const turns: CollaborationConversationTurn[] = [];
+  turns.push({
+    from: "front_desk",
+    to: ["hardware_procurement", "software_lead", "delivery_lead"],
+    message: `我先同步用户诉求：${output.requirement_summary}。大家自由补充可落地建议，我来继续和用户对齐。`,
+  });
+
+  if (shouldAgentSpeakInStage("hardware_procurement", stage)) {
+    turns.push({
+      from: "hardware_procurement",
+      to: ["front_desk", "software_lead", "delivery_lead"],
+      message: buildProcurementFreeform(output),
+    });
+  }
+
+  if (shouldAgentSpeakInStage("software_lead", stage)) {
+    turns.push({
+      from: "software_lead",
+      to: ["front_desk", "hardware_procurement", "delivery_lead"],
+      message: buildSoftwareFreeform(output),
+    });
+  }
+
+  if (shouldAgentSpeakInStage("delivery_lead", stage)) {
+    turns.push({
+      from: "delivery_lead",
+      to: ["front_desk", "hardware_procurement", "software_lead"],
+      message: buildDeliveryFreeform(output),
+    });
+  }
+
+  if (stage !== "front_desk_intake") {
+    turns.push({
+      from: "front_desk",
+      to: ["hardware_procurement", "software_lead", "delivery_lead"],
+      message: "收到，我会把你们的建议翻译成用户听得懂的选项，尽快收齐缺口并回传。",
+    });
+  }
+
+  return turns;
+}
+
 function buildFallbackConversation(output: IntakeAgentOutput, stage: CollaborationStage) {
   const turns: CollaborationConversationTurn[] = [
     {
@@ -358,7 +451,7 @@ function buildFallbackPanel(output: IntakeAgentOutput): CollaborationPanel {
         handoff_preview: buildDeliveryPreview(output),
       },
     ],
-    conversation: buildFallbackConversation(output, stage),
+    conversation: buildFreeformConversation(output, stage),
   };
 }
 

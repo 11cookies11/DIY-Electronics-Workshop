@@ -132,6 +132,9 @@ export function ChatInterface({
   const { mode } = useTheme();
   const isDark = mode === "dark";
   const showDebug = process.env.NEXT_PUBLIC_INTAKE_DEBUG === "1";
+  const showCollaborationPanel =
+    process.env.NEXT_PUBLIC_SHOW_COLLAB_PANEL === "1" ||
+    process.env.NODE_ENV === "development";
   const visitorName = useMemo(() => {
     const candidate =
       (userInfo?.nickname as string | undefined) ??
@@ -1077,7 +1080,7 @@ export function ChatInterface({
                         </div>
                       </section>
 
-                      {collaborationPanel && false ? (
+                      {collaborationPanel && showCollaborationPanel ? (
                         <section
                           className={`rounded-sm border p-3 ${
                             isDark
