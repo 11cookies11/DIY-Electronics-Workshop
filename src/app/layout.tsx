@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { DesktopScaleShell } from "@/components/lab/DesktopScaleShell";
 
 export const metadata: Metadata = {
   title: "SecondMe Hello World",
@@ -14,7 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body><DesktopScaleShell>{children}</DesktopScaleShell></body>
+      <body>{children}</body>
     </html>
   );
 }
