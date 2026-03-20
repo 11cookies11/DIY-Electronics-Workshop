@@ -157,7 +157,7 @@ export function LabScene({
       }`}
     >
       <Canvas shadows dpr={[1, 2]} onPointerMissed={() => setSelectedNodeId(null)}>
-        <PerspectiveCamera makeDefault position={[4.3, 3.7, 5.2]} fov={34} />
+        <PerspectiveCamera makeDefault position={[3.8, 3.2, 4.6]} fov={34} />
         <OrbitControls
           enableDamping
           dampingFactor={0.05}
@@ -196,7 +196,7 @@ export function LabScene({
           position={[0, -4, 0]}
         />
         <Suspense fallback={null}>
-          <group scale={0.015}>
+          <group scale={0.018}>
             <SceneRenderer
               scene={activeScene}
               selectedNodeId={selectedNodeId}

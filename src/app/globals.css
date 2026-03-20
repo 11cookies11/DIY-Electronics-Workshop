@@ -32,6 +32,21 @@ body {
   min-height: 100vh;
 }
 
+.app-zoom-shell {
+  width: calc(100vw / var(--desktop-ui-scale, 1));
+  height: calc(100vh / var(--desktop-ui-scale, 1));
+  transform: scale(var(--desktop-ui-scale, 1));
+  transform-origin: top left;
+}
+
+@media (max-width: 1024px) {
+  .app-zoom-shell {
+    width: 100vw;
+    height: 100vh;
+    transform: none;
+  }
+}
+
 a {
   color: inherit;
   text-decoration: none;
