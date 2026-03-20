@@ -2,6 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForToken, storeSecondMeTokens } from "@/lib/secondme";
 import { sanitizeReturnPath } from "@/lib/secondme-auth-guard";
 
+function buildAppUrl(pathname: string, request: NextRequest) {
+  const configuredRedirectUri = process.env.SECONDME_REDIRECT_URI;
+
+  if (configuredRedirectUri) {
+    const configuredBaseUrl = new URL(configuredRedirectUri);
+    return new URL(pathname, configuredBaseUrl);
+  }
+
+  return new URL(pathname, request.url);
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   const error = request.nextUrl.searchParams.get("error");
@@ -9,20 +20,20 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     return NextResponse.redirect(
-      new URL(`/?error=${encodeURIComponent(error)}`, request.url),
+      buildAppUrl(`/?error=${encodeURIComponent(error)}`, request),
     );
   }
 
   if (!code) {
     return NextResponse.redirect(
-      new URL("/?error=missing_code", request.url),
+      buildAppUrl("/?error=missing_code", request),
     );
   }
 
   try {
     const tokenData = await exchangeCodeForToken(code);
     await storeSecondMeTokens(tokenData);
-    const targetUrl = new URL(returnTo, request.url);
+    const targetUrl = buildAppUrl(returnTo, request);
     targetUrl.searchParams.set("connected", "1");
     return NextResponse.redirect(targetUrl);
   } catch (callbackError) {
@@ -30,7 +41,7 @@ export async function GET(request: NextRequest) {
       callbackError instanceof Error ? callbackError.message : "callback_failed";
 
     return NextResponse.redirect(
-      new URL(`/?error=${encodeURIComponent(message)}`, request.url),
+      buildAppUrl(`/?error=${encodeURIComponent(message)}`, request),
     );
   }
 }
