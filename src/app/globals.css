@@ -2,6 +2,7 @@
 
 :root {
   color-scheme: light;
+  --app-ui-zoom: 0.8;
   --background: #f4efe5;
   --foreground: #1b2230;
   --muted: #5e6675;
@@ -27,6 +28,17 @@ body {
     linear-gradient(180deg, #fffaf2 0%, var(--background) 100%);
   color: var(--foreground);
   font-family: Georgia, "Times New Roman", serif;
+}
+
+/* Keep desktop default visual density close to browser 80% zoom. */
+html {
+  zoom: var(--app-ui-zoom);
+}
+
+@media (max-width: 1024px) {
+  html {
+    zoom: 1;
+  }
 }
 
 body {
