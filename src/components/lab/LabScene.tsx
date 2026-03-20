@@ -157,7 +157,7 @@ export function LabScene({
       }`}
     >
       <Canvas shadows dpr={[1, 2]} onPointerMissed={() => setSelectedNodeId(null)}>
-        <PerspectiveCamera makeDefault position={[4.05, 3.35, 4.95]} fov={34} />
+        <PerspectiveCamera makeDefault position={[3.8, 3.2, 4.6]} fov={34} />
         <OrbitControls
           enableDamping
           dampingFactor={0.05}
@@ -196,7 +196,7 @@ export function LabScene({
           position={[0, -4, 0]}
         />
         <Suspense fallback={null}>
-          <group scale={0.017}>
+          <group scale={0.018}>
             <SceneRenderer
               scene={activeScene}
               selectedNodeId={selectedNodeId}
@@ -271,10 +271,9 @@ export function LabScene({
           </div>
 
           <div
-            className="pointer-events-auto fixed bottom-6 z-[70]"
-            style={{
-              right: isChatMinimized ? "6rem" : "calc(min(94vw, 420px) + 9rem)",
-            }}
+            className={`pointer-events-auto fixed bottom-6 z-[70] ${
+              isChatMinimized ? "right-24" : "right-[22rem] sm:right-[26.5rem]"
+            }`}
           >
             <button
               onClick={() => {
