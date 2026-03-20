@@ -34,6 +34,14 @@ Language: English | [简体中文](README.zh-CN.md)
 - Lightweight user/account and interaction persistence (SQLite)
 - Second Me OAuth + API integration, with optional DeepSeek LLM-first mode
 
+## Prior Validation
+
+This project is not starting from zero. Our earlier repository
+[EmbeddedLoopDemo](https://github.com/11cookies11/EmbeddedLoopDemo)
+serves as a proof point that an embedded AI-agent closed loop is feasible in
+practice. DIY Electronics Workshop builds on that validation and pushes the
+idea further into a multi-agent, user-facing workshop experience.
+
 ## Tech Stack
 
 - Next.js 16 (App Router)
