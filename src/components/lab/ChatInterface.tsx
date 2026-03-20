@@ -516,7 +516,7 @@ export function ChatInterface({
     <div
       data-chat-interface-root="true"
       className={`pointer-events-none fixed bottom-6 right-6 z-50 transition-all duration-300 ${
-        isMinimized ? "h-12 w-12" : "w-80 sm:w-96"
+        isMinimized ? "h-12 w-12" : "w-[min(94vw,420px)] xl:w-[440px]"
       }`}
     >
       <AnimatePresence mode="wait">
@@ -541,7 +541,7 @@ export function ChatInterface({
             initial={{ y: 20, opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 20, opacity: 0, scale: 0.95 }}
-            className={`pointer-events-auto flex h-[580px] flex-col overflow-hidden rounded-sm border backdrop-blur-2xl ${
+            className={`pointer-events-auto flex h-[min(78vh,640px)] min-h-[520px] flex-col overflow-hidden rounded-sm border backdrop-blur-2xl ${
               isDark
                 ? "border-white/10 bg-black/88 shadow-[0_32px_64px_rgba(0,0,0,0.5)]"
                 : "border-slate-200 bg-[rgba(255,255,255,0.94)] shadow-[0_28px_70px_rgba(148,163,184,0.35)]"
