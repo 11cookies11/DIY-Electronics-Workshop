@@ -34,8 +34,8 @@ body {
 }
 
 .app-zoom-shell {
-  width: 100vw;
-  height: 100vh;
+  width: calc(100vw / var(--desktop-ui-scale, 1));
+  height: calc(100vh / var(--desktop-ui-scale, 1));
   overflow: hidden;
   zoom: var(--desktop-ui-scale, 1);
 }
