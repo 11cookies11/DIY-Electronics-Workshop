@@ -992,6 +992,205 @@ function deriveConfirmed(
   };
 }
 
+function inferDeviceTypeV2(message: string) {
+  if (/(手表|穿戴)/.test(message)) return "智能手表";
+  if (/(遥控器|红外)/.test(message)) return "红外遥控器";
+  if (/(喂食器|喂宠|宠物喂食)/.test(message)) return "喂食器控制终端";
+  if (/(空气质量|监测仪|检测仪|噪声提示|噪声计|分贝)/.test(message)) return "桌面监测设备";
+  if (/(白噪音|助眠机|天气时钟|车库中控|露营灯|智能灯|门铃终端|状态牌)/.test(message)) {
+    return "桌面设备";
+  }
+  if (/(桌面|桌上|会议室|教室|车库|厨房|门店)/.test(message)) return "桌面设备";
+  if (/(音箱|音响|speaker)/i.test(message)) return "蓝牙音箱";
+  if (/(手持|便携|随身)/.test(message)) return "手持设备";
+  return undefined;
+}
+
+function inferUseCaseV2(message: string) {
+  return (
+    message.match(/用于([^，。；]+)/)?.[1]?.trim() ??
+    message.match(/给([^，。；]+)用/)?.[1]?.trim() ??
+    message.match(/放在([^，。；]+)/)?.[1]?.trim() ??
+    message.match(/放([^，。；]+)(?:里|中|上)/)?.[1]?.trim() ??
+    (/(家里|家庭|客厅|卧室)/.test(message) ? "家庭环境" : undefined) ??
+    (/(会议室|教室|办公室|门店)/.test(message) ? "办公或公共空间" : undefined) ??
+    (/(露营|户外|外出)/.test(message) ? "户外环境" : undefined) ??
+    (/(车库)/.test(message) ? "车库环境" : undefined)
+  );
+}
+
+function extractDeviceMentionsV2(text: string) {
+  const controlContext = /(控制|遥控|开关|调节|联动|家电)/.test(text);
+  const explicitSingleDeviceReply = /^(电视|tv|空调|智能灯|灯|投影|投影仪|风扇|机顶盒)[\s，,。!?？]*$/i.test(
+    text.trim(),
+  );
+  if (!controlContext && !explicitSingleDeviceReply) return [];
+  return unique(
+    collectKeywords(text, [
+      [/(电视|tv)/i, "电视"],
+      [/(空调)/, "空调"],
+      [/(智能灯|灯光|灯)/, "智能灯"],
+      [/(投影|投影仪)/, "投影仪"],
+      [/(风扇)/, "风扇"],
+      [/(机顶盒)/, "机顶盒"],
+    ]),
+  );
+}
+
+function extractButtonPreferencesV2(text: string) {
+  return unique(
+    collectKeywords(text, [
+      [/(电源|开关机)/, "电源键"],
+      [/(音量)/, "音量键"],
+      [/(切换|模式|频道)/, "切换键"],
+      [/(返回)/, "返回键"],
+      [/(主页|home)/i, "主页键"],
+      [/(确认|ok)/i, "确认键"],
+      [/(方向|上下左右)/, "方向键"],
+    ]),
+  );
+}
+
+function deriveConfirmedV2(
+  message: string,
+  current: ConfirmedRequirement,
+  _history: ConversationTurn[] = [],
+): ConfirmedRequirement {
+  const signals = parseConversationSignals(message);
+  const extractionText = message;
+
+  const connectivity = collectKeywords(extractionText, [
+    [/蓝牙/i, "蓝牙"],
+    [/(wi-?fi|wifi)/i, "Wi-Fi"],
+    [/(4g|lte)/i, "4G"],
+    [/gps/i, "GPS"],
+    [/(zigbee|thread|matter)/i, "低功耗组网"],
+  ]);
+  const sensors = collectKeywords(extractionText, [
+    [/imu/i, "IMU"],
+    [/温度/, "温度传感器"],
+    [/湿度/, "湿度传感器"],
+    [/压力/, "压力传感器"],
+    [/噪声|分贝|麦克风/, "噪声传感器"],
+    [/(摄像头|相机)/, "摄像头"],
+    [/(门磁|开关门|门状态)/, "门磁传感器"],
+    [/co2/i, "CO2 传感器"],
+    [/(pm2\.?5|颗粒物)/i, "颗粒物传感器"],
+  ]);
+  const controls = collectKeywords(extractionText, [
+    [/(按键|按钮)/, "按钮"],
+    [/旋钮/, "旋钮"],
+    [/(触控|触摸|触屏)/, "触控"],
+    [/(语音|声控)/, "语音"],
+  ]);
+  const ports = collectKeywords(extractionText, [
+    [/(usb-?c|type-?c)/i, "USB-C"],
+    [/(音频|耳机)/, "音频口"],
+    [/(电源口|dc|外接供电|插电)/i, "电源口"],
+    [/(网口|rj45)/i, "RJ45"],
+  ]);
+  const power = collectKeywords(extractionText, [
+    [/(电池|充电|磁吸充电)/, "电池供电"],
+    [/(外接供电|适配器|插电)/, "外接供电"],
+  ]);
+  const targetDevices = extractDeviceMentionsV2(extractionText);
+  const buttonPreferences = extractButtonPreferencesV2(extractionText);
+  const coreFeatures = collectKeywords(extractionText, [
+    [/(显示|屏幕|状态显示)/, "显示"],
+    [/(遥控|红外)/, "红外控制"],
+    [/(监测|检测|采集)/, "数据采集"],
+    [/(心率|血氧|睡眠|活动提醒|健康)/, "健康监测"],
+    [/(pm2\.?5|co2|温湿度|空气质量)/i, "空气监测"],
+    [/(定时喂食|喂食|出粮)/, "定时喂食"],
+    [/(远程|app|手机查看|状态查看)/i, "远程状态查看"],
+    [/(联网|连接|同步手机)/, "无线连接"],
+    [/(播放|音频|音响|白噪音|助眠)/, "音频播放"],
+    [/(亮度|灯光|照明|sos|闪烁)/i, "照明与告警"],
+    [/(天气|时钟|温湿度显示)/, "环境信息显示"],
+    [/(门磁|开门|车库门状态)/, "门禁状态监测"],
+    [/(噪声|分贝|太吵|安静提示)/, "噪声监测提醒"],
+  ]);
+
+  const screenCandidate =
+    /(屏幕|显示|触控|触摸|触屏)/.test(extractionText)
+      ? /(触控|触摸|触屏)/.test(extractionText)
+        ? "触控屏"
+        : "显示屏"
+      : undefined;
+  const normalizedControls =
+    screenCandidate === "触控屏" ? mergeArrays(controls, ["触控"]) : controls;
+
+  const provisionalRequirement: ConfirmedRequirement = {
+    ...current,
+    use_case: current.use_case ?? inferUseCaseV2(extractionText),
+    target_users:
+      current.target_users ??
+      (/(老人|孩子|家人|家庭)/.test(extractionText)
+        ? "家庭成员"
+        : /(团队|同事|会议室|教室)/.test(extractionText)
+          ? "团队内部"
+          : current.target_users),
+    target_devices: mergeOrReplaceArrays(current.target_devices, targetDevices, signals.isCorrection),
+    screen: preferOverride(current.screen, screenCandidate, signals.isCorrection),
+    controls: mergeOrReplaceArrays(current.controls, normalizedControls, signals.isCorrection),
+    button_preferences: mergeOrReplaceArrays(
+      current.button_preferences,
+      buttonPreferences,
+      signals.isCorrection,
+    ),
+    sensors: mergeOrReplaceArrays(current.sensors, sensors, signals.isCorrection),
+    connectivity: mergeOrReplaceArrays(current.connectivity, connectivity, signals.isCorrection),
+    ports: mergeOrReplaceArrays(current.ports, ports, signals.isCorrection),
+    power: mergeOrReplaceArrays(current.power, power, signals.isCorrection),
+    core_features: mergeArrays(
+      current.core_features,
+      targetDevices.length ? [...coreFeatures, "红外控制"] : coreFeatures,
+    ),
+    size: current.size ?? extractApproxSize(extractionText),
+    placement:
+      current.placement ??
+      (/(茶几)/.test(extractionText)
+        ? "茶几"
+        : /(客厅)/.test(extractionText)
+          ? "客厅"
+          : /(会议室)/.test(extractionText)
+            ? "会议室"
+            : /(教室)/.test(extractionText)
+              ? "教室"
+              : /(车库)/.test(extractionText)
+                ? "车库"
+                : /(露营|户外)/.test(extractionText)
+                  ? "户外"
+                  : current.placement),
+    portability:
+      current.portability ??
+      (/(手持|便携|随身)/.test(extractionText)
+        ? "便携随身"
+        : /(桌面|放在|客厅|会议室|教室|车库)/.test(extractionText)
+          ? "居家常驻，偶尔手持"
+          : current.portability),
+  };
+
+  const explicitDeviceType = inferDeviceTypeV2(extractionText);
+  const inferredDeviceType =
+    explicitDeviceType ??
+    inferDeviceTypeFromArchetype({
+      message: extractionText,
+      confirmed: provisionalRequirement,
+    });
+  const resolvedDeviceType = reconcileDeviceTypeByContext(inferredDeviceType, {
+    message: extractionText,
+    coreFeatures: provisionalRequirement.core_features,
+    targetDevices: provisionalRequirement.target_devices,
+  });
+  const fallbackDeviceType = inferFallbackDeviceTypeFromStructure(provisionalRequirement);
+
+  return {
+    ...provisionalRequirement,
+    device_type: resolvedDeviceType ?? current.device_type ?? fallbackDeviceType,
+  };
+}
+
 function computeUnknowns(confirmed: ConfirmedRequirement) {
   const unknowns: string[] = [];
   if (!confirmed.device_type) unknowns.push("设备类型");
@@ -1957,12 +2156,25 @@ function resolveWorkflowControl(args: {
     handoffCandidate: args.labHandoff,
     fallback: forcedConversational ? "ask_more" : readiness.nextAction,
   });
-  const exposedPreviewDraft = readiness.exposePreview ? args.previewDraft : undefined;
-  const exposedLabHandoff = readiness.exposeHandoff ? args.labHandoff : undefined;
+  const messageSignals = parseConversationSignals(args.message);
+  const shouldForcePreviewExposure = Boolean(messageSignals.wantsPreview && args.previewDraft);
+  const exposedPreviewDraft =
+    shouldForcePreviewExposure || readiness.exposePreview ? args.previewDraft : undefined;
+  const exposedLabHandoff = shouldForcePreviewExposure
+    ? undefined
+    : readiness.exposeHandoff
+      ? args.labHandoff
+      : undefined;
+  const resolvedWorkflowState: IntakeAgentState["workflow_state"] = shouldForcePreviewExposure
+    ? "preview_generated"
+    : workflowState;
+  const resolvedNextAction: IntakeNextAction = shouldForcePreviewExposure
+    ? "generate_preview"
+    : nextAction;
 
   return {
-    workflowState,
-    nextAction,
+    workflowState: resolvedWorkflowState,
+    nextAction: resolvedNextAction,
     exposedPreviewDraft,
     exposedLabHandoff,
   };
@@ -2362,7 +2574,7 @@ async function deriveRequirementContext(request: IntakeAgentRequest): Promise<Re
   let localConfirmedCache: ConfirmedRequirement | undefined;
   const getLocalConfirmed = () => {
     if (!localConfirmedCache) {
-      localConfirmedCache = deriveConfirmed(
+      localConfirmedCache = deriveConfirmedV2(
         request.message,
         request.state.confirmed,
         request.history ?? [],

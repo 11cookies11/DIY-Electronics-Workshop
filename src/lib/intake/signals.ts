@@ -25,74 +25,63 @@ export function parseConversationSignals(message: string): ConversationSignals {
   const normalized = normalizeMessage(message);
   const lowered = message.trim().toLowerCase();
 
-  const wantsPreviewByKeyword = containsAny(normalized, [
+  const wantsPreview = containsAny(normalized, [
     "预览",
     "出图",
-    "生成",
     "3d",
-    "草案",
-    "模型",
     "看一版",
+    "看看效果",
+    "生成草案",
   ]);
-  const wantsHandoffByKeyword = containsAny(normalized, [
+
+  const wantsHandoff = containsAny(normalized, [
     "交接",
     "handoff",
     "移交",
     "提交实验室",
     "继续推进",
     "往下走",
-  ]);
-  const affirmativeByKeyword = containsAny(normalized, [
-    "我愿意",
-    "愿意",
-    "可以",
-    "好",
-    "好的",
-    "行",
-    "开始吧",
-    "继续",
-    "就这样",
-    "没问题",
-  ]);
-  const negativeByKeyword = containsAny(normalized, [
-    "不要",
-    "先不要",
-    "先不",
-    "不做",
-    "不生成",
-    "等等",
-    "等一下",
-    "稍后",
-  ]);
-  const correctionByKeyword = containsAny(normalized, [
-    "不是",
-    "不对",
-    "纠正",
-    "改成",
-    "应该是",
-    "我说的是",
+    "给我一版交接",
   ]);
 
+  const isAffirmative =
+    containsAny(normalized, [
+      "我愿意",
+      "愿意",
+      "可以",
+      "好的",
+      "好呀",
+      "好啊",
+      "行",
+      "开始吧",
+      "继续",
+      "就这样",
+      "没问题",
+    ]) ||
+    hasPattern(normalized, [/^(愿意|可以|好的|好呀|好啊|行|开始吧|继续|就这样)$/i]);
+
+  const isNegative =
+    containsAny(normalized, [
+      "不要",
+      "先不要",
+      "先不",
+      "不做",
+      "不生成",
+      "等等",
+      "等一下",
+      "稍后",
+    ]) ||
+    hasPattern(normalized, [/^(先不要|不要|先不|不做|不生成|等等|等一下|稍后)$/i]);
+
+  const isCorrection =
+    containsAny(normalized, ["不是", "不对", "纠正", "改成", "应该是", "我说的是"]) ||
+    hasPattern(lowered, [/(不是.*而是|改成|应该是|我说的是)/i]);
+
   return {
-    wantsPreview:
-      wantsPreviewByKeyword &&
-      hasPattern(lowered, [
-        /(生成|出|看).*(预览|草案|模型|3d)/i,
-        /(先出|先看|直接|现在).*(预览|出图|3d)/i,
-      ]),
-    wantsHandoff:
-      wantsHandoffByKeyword &&
-      hasPattern(lowered, [
-        /(交接|handoff|移交|提交).*(实验室|团队|工程|负责人)?/i,
-        /(继续推进|往下走|下一步)/i,
-      ]),
-    isAffirmative:
-      affirmativeByKeyword ||
-      hasPattern(normalized, [/^(我愿意|愿意|可以|好的|好啊|好呀|行|开始吧|继续|就这样)$/i]),
-    isNegative:
-      negativeByKeyword ||
-      hasPattern(normalized, [/^(先不要|不要|先不|不做|不生成|等等|等一下|稍后)$/i]),
-    isCorrection:
-      correctionByKeyword || hasPattern(lowered, [/(不是.*而是|改成|应该是|我说的是)/i]),
+    wantsPreview,
+    wantsHandoff,
+    isAffirmative,
+    isNegative,
+    isCorrection,
   };
 }
