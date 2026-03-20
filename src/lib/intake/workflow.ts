@@ -241,6 +241,85 @@ function mergeArrays(left?: string[], right?: string[]) {
   return unique([...(left ?? []), ...(right ?? [])]);
 }
 
+function normalizeUnknownFieldsV2(fields: string[]) {
+  const alias: Record<string, string> = {
+    主要交互方式: "主要交互方式",
+    交互方式: "主要交互方式",
+    使用场景: "使用场景",
+    场景: "使用场景",
+    核心功能: "核心功能",
+    功能: "核心功能",
+    供电方式: "供电方式",
+    供电: "供电方式",
+    接口需求: "接口或连接方式",
+    连接方式: "接口或连接方式",
+    接口或连接方式: "接口或连接方式",
+  };
+
+  return unique(
+    fields
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => alias[item] ?? item),
+  );
+}
+
+function filterUnknownsByContextV2(fields: string[], confirmed: ConfirmedRequirement, message: string) {
+  const controlContext =
+    confirmed.device_type === "红外遥控器" ||
+    Boolean(confirmed.target_devices?.length) ||
+    /(控制|遥控|家电|空调|电视|投影|机顶盒|风扇|开关|调节)/.test(message);
+
+  return fields.filter((field) => {
+    if (field === "设备类型" && confirmed.device_type) return false;
+    if (field === "使用场景" && confirmed.use_case) return false;
+    if (field === "核心功能" && confirmed.core_features?.length) return false;
+    if (field === "主要交互方式" && (confirmed.controls?.length || confirmed.screen)) return false;
+    if (field === "供电方式" && confirmed.power?.length) return false;
+    if (field === "控制对象" && !controlContext) return false;
+    return true;
+  });
+}
+
+function relaxUnknownsWithBroadAnswers(args: {
+  unknowns: string[];
+  confirmed: ConfirmedRequirement;
+  message: string;
+  history: ConversationTurn[];
+  repeatedFocusCount?: number;
+}) {
+  const merged = `${args.message} ${args.history.slice(-6).map((item) => item.content).join(" ")}`;
+  const hasBroadUseCaseCue =
+    /(家里|家庭|客厅|卧室|办公室|会议室|教室|车库|门店|露营|桌面|固定放|随身|便携|厨房|玄关)/.test(
+      merged,
+    ) || Boolean(args.confirmed.placement || args.confirmed.portability);
+  const hasBroadIoCue =
+    /(离线|本地|不联网|无需联网|蓝牙|wifi|wi-fi|type-c|usb|按键|触屏|旋钮|确认键)/i.test(
+      merged,
+    ) || Boolean(args.confirmed.controls?.length || args.confirmed.screen || args.confirmed.ports?.length);
+
+  return args.unknowns.filter((field) => {
+    if (
+      field === "使用场景" &&
+      !args.confirmed.use_case &&
+      hasBroadUseCaseCue &&
+      (args.repeatedFocusCount ?? 0) >= 1
+    ) {
+      return false;
+    }
+    if (
+      field === "接口或连接方式" &&
+      !args.confirmed.connectivity?.length &&
+      !args.confirmed.ports?.length &&
+      hasBroadIoCue &&
+      (args.repeatedFocusCount ?? 0) >= 1
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 function mergeOrReplaceArrays(
   left: string[] | undefined,
   right: string[],
@@ -2455,17 +2534,23 @@ async function deriveRuntimeContext(args: {
   const llmNativeUnknowns = llmNativeDecision?.unknowns.length
     ? unique([...slotAssessmentUnknowns, ...llmNativeDecision.unknowns])
     : slotAssessmentUnknowns;
-  const unknowns = filterUnknownsByContext(
-    normalizeUnknownFieldsSafe(
+  const unknowns = relaxUnknownsWithBroadAnswers({
+    unknowns: filterUnknownsByContextV2(
+      normalizeUnknownFieldsV2(
       llmNativeDecision
         ? isLlmFirstModeEnabled()
           ? (llmNativeUnknowns.length ? llmNativeUnknowns : resolvedGuardrailUnknowns)
           : unique([...llmNativeUnknowns, ...resolvedGuardrailUnknowns])
         : resolvedBaselineUnknowns,
+      ),
+      resolvedConfirmed,
+      message,
     ),
-    resolvedConfirmed,
+    confirmed: resolvedConfirmed,
     message,
-  );
+    history,
+    repeatedFocusCount: history.length >= 4 ? 1 : 0,
+  });
   const memory = analyzeConversationMemory({
     message,
     history,

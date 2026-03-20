@@ -31,8 +31,8 @@ export function parseConversationSignals(message: string): ConversationSignals {
     "生成",
     "3d",
     "草案",
-    "方案",
     "模型",
+    "看一版",
   ]);
   const wantsHandoffByKeyword = containsAny(normalized, [
     "交接",
@@ -40,6 +40,7 @@ export function parseConversationSignals(message: string): ConversationSignals {
     "移交",
     "提交实验室",
     "继续推进",
+    "往下走",
   ]);
   const affirmativeByKeyword = containsAny(normalized, [
     "我愿意",
@@ -76,14 +77,14 @@ export function parseConversationSignals(message: string): ConversationSignals {
     wantsPreview:
       wantsPreviewByKeyword &&
       hasPattern(lowered, [
-        /(生成|出|看).*(预览|草案|方案|模型|3d)/i,
-        /(直接|现在).*(生成|出图)/i,
+        /(生成|出|看).*(预览|草案|模型|3d)/i,
+        /(先出|先看|直接|现在).*(预览|出图|3d)/i,
       ]),
     wantsHandoff:
       wantsHandoffByKeyword &&
       hasPattern(lowered, [
-        /(交接|handoff|移交|提交).*(实验室|团队|工程)/i,
-        /(继续推进|往下走)/i,
+        /(交接|handoff|移交|提交).*(实验室|团队|工程|负责人)?/i,
+        /(继续推进|往下走|下一步)/i,
       ]),
     isAffirmative:
       affirmativeByKeyword ||
